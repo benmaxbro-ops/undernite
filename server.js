@@ -10,7 +10,7 @@ import { WebSocketServer } from 'ws';
 import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR,
-  EXP_HP, EXP_BOAT, EXP_RESPAWN, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
+  EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
   TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY,
 } from './public/js/shared.js';
 
@@ -200,6 +200,7 @@ function damage(p, amt, src, how, sx, sz) {
   const v = p.veh && G.vehicles.get(p.veh);
   if (v && v.type === 'sub' && how !== 'zone') { damageVehicle(v, amt, src); return; }
   let a = amt;
+  p.hurtT = G.time;   // expedition: pauses health regeneration
   if (how !== 'zone') { const s = Math.min(p.shield, a); p.shield -= s; a -= s; }
   p.hp -= a;
   if (!p.bot) p.ye.push(['hurt', Math.round(amt), r2(sx ?? p.x), r2(sz ?? p.z), how === 'zone' ? 1 : 0]);
@@ -674,7 +675,8 @@ const boatSpawn = () => { const a = rnd() * 6.283; return { x: EXP_BOAT.x + Math
 function expJoin(c) {
   const p = mkPlayer(c.id, c.name, 'triton', false);
   const s = saves[saveKey(c.name)];
-  p.money = s?.money || 0; p.tank = clamp(s?.tank || 0, 0, TANKS.length - 1); p.lung = clamp(s?.lung || 0, 0, LUNGS.length - 1);
+  p.money = s ? (s.money || 0) : EXP_START_MONEY;   // brand-new divers get starting money
+  p.tank = clamp(s?.tank || 0, 0, TANKS.length - 1); p.lung = clamp(s?.lung || 0, 0, LUNGS.length - 1);
   p.lamp = clamp(s?.lamp || 0, 0, LAMPS.length - 1);
   p.bag = Array.isArray(s?.bag) ? s.bag : [];
   if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? { id: w.id, rar: w.rar, ammo: WEAPONS[w.id].mag } : null);
@@ -857,7 +859,7 @@ function expBuy(p, m) {
       p.weapons[slot] = { id: it.wid, rar: it.rar, ammo: WEAPONS[it.wid].mag }; p.slot = slot; p.reload = 0;
     };
   } else return;
-  if (p.money < price) { p.ye.push(['shop', `Zu wenig Geld – dir fehlen ${price - p.money} $`]); return; }
+  if (p.money < price) { p.ye.push(['shop', `Zu wenig Geld – dir fehlen ${price - p.money} €`]); return; }
   p.money -= price; apply();
   p.ye.push(['bought', label, price]);
   storeProgress(p);
@@ -889,6 +891,8 @@ function tickExp(dt) {
       hurt += 6; p.lastHitBy = 'Wasserdruck';
       if ((p.warnT -= dt) <= 0) { p.warnT = 3; p.ye.push(['warn', `Zu tief für die ${T.name}! Max. ${T.maxDepth} m`]); }
     }
+    // health regeneration after a few seconds without damage, faster at the surface
+    if (p.hp < p.maxhp && G.time - (p.hurtT || 0) > REGEN_DELAY) p.hp = Math.min(p.maxhp, p.hp + (depth < 2.6 ? REGEN_RATE_SURFACE : REGEN_RATE) * dt);
     if (hurt) { p.envAcc += hurt * dt; if (p.envAcc >= 1) { const a = Math.floor(p.envAcc); p.envAcc -= a; damage(p, a, null, 'zone', p.x, p.z); } }
     // sell the catch at the boat
     if (p.alive && p.bag.length && nearBoat(p)) {

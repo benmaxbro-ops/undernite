@@ -60,6 +60,8 @@ In der Lobby rechts zwischen **Battle Royale** und **Tiefsee-Expedition** wähle
   An der Oberfläche füllt sich die Luft wieder.
 - **Bosse:** einer pro Etage, jeder Biss macht **20 Schaden**, du hast **100 Leben**. Alle, die mitkämpfen, kassieren die Belohnung.
   Nach 2 Minuten kommt der Boss zurück.
+- **Leben regenerieren:** 5 s ohne Schaden, dann heilst du 4 Leben pro Sekunde, an der Oberfläche 15.
+- **Startgeld:** neue Taucher beginnen mit 100 €.
 - **Ohnmächtig?** Nach 5 s wachst du am Boot auf, die Hälfte deines Fangs ist weg, Geld und Ausrüstung bleiben.
 - **Spielstand** wird pro Spielername in `saves/expedition.json` gespeichert.
 

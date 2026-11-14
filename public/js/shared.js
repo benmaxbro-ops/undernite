@@ -65,6 +65,9 @@ export const creatureR = (type, sub) => type === 'fish' ? Math.max(0.5, FISH[sub
 export const EXP_HP = 100;
 export const EXP_BOAT = { x: 0, z: 0 };           // shop boat floats at the surface here
 export const EXP_RESPAWN = 5;                     // seconds until you wake up at the boat
+export const EXP_START_MONEY = 100;               // new divers start with this much money
+// Health regeneration: starts after REGEN_DELAY seconds without damage.
+export const REGEN_DELAY = 5, REGEN_RATE = 4, REGEN_RATE_SURFACE = 15;
 // Floors ("Etagen") by depth in metres below the surface.
 export const FLOORS = [
   { name: 'Sonnenriff',   top: 0,   bot: 60,  fish: 16 },

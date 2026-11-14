@@ -1,6 +1,6 @@
 // Undernite - DOM based HUD, lobby and result screen.
 import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse } from './shared.js';
-const money = (v) => Math.round(v).toLocaleString('de-DE') + ' $';
+const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
