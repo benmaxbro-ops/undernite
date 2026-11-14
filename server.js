@@ -14,7 +14,7 @@ import {
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PUB = path.join(DIR, 'public');
-const PORT = +process.env.PORT || 8190;
+const PORT = +process.env.PORT || 8080;
 const SPEED = +process.env.UN_SPEED || 1;     // sim steps per timer tick (testing only)
 const DT = 1 / TICK_HZ;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
