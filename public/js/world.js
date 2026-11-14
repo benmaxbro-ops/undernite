@@ -162,8 +162,12 @@ export function buildEnvironment(scene, W) {
     for (let i = 0; i < 140; i++) { const x = Math.random() * n, y = Math.random() * n, r = 8 + Math.random() * 26; const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(255,255,255,0.5)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; for (const ox of [-n, 0, n]) for (const oy of [-n, 0, n]) { c.beginPath(); c.arc(x + ox, y + oy, r, 0, TAU); c.fill(); } }
   });
   surfTex.repeat.set(26, 26);
-  const surface = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 2.4, SIZE * 2.4).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ map: surfTex, color: 0xd8fbff, side: THREE.DoubleSide }));
+  // seen from below: bright, shimmering ceiling
+  const surface = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 2.4, SIZE * 2.4).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ map: surfTex, color: 0xd8fbff }));
   surface.position.y = SURFACE; root.add(surface);
+  // seen from above: deep blue sea, slightly see-through
+  const seaTop = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 2.4, SIZE * 2.4).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: surfTex, color: 0x2a7aa6, transparent: true, opacity: 0.94, depthWrite: false }));
+  seaTop.position.y = SURFACE + 0.02; root.add(seaTop);
   const rayN = 70;
   const rays = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.8, 6, 80, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xbff4ff, transparent: true, opacity: 0.028, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), rayN);
   for (let i = 0; i < rayN; i++) put(rays, i, (Math.random() * 2 - 1) * 300, SURFACE - 40, (Math.random() * 2 - 1) * 300, (Math.random() - 0.5) * 0.25, 0, 0.18 + (Math.random() - 0.5) * 0.2, 0.6 + Math.random(), 1, 0.6 + Math.random());
@@ -177,18 +181,42 @@ export function buildEnvironment(scene, W) {
   plankton.frustumCulled = false; root.add(plankton);
 
   // ----- bubbles -----
-  const BN = 700, bArr = new Float32Array(BN * 3).fill(-9999), bVel = new Float32Array(BN * 3), bLife = new Float32Array(BN);
+  // Every bubble has its own size: big ones rise faster, all of them wobble on the way
+  // up, grow a little (less pressure) and pop at the surface.
+  const BN = 2600, bArr = new Float32Array(BN * 3).fill(-9999), bVel = new Float32Array(BN * 3), bLife = new Float32Array(BN);
+  const bSize = new Float32Array(BN), bAlpha = new Float32Array(BN), bPh = new Float32Array(BN);
   let bNext = 0;
-  const bGeo = new THREE.BufferGeometry(); bGeo.setAttribute('position', new THREE.BufferAttribute(bArr, 3));
-  const bTex = noiseTexture(64, (c) => { c.clearRect(0, 0, 64, 64); c.strokeStyle = 'rgba(230,250,255,0.95)'; c.lineWidth = 5; c.beginPath(); c.arc(32, 32, 24, 0, TAU); c.stroke(); c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(23, 23, 5, 0, TAU); c.fill(); });
-  const bubbles = new THREE.Points(bGeo, new THREE.PointsMaterial({ map: bTex, size: 0.32, transparent: true, opacity: 0.75, depthWrite: false }));
+  const bGeo = new THREE.BufferGeometry();
+  bGeo.setAttribute('position', new THREE.BufferAttribute(bArr, 3));
+  bGeo.setAttribute('size', new THREE.BufferAttribute(bSize, 1));
+  bGeo.setAttribute('alpha', new THREE.BufferAttribute(bAlpha, 1));
+  const bTex = noiseTexture(128, (c) => {   // shiny air bubble: clear middle, bright rim, highlights
+    c.clearRect(0, 0, 128, 128);
+    const g = c.createRadialGradient(64, 64, 0, 64, 64, 62);
+    g.addColorStop(0, 'rgba(210,245,255,0.05)'); g.addColorStop(0.7, 'rgba(200,240,255,0.12)');
+    g.addColorStop(0.88, 'rgba(230,252,255,0.75)'); g.addColorStop(0.97, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(64, 64, 62, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.ellipse(44, 40, 14, 9, -0.7, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.45)'; c.beginPath(); c.ellipse(86, 90, 7, 4, -0.7, 0, TAU); c.fill();
+  });
+  const bMat = new THREE.ShaderMaterial({
+    uniforms: { map: { value: bTex }, scale: { value: 500 } }, transparent: true, depthWrite: false,
+    vertexShader: `attribute float size; attribute float alpha; uniform float scale; varying float vA;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * scale / max(0.1, -mv.z);
+        vA = alpha * clamp(1.0 + mv.z / 75.0, 0.0, 1.0); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform sampler2D map; varying float vA; void main() { vec4 c = texture2D(map, gl_PointCoord); gl_FragColor = vec4(c.rgb, c.a * vA); }`,
+  });
+  const bubbles = new THREE.Points(bGeo, bMat);
   bubbles.frustumCulled = false; root.add(bubbles);
-  function bubble(x, y, z, n = 1, spread = 0.3, vel = 0) {
+  // size = bubble diameter in metres (0 = random, mostly small); vel > 0 = burst (explosions)
+  function bubble(x, y, z, n = 1, spread = 0.3, vel = 0, size = 0) {
     for (let i = 0; i < n; i++) {
       const k = bNext; bNext = (bNext + 1) % BN;
       bArr[k * 3] = x + (Math.random() - 0.5) * spread; bArr[k * 3 + 1] = y + (Math.random() - 0.5) * spread; bArr[k * 3 + 2] = z + (Math.random() - 0.5) * spread;
-      bVel[k * 3] = (Math.random() - 0.5) * (0.6 + vel); bVel[k * 3 + 1] = 1.5 + Math.random() * 2.5 + vel * 0.3; bVel[k * 3 + 2] = (Math.random() - 0.5) * (0.6 + vel);
-      bLife[k] = 1.2 + Math.random() * 1.6;
+      const sz = size || 0.03 + Math.random() ** 2.2 * 0.16;
+      bSize[k] = sz; bAlpha[k] = 0.9; bPh[k] = Math.random() * TAU;
+      bVel[k * 3] = (Math.random() - 0.5) * (0.25 + vel); bVel[k * 3 + 1] = 0.35 + sz * 7 + vel * 0.3; bVel[k * 3 + 2] = (Math.random() - 0.5) * (0.25 + vel);
+      bLife[k] = vel > 0 ? 1.5 + Math.random() * 1.5 : Math.min(16, 2.5 + sz * 80);
     }
   }
 
@@ -251,11 +279,16 @@ export function buildEnvironment(scene, W) {
       for (let i = 0; i < BN; i++) {
         if (bLife[i] <= 0) continue;
         bLife[i] -= dt; const o = i * 3;
-        if (bLife[i] <= 0 || bArr[o + 1] > SURFACE) { bArr[o + 1] = -9999; bLife[i] = 0; continue; }
-        bArr[o] += bVel[o] * dt; bArr[o + 1] += bVel[o + 1] * dt; bArr[o + 2] += bVel[o + 2] * dt;
+        if (bLife[i] <= 0 || bArr[o + 1] > SURFACE - 0.05) { bArr[o + 1] = -9999; bLife[i] = 0; bSize[i] = 0; continue; }
+        const sz = bSize[i], wob = 0.12 + sz * 2.2;
+        bPh[i] += dt * (5 + 10 * (0.2 - Math.min(0.2, sz)) * 10);
+        bArr[o] += (bVel[o] + Math.sin(bPh[i]) * wob) * dt; bArr[o + 1] += bVel[o + 1] * dt; bArr[o + 2] += (bVel[o + 2] + Math.cos(bPh[i] * 0.8) * wob) * dt;
         bVel[o] *= 0.97; bVel[o + 2] *= 0.97;
+        bSize[i] = Math.min(0.45, sz * (1 + dt * 0.02));
+        bAlpha[i] = Math.min(0.9, bLife[i] * 1.5);
       }
-      bGeo.attributes.position.needsUpdate = true;
+      bGeo.attributes.position.needsUpdate = true; bGeo.attributes.size.needsUpdate = true; bGeo.attributes.alpha.needsUpdate = true;
+      bMat.uniforms.scale.value = innerHeight * Math.min(devicePixelRatio, 1.5) / (2 * Math.tan(cam.fov * Math.PI / 360));
       for (let i = fx.length - 1; i >= 0; i--) {
         const f = fx[i]; f.t += dt; const k = Math.min(1, f.t / f.dur); f.upd(f, k);
         if (k >= 1) { root.remove(f.m); f.m.material.dispose(); fx.splice(i, 1); }
@@ -272,6 +305,10 @@ export function buildEnvironment(scene, W) {
         // the guiding light beam only shows once you are deeper down
         boat.userData.beam.material.opacity = 0.07 * Math.max(0, Math.min(1, (SURFACE - cy - 10) / 30));
       }
+      // camera above the water: sky, clear air, no plankton or light shafts
+      const above = cy > SURFACE;
+      if (above) { fog.color.setHex(0xa9d9ef); fog.density = 0.0016; }
+      plankton.visible = rays.visible = !above;
       scene.background = fog.color;
       if (zone) { zoneWall.visible = zone[2] > 0.5 && zone[2] < 400; zoneWall.position.set(zone[0], 60, zone[1]); zoneWall.scale.set(zone[2], 1, zone[2]); }
       else zoneWall.visible = false;

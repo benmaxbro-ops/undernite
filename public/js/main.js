@@ -37,7 +37,7 @@ const meta = new Map(), players = new Map(), creatures = new Map(), vehicles = n
 let crates = [];
 const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, energy: 100, boost: false, exhaust: false };
 let camYaw = 0, camPitch = -0.35, camDist = 5, firing = false, nextFire = 0, specId = 0, shockUntil = 0, shake = 0, deadInfo = null, promptT = 0, sendT = 0;
-let vehSince = 0;
+let vehSince = 0, headUp = 0;
 // expedition flashlight: on/off with L, battery in seconds, recharges at the surface
 const torch = { on: false, bat: LAMPS[0].battery, lvl: 0, hinted: false };
 const keys = {};
@@ -310,8 +310,14 @@ function updateEntities(dt) {
     e.mesh.userData.update(dt, e);
     const near = e.mesh.position.distanceToSquared(camera.position);
     if (e.mesh.userData.tag) e.mesh.userData.tag.visible = near < 55 * 55;
-    e.bubT -= dt;
-    if (e.bubT <= 0 && near < 80 * 80) { e.bubT = e.fl & 2 ? 0.04 : e.speed > 3 ? 0.14 : 0.9; const f = dirFrom(e.yaw, e.pitch); env.bubble(e.x - f[0] * 0.6, e.y + 0.3, e.z - f[2] * 0.6, 1, 0.4); }
+    // breathing: every few seconds the diver exhales a cloud of bubbles from the regulator
+    e.breath = (e.breath ?? Math.random() * 4) - dt * (e.fl & 2 ? 1.7 : 1);
+    if (e.breath <= 0) { e.breath = 3.4 + Math.random() * 1.4; e.exhale = 0.9; }
+    if (e.exhale > 0 && near < 90 * 90 && SURFACE - e.y > 1.2) {
+      e.exhale -= dt;
+      const f = dirFrom(e.yaw, e.pitch), big = e.exhale > 0.45, n = Math.random() < (big ? 0.9 : 0.5) ? (big ? 2 : 1) : 0;
+      for (let i = 0; i < n; i++) env.bubble(e.x + f[0] * 0.8, e.y + f[1] * 0.8 - 0.05, e.z + f[2] * 0.8, 1, 0.1, 0, big ? 0.04 + Math.random() ** 1.5 * 0.17 : 0.02 + Math.random() * 0.06);
+    }
   }
   for (const v of vehicles.values()) {
     if (v.driver === myId && alive) { v.x = me.x; v.y = me.y; v.z = me.z; v.yaw = me.hyaw; v.pitch = me.hpitch; v.speed = Math.hypot(me.vx, me.vy, me.vz); }
@@ -328,7 +334,7 @@ function updateEntities(dt) {
   for (const [id, p] of projs) {
     const st = p.sp * dt; p.x += p.dx * st; p.y += p.dy * st; p.z += p.dz * st; p.life -= dt;
     p.mesh.position.set(p.x, p.y, p.z);
-    p.tt -= dt; if (p.tt <= 0) { p.tt = p.trail; env.bubble(p.x, p.y, p.z, 1, 0.1); }
+    p.tt -= dt; if (p.tt <= 0) { p.tt = p.trail; env.bubble(p.x, p.y, p.z, 1, 0.1, 0, 0.025 + Math.random() * 0.03); }
     if (p.life <= -0.15 || p.y < W.heightAt(p.x, p.z) - 0.5) removeProj(id);
   }
 }
@@ -341,6 +347,9 @@ function updateCamera(dt) {
     want = v ? VEHICLES[v.type].cam : SUITS[mySuit].cam;
     if (v && v.type === 'sub') { side = 0; up = 2.2; }
     tx = me.x; ty = me.y + (SUITS[mySuit].mech ? 1.4 : 0.5); tz = me.z;
+    // swimming at the surface: head out of the water, the camera looks across the sea
+    if (mode === 'exp' && SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
+    ty += headUp * 2.2;
   } else {
     let e = players.get(specId);
     if (!e) { for (const p of players.values()) { if (!e || (!meta.get(p.id)?.bot && meta.get(e.id)?.bot)) e = p; } specId = e ? e.id : 0; }
@@ -352,7 +361,8 @@ function updateCamera(dt) {
   let px = tx - cd[0] * camDist + rx * side, py = ty - cd[1] * camDist + up, pz = tz - cd[2] * camDist + rz * side;
   const t = W.segmentHit(tx, ty, tz, px, py, pz);
   if (t > 0) { const q = Math.max(0.15, t - 0.08); px = tx + (px - tx) * q; py = ty + (py - ty) * q; pz = tz + (pz - tz) * q; }
-  py = Math.min(SURFACE - 0.6, Math.max(py, W.heightAt(px, pz) + 0.5));
+  py = Math.min(headUp > 0.5 ? SURFACE + 14 : SURFACE - 0.6, Math.max(py, W.heightAt(px, pz) + 0.5));
+  if (headUp > 0.5 && py < SURFACE + 0.8 && py > SURFACE - 0.8) py = SURFACE + 0.8;   // never sit exactly in the water plane
   shake = Math.max(0, shake - dt * 2.2);
   camera.position.set(px + (Math.random() - 0.5) * shake, py + (Math.random() - 0.5) * shake, pz + (Math.random() - 0.5) * shake);
   camera.rotation.set(camPitch, camYaw, 0);
@@ -397,7 +407,7 @@ function frame(now) {
       const df = Math.max(0, Math.min(1, (SURFACE - camera.position.y) / 300));
       // below ~150 m it is almost pitch black without a lamp
       const dep = SURFACE - camera.position.y;
-      hemi.intensity = 1.25 * Math.max(0.04, 1 - dep / 160); sun.intensity = 1.35 * Math.max(0, 1 - dep / 120);
+      hemi.intensity = 1.25 * Math.min(1, Math.max(0.04, 1 - dep / 160)); sun.intensity = 1.35 * Math.min(1, Math.max(0, 1 - dep / 120));
     } else { hemi.intensity = 1.25; sun.intensity = 1.35; }
     hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, marks);
     if (mode === 'exp' && you && !you.alive && deadInfo) hud.spec(`<b>Ohnmächtig!</b>Erwischt von ${esc(deadInfo.by)}${deadInfo.lost ? ` · ${deadInfo.lost} Fische verloren` : ''} · aufwachen in ${Math.ceil(you.x?.rt || 0)} s`);

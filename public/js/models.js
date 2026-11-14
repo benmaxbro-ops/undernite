@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { SUITS, RARITY } from './shared.js';
 import { makeRealFish, makeRealShark, makeRealOcto, makeRealBoss } from './creatures.js';
 import { makeShip } from './ship.js';
+import { buildRealDiver } from './diver.js';
 
 const TAU = Math.PI * 2;
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1, ...o });
@@ -105,7 +106,7 @@ function buildMech(accent) {
 export function makePlayerModel(suit, id, name) {
   const accent = new THREE.Color().setHSL((id * 0.137) % 1, 0.9, 0.6).getHex();
   const root = new THREE.Group();
-  const parts = suit === 'goliath' ? buildMech(accent) : buildDiver(suit, accent);
+  const parts = suit === 'goliath' ? buildMech(accent) : buildRealDiver(suit, accent);
   const inner = parts.g; inner.rotation.order = 'YXZ'; root.add(inner);
   if (name) { const tag = makeTag(name); tag.position.y = suit === 'goliath' ? 3.0 : 1.5; root.add(tag); root.userData.tag = tag; }
   let phase = Math.random() * 6, lastW = -2;
@@ -121,7 +122,8 @@ export function makePlayerModel(suit, id, name) {
     } else {
       inner.rotation.x = s.pitch;
       inner.rotation.z = Math.sin(phase * 0.5) * 0.05;
-      parts.legs[0].rotation.x = Math.sin(phase) * amp; parts.legs[1].rotation.x = -Math.sin(phase) * amp;
+      if (parts.animate) parts.animate(dt, s, phase, 0.5 + amp * 1.6);
+      else { parts.legs[0].rotation.x = Math.sin(phase) * amp; parts.legs[1].rotation.x = -Math.sin(phase) * amp; }
       if (s.weapon !== lastW && s.weapon >= 0) { lastW = s.weapon; parts.gunGlow.color.setHex(WCOL[s.weapon]); parts.gunGlow.emissive.setHex(WCOL[s.weapon]); }
     }
   };

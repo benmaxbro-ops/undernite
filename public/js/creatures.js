@@ -11,7 +11,7 @@ const sst = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * 
 const hash = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 // smooth curve through keys [[t, value], ...]
-function spline(keys, t) {
+export function spline(keys, t) {
   const n = keys.length;
   if (t <= keys[0][0]) return keys[0][1];
   if (t >= keys[n - 1][0]) return keys[n - 1][1];
@@ -23,7 +23,7 @@ function spline(keys, t) {
 
 // ---------- geometry helpers ----------
 // Body: rings along t (0 = nose, 1 = tail). color(t, u, v) -> THREE.Color, u = side (cos), v = up (sin)
-function loft(P, stretch, color, rings = 34, seg = 18) {
+export function loft(P, stretch, color, rings = 34, seg = 18) {
   const pos = [], col = [], idx = [];
   for (let i = 0; i <= rings; i++) {
     const t = i / rings, w = Math.max(0, spline(P.w, t)), h = Math.max(0, spline(P.h, t)), yc = spline(P.y, t), z = (-1 + 2 * t) * stretch;
