@@ -2,7 +2,7 @@
 // surface, light shafts, plankton, bubbles, effects and the zone wall.
 import * as THREE from 'three';
 import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT } from './shared.js';
-import { makeBoat } from './models.js';
+import { makeBoat, makeTag } from './models.js';
 
 const TAU = Math.PI * 2;
 const CAUSTIC = `
@@ -44,6 +44,54 @@ function noiseTexture(size, draw) {
   draw(cv.getContext('2d'), size);
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+// ---------- underwater base (expedition): floor 1, 50 m deep, on the west cliff ----------
+function buildBase(root, W) {
+  const B = W.base, c = B.c, g = new THREE.Group(); g.position.set(c.x, c.y, c.z); root.add(g);
+  const metal = new THREE.MeshStandardMaterial({ color: 0xd9a63a, roughness: 0.45, metalness: 0.6 });     // yellow station paint
+  const steel = new THREE.MeshStandardMaterial({ color: 0x6c7880, roughness: 0.4, metalness: 0.8 });
+  const glassM = new THREE.MeshStandardMaterial({ color: 0xbff2ff, transparent: true, opacity: 0.2, roughness: 0.05, metalness: 0.4, depthWrite: false, side: THREE.DoubleSide });
+  const glowM = (c, i = 2.5) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i });
+  const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
+  // platform + stilts down to the slope
+  add(new THREE.CylinderGeometry(9, 9, 0.6, 32), metal, 0, -0.3, 0);
+  add(new THREE.TorusGeometry(9, 0.18, 8, 48), steel, 0, 0, 0).rotation.x = Math.PI / 2;
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2, x = Math.cos(a) * 7.5, z = Math.sin(a) * 7.5;
+    const ground = W.heightAt(c.x + x, c.z + z) - c.y, len = Math.max(0.5, -ground + 1);
+    if (ground > -0.5) continue;   // that side rests on the cliff
+    add(new THREE.CylinderGeometry(0.35, 0.45, len, 10), steel, x, -len / 2, z);
+  }
+  // glass dome with ribs and a warm light inside
+  const dome = new THREE.Group(); dome.position.set(0, 0, -3.5); g.add(dome);
+  dome.add(new THREE.Mesh(new THREE.SphereGeometry(4.2, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), glassM));
+  for (let i = 0; i < 6; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.09, 6, 24, Math.PI), steel); r.rotation.y = i / 6 * Math.PI; dome.add(r); }
+  const ringB = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.2, 8, 40), metal); ringB.rotation.x = Math.PI / 2; dome.add(ringB);
+  const inner = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.9, 16), steel); inner.position.y = 0.45; dome.add(inner);   // console inside
+  const lampIn = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 8), glowM(0xffe2a0, 3)); lampIn.position.y = 3.2; dome.add(lampIn);
+  const pl = new THREE.PointLight(0xffd9a0, 30, 18); pl.position.y = 2.5; dome.add(pl);
+  // airlock tube on the side
+  const tube = add(new THREE.CylinderGeometry(1.1, 1.1, 3.4, 16), metal, -5.4, 1.1, -3.5); tube.rotation.z = Math.PI / 2;
+  const hatch = add(new THREE.TorusGeometry(1.1, 0.16, 8, 24), steel, -7.1, 1.1, -3.5); hatch.rotation.y = Math.PI / 2;
+  add(new THREE.CircleGeometry(1.0, 20), glowM(0x5ef2e0, 0.8), -7.12, 1.1, -3.5).rotation.y = -Math.PI / 2;
+  // round aquarium: glass cylinder with water, sand, plants, rings
+  const tank = new THREE.Group(); tank.position.set(0, 0, 4.5); g.add(tank);
+  const tw = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 4, 32, 1, true), glassM); tw.position.y = 2; tank.add(tw);
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, 3.8, 32), new THREE.MeshStandardMaterial({ color: 0x40c8f0, transparent: true, opacity: 0.16, depthWrite: false })); water.position.y = 2; tank.add(water);
+  for (const y of [0.05, 4]) { const r = new THREE.Mesh(new THREE.TorusGeometry(2.95, 0.16, 8, 40), metal); r.rotation.x = Math.PI / 2; r.position.y = y; tank.add(r); }
+  const sand = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, 0.3, 32), new THREE.MeshStandardMaterial({ color: 0xe8d6a0, roughness: 1 })); sand.position.y = 0.15; tank.add(sand);
+  for (let i = 0; i < 9; i++) {
+    const a = i / 9 * Math.PI * 2, r = 1.2 + (i % 3) * 0.5, h = 0.8 + (i % 4) * 0.35;
+    const pl2 = new THREE.Mesh(new THREE.ConeGeometry(0.12, h, 5), new THREE.MeshStandardMaterial({ color: i % 2 ? 0x2f8f4a : 0x3fae5a })); pl2.position.set(Math.cos(a) * r, 0.3 + h / 2, Math.sin(a) * r); tank.add(pl2);
+  }
+  const tl = new THREE.PointLight(0x9fe8ff, 12, 9); tl.position.y = 3.5; tank.add(tl);
+  // beacon on top + a faint light beam up to the surface so you can find it
+  const beacon = add(new THREE.SphereGeometry(0.4, 12, 8), glowM(0x5ef2e0, 4), 0, 4.6, -3.5);
+  const beam = add(new THREE.CylinderGeometry(0.6, 1.6, 48, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0x5ef2e0, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), 0, 28, -3.5);
+  const sign = makeTag('🐠 BASIS · Aquarium', '#5ef2e0'); sign.scale.multiplyScalar(2.2); sign.position.set(0, 6.4, 0); g.add(sign);
+  let t = 0;
+  return { group: g, tank, tankR: 2.5, tankH: [0.6, 3.6], update(dt) { t += dt; beacon.material.emissiveIntensity = 2.5 + Math.sin(t * 3) * 1.5; beam.material.opacity = 0.05 + Math.sin(t * 3) * 0.02; } };
 }
 
 export function buildEnvironment(scene, W) {
@@ -142,7 +190,7 @@ export function buildEnvironment(scene, W) {
   root.add(wr);
 
   // ----- expedition: glowing crystals in the deep + trader boat -----
-  let boat = null;
+  let boat = null, base = null;
   if (exp) {
     if (W.crystals.length) {
       const cg = new THREE.OctahedronGeometry(0.5, 0).scale(0.6, 2.2, 0.6).translate(0, 0.9, 0);
@@ -154,6 +202,7 @@ export function buildEnvironment(scene, W) {
       root.add(im);
     }
     boat = makeBoat(); boat.position.set(EXP_BOAT.x, SURFACE, EXP_BOAT.z); root.add(boat);
+    base = buildBase(root, W);
   }
 
   // ----- water surface + light shafts -----
@@ -260,7 +309,7 @@ export function buildEnvironment(scene, W) {
 
   const shallow = new THREE.Color(0x2b8fb0), deepC = new THREE.Color(0x05202e), toxic = new THREE.Color(0x1d0a33), abyss = new THREE.Color(0x010307);
   return {
-    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat,
+    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat, base,
     update(dt, t, cam, zone, outside) {
       uTime.value = t;
       surfTex.offset.x = t * 0.004; surfTex.offset.y = t * 0.0025;
@@ -301,7 +350,7 @@ export function buildEnvironment(scene, W) {
       if (exp) {   // the deeper, the darker
         const dd = Math.max(0, Math.min(1, (SURFACE - cy - 120) / 220));
         fog.color.lerp(abyss, dd); fog.density += 0.008 * dd;
-        boat.userData.update(dt);
+        boat.userData.update(dt); base.update(dt);
         // the guiding light beam only shows once you are deeper down
         boat.userData.beam.material.opacity = 0.07 * Math.max(0, Math.min(1, (SURFACE - cy - 10) / 30));
       }

@@ -672,6 +672,8 @@ function storeProgress(p) {
 }
 const depthOf = (o) => SURFACE - o.y;
 const nearBoat = (p, r = 16, d = 6) => dist2d(p, EXP_BOAT.x, EXP_BOAT.z) < r && depthOf(p) < d;
+// the underwater base with the aquarium and an air station
+const nearBase = (p, r = 16) => !!G.world.base && dist(p, G.world.base.c) < r;
 // wake up in the water next to the ship (it is 24 m long along z, 7 m wide)
 const boatSpawn = () => { const s = rnd() < 0.5 ? -1 : 1; return { x: EXP_BOAT.x + s * (6 + rnd() * 2), y: SURFACE - 2.5, z: EXP_BOAT.z + (rnd() - 0.5) * 12, yaw: s > 0 ? 1.57 : -1.57 }; };
 
@@ -870,7 +872,8 @@ function expFishAction(p, m) {
   return true;
 }
 function expBuy(p, m) {
-  if (!p.alive || !nearBoat(p, 22, 10)) { p.ye.push(['shop', 'Du musst am Boot sein!']); return; }
+  const atBase = ['aq', 'aqsell', 'aqup'].includes(m.k);   // aquarium things happen in the base, everything else at the ship
+  if (!p.alive || !(atBase ? nearBase(p, 20) : nearBoat(p, 22, 10))) { p.ye.push(['shop', atBase ? 'Du musst an der Basis sein!' : 'Du musst am Boot sein!']); return; }
   if (expFishAction(p, m)) return;
   let price, label, apply;
   if (m.k === 'aqup' && AQUARIUM.sizes[p.aqLvl + 1]) {
@@ -916,7 +919,7 @@ function tickExp(dt) {
     if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) { p.reload = 0; const w = p.weapons[p.slot]; if (w) w.ammo = WEAPONS[w.id].mag; } }
     // air and pressure
     const depth = depthOf(p), T = TANKS[p.tank];
-    if (depth < 2.6) { p.air = Math.min(T.cap, p.air + T.cap * 0.35 * dt); p.lowAir = false; }
+    if (depth < 2.6 || nearBase(p, 14)) { p.air = Math.min(T.cap, p.air + T.cap * 0.35 * dt); p.lowAir = false; }   // surface or air station in the base
     else p.air = Math.max(0, p.air - airUse(depth) * LUNGS[p.lung].mul * (p.boost ? 1.4 : 1) * dt);
     if (!p.lowAir && p.air < T.cap * 0.25) { p.lowAir = true; p.ye.push(['warn', 'Luft wird knapp – auftauchen!']); }
     let hurt = 0;
@@ -932,6 +935,9 @@ function tickExp(dt) {
     const atBoat = nearBoat(p);
     if (atBoat && !p.atBoat && p.bag.length) p.ye.push(['bagHint', p.bag.length, p.bag.reduce((a, e) => a + fishValue(e), 0)]);
     p.atBoat = atBoat;
+    const atBase = nearBase(p);
+    if (atBase && !p.atBase) p.ye.push(['baseHint', p.bag.length]);
+    p.atBase = atBase;
   }
   // aquarium income (also while dead or swimming far away)
   for (const p of G.players.values()) {

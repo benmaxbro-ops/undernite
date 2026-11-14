@@ -72,7 +72,8 @@ function ensureWorld(seed, wmode = 'br') {
 }
 // ---------- expedition shop ----------
 const nearBoat = () => Math.hypot(me.x - EXP_BOAT.x, me.z - EXP_BOAT.z) < 20 && SURFACE - me.y < 9;
-function openShop() { hud.openShop(you); firing = false; if (document.pointerLockElement) document.exitPointerLock(); }
+const nearBase = () => !!W.base && Math.hypot(me.x - W.base.c.x, me.y - W.base.c.y, me.z - W.base.c.z) < 16;
+function openShop(kind) { hud.openShop(you, kind); firing = false; if (document.pointerLockElement) document.exitPointerLock(); }
 function closeShop() { hud.closeShop(); lock(); }
 hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeShop(); send({ t: 'quit' }); });
 function clearDyn() {
@@ -174,7 +175,8 @@ function onPrivate(e) {
     case 'sold': hud.banner(`${e[1]} Fische verkauft: +${e[2].toLocaleString('de-DE')} €`, 3); sfx.ping(); break;
     case 'bought': hud.shopMsg(`Gekauft: ${e[1]}`, true); hud.feed(`Gekauft: <b>${esc(e[1])}</b>`, true); sfx.crate(); break;
     case 'shop': hud.shopMsg(e[1]); hud.banner(e[1], 2); break;
-    case 'bagHint': hud.banner(`${e[1]} Fische dabei (${e[2].toLocaleString('de-DE')} €) – drück E: verkaufen oder ins Aquarium!`, 4); break;
+    case 'bagHint': hud.banner(`${e[1]} Fische dabei (${e[2].toLocaleString('de-DE')} €) – drück E zum Verkaufen!`, 4); break;
+    case 'baseHint': hud.banner(e[1] ? `Unterwasser-Basis – drück E, um Fische ins Aquarium zu setzen! Luft wird aufgefüllt.` : 'Unterwasser-Basis – hier wird deine Luft aufgefüllt.', 4); sfx.ping(); break;
     case 'aqin': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`Ins Aquarium: <b>${e[2] ? '⭐ Goldener ' : ''}${S.name}</b>`, true); break; }
     case 'aqoffline': hud.banner(`Während du weg warst, hat dein Aquarium ${e[1].toLocaleString('de-DE')} € verdient!`, 5); sfx.ping(); break;
     case 'boss': hud.banner(`${BOSSES[e[1]].name} besiegt! +${e[2].toLocaleString('de-DE')} €`, 4); sfx.ping(); break;
@@ -195,7 +197,7 @@ addEventListener('keydown', (e) => {
     else { torch.on = !torch.on; sfx.hitmark(false); }
     return;
   }
-  if (mode === 'exp' && e.code === 'KeyE') { if (hud.shopOpen) closeShop(); else if (nearBoat()) openShop(); return; }
+  if (mode === 'exp' && e.code === 'KeyE') { if (hud.shopOpen) closeShop(); else if (nearBoat()) openShop('boat'); else if (nearBase()) openShop('base'); return; }
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i]) send({ t: 'slot', i }); }
   else if (e.code === 'KeyR') send({ t: 'r' });
   else if (e.code === 'KeyE') send({ t: 'e' });
@@ -247,41 +249,31 @@ function controlMe(dt) {
   if (atTop && !me.surfaced && me.vy > 0.5) { env.bubble(me.x, SURFACE - 0.4, me.z, 28, 1.4, 1.5); sfx.noise(0.45, 1100, 0.7, 0.35, 'lowpass', 250); }
   me.surfaced = atTop;
 }
-// ---------- aquarium on the ship deck: a glass tank with your own fish ----------
-const aqView = { boat: null, tank: null, fish: [], key: '' };
+// ---------- aquarium in the underwater base: your fish swim in the round glass tank ----------
+const aqView = { base: null, fish: [], key: '' };
 function updateAquarium(dt) {
-  if (mode !== 'exp' || !env || !env.boat || !you || !you.x) return;
-  if (aqView.boat !== env.boat) {   // new world: build the tank on this ship
-    aqView.boat = env.boat; aqView.fish = []; aqView.key = '';
-    const t = new THREE.Group(); t.position.set(0, 1.85, -4.6); env.boat.add(t); aqView.tank = t;
-    const glass = new THREE.MeshStandardMaterial({ color: 0xbfefff, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.3, depthWrite: false });
-    const water = new THREE.MeshStandardMaterial({ color: 0x2aa8d8, transparent: true, opacity: 0.32, roughness: 0.1, depthWrite: false });
-    const frame = new THREE.MeshStandardMaterial({ color: 0x3a2616, roughness: 0.7 });
-    const box = (m, x, y, z, sx, sy, sz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); t.add(o); return o; };
-    box(frame, 0, 0.08, 0, 2.9, 0.16, 1.7);                           // base
-    box(new THREE.MeshStandardMaterial({ color: 0xe8d6a0, roughness: 1 }), 0, 0.22, 0, 2.7, 0.12, 1.5);   // sand
-    box(water, 0, 0.92, 0, 2.66, 1.3, 1.46);                          // water
-    box(glass, 0, 0.92, 0, 2.76, 1.42, 1.56);                         // glass
-    for (const [x, z] of [[-1.38, -0.78], [1.38, -0.78], [-1.38, 0.78], [1.38, 0.78]]) box(frame, x, 0.92, z, 0.07, 1.46, 0.07);
-    box(frame, 0, 1.66, 0, 2.9, 0.08, 1.7);                           // lid rim
-    for (let i = 0; i < 5; i++) { const p = box(new THREE.MeshStandardMaterial({ color: 0x2f8f4a }), -1.1 + i * 0.55, 0.5, 0.45 - (i % 2) * 0.9, 0.06, 0.5 + (i % 3) * 0.18, 0.06); p.rotation.z = (i - 2) * 0.12; }   // plants
-    box(new THREE.MeshStandardMaterial({ color: 0x7d7a74, roughness: 0.9 }), 0.8, 0.36, -0.3, 0.4, 0.22, 0.32);   // a stone
-    const lamp = new THREE.PointLight(0xbff4ff, 1.5, 4); lamp.position.set(0, 1.5, 0); t.add(lamp);
-  }
+  if (mode !== 'exp' || !env || !env.base || !you || !you.x) return;
+  const B = env.base;
+  if (aqView.base !== B) { aqView.base = B; aqView.fish = []; aqView.key = ''; }   // new world
   const key = JSON.stringify(you.x.aq);
   if (key !== aqView.key) {   // the fish in the tank changed: rebuild them
     aqView.key = key;
-    for (const f of aqView.fish) aqView.tank.remove(f.mesh);
+    for (const f of aqView.fish) B.tank.remove(f.mesh);
     aqView.fish = you.x.aq.map(([s, g]) => {
-      const S = FISH[s], mesh = makeFish(S, g); mesh.scale.setScalar(0.17 / S.size); aqView.tank.add(mesh);
-      return { mesh, x: (Math.random() - 0.5) * 2, y: 0.5 + Math.random() * 0.9, z: (Math.random() - 0.5) * 1, tx: 0, ty: 0.9, tz: 0, yaw: 0, t: 0 };
+      const S = FISH[s], mesh = makeFish(S, g); mesh.scale.setScalar(0.32 / S.size); B.tank.add(mesh);
+      const a = Math.random() * 6.28, r = Math.random() * B.tankR;
+      return { mesh, x: Math.cos(a) * r, y: B.tankH[0] + Math.random() * (B.tankH[1] - B.tankH[0]), z: Math.sin(a) * r, tx: 0, ty: 2, tz: 0, yaw: 0, t: 0 };
     });
   }
   // only animate when you are close enough to see it
-  if (Math.hypot(camera.position.x - EXP_BOAT.x, camera.position.z - EXP_BOAT.z) > 70) return;
+  const c = W.base.c;
+  if (Math.hypot(camera.position.x - c.x, camera.position.y - c.y, camera.position.z - c.z) > 80) return;
   for (const f of aqView.fish) {
-    if ((f.t -= dt) <= 0) { f.t = 2 + Math.random() * 3; f.tx = (Math.random() - 0.5) * 2.2; f.ty = 0.45 + Math.random() * 1.0; f.tz = (Math.random() - 0.5) * 1.1; }
-    const dx = f.tx - f.x, dy = f.ty - f.y, dz = f.tz - f.z, d = Math.hypot(dx, dy, dz) || 1, sp = Math.min(d, 0.35 * dt);
+    if ((f.t -= dt) <= 0) {
+      f.t = 2 + Math.random() * 3; const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * B.tankR;
+      f.tx = Math.cos(a) * r; f.tz = Math.sin(a) * r; f.ty = B.tankH[0] + Math.random() * (B.tankH[1] - B.tankH[0]);
+    }
+    const dx = f.tx - f.x, dy = f.ty - f.y, dz = f.tz - f.z, d = Math.hypot(dx, dy, dz) || 1, sp = Math.min(d, 0.6 * dt);
     f.x += dx / d * sp; f.y += dy / d * sp; f.z += dz / d * sp;
     f.yaw = lerpAngle(f.yaw, Math.atan2(-dx, -dz), Math.min(1, dt * 3));
     f.mesh.position.set(f.x, f.y, f.z);
@@ -332,7 +324,7 @@ function tryFire(now) {
 function computePrompt() {
   if (!you || !you.alive) return null;
   if (you.grab) return ['F', 'Befreien – mehrfach drücken!'];
-  if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Laden & Aquarium'] : null;
+  if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
   const S = SUITS[mySuit]; let best = null, bd = 1e9;
@@ -445,14 +437,14 @@ function frame(now) {
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap
       let bb = null, bd = 70;
-      marks = [{ x: EXP_BOAT.x, z: EXP_BOAT.z, c: '#ffc94d', s: 4 }];
+      marks = [{ x: EXP_BOAT.x, z: EXP_BOAT.z, c: '#ffc94d', s: 4 }, { x: W.base.c.x, z: W.base.c.z, c: '#5ef2e0', s: 4 }];
       for (const c of creatures.values()) if (c.type === 'boss') {
         marks.push({ x: c.x, z: c.z, c: '#ff4d4d', s: 3.5 });
         const d = Math.hypot(c.x - fx.x, c.y - fx.y, c.z - fx.z); if (d < bd) { bd = d; bb = c; }
       }
       hud.boss(bb ? { name: BOSSES[bb.sub].name, hp: bb.hpPct } : null);
       hud.renderShop(you);
-      if (hud.shopOpen && !nearBoat()) hud.closeShop();
+      if (hud.shopOpen && !(hud.shopKind === 'base' ? nearBase() : nearBoat())) hud.closeShop();
       // it gets darker the deeper you dive
       const df = Math.max(0, Math.min(1, (SURFACE - camera.position.y) / 300));
       // below ~150 m it is almost pitch black without a lamp

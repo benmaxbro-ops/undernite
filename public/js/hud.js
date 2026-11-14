@@ -75,12 +75,20 @@ export class Hud {
     $('shopQuit').addEventListener('click', onQuit);
   }
   get shopOpen() { return !$('shop').classList.contains('hidden'); }
-  openShop(you) { $('shop').classList.remove('hidden'); this.shopMsg(''); this.shopKey = ''; this.renderShop(you); }
+  // kind: 'boat' (sell fish, buy gear) or 'base' (underwater base: aquarium)
+  openShop(you, kind = 'boat') {
+    this.shopKind = kind; $('shop').classList.remove('hidden'); this.shopMsg(''); this.shopKey = '';
+    document.querySelector('.shopBox h2').innerHTML = kind === 'base' ? 'UNTERWASSER<span>-BASIS</span>' : 'HÄNDLER<span>-BOOT</span>';
+    document.querySelector('.shopGrid').classList.toggle('hidden', kind === 'base');
+    $('shopClose').textContent = 'WEITER TAUCHEN (E)';
+    this.renderShop(you);
+  }
   closeShop() { $('shop').classList.add('hidden'); }
   shopMsg(t, good) { const el = $('shopMsg'); el.textContent = t; el.style.color = good ? 'var(--hp)' : 'var(--warn)'; }
   renderShop(you) {
     if (!you || !you.x || !this.shopOpen) return;
-    const x = you.x, key = [x.money, x.tank, x.lung, x.lamp, JSON.stringify(x.bagL), JSON.stringify(x.aq), x.aqLvl, you.w.map(w => w && w[0] + w[1]).join()].join('|');
+    const base = this.shopKind === 'base';
+    const x = you.x, key = [this.shopKind, x.money, x.tank, x.lung, x.lamp, JSON.stringify(x.bagL), JSON.stringify(x.aq), x.aqLvl, you.w.map(w => w && w[0] + w[1]).join()].join('|');
     if (key === this.shopKey) return; this.shopKey = key;
     $('shopMoney').textContent = 'Dein Geld: ' + money(x.money);
     const item = (title, sub, price, can, k, i, rar) => `<div class="item" style="--rar:${rar || '#55626c'}"><b>${title}</b><small>${sub}</small>`
@@ -97,17 +105,22 @@ export class Hud {
     // ----- your catch + aquarium -----
     const fname = (f) => f[0] < 0 ? 'Alter Fang' : (f[1] ? '⭐ Goldener ' : '') + FISH[f[0]].name;
     const fval = (f) => f[0] < 0 ? f[1] : FISH[f[0]].value * (f[1] ? GOLD_MUL : 1);
-    const cap = AQUARIUM.sizes[x.aqLvl], full = x.aq.length >= cap, eur = (v) => v.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' €';
+    const cap = AQUARIUM.sizes[x.aqLvl], full = x.aq.length >= cap;
+    const perSec = (perMin) => (perMin / 60).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
     const bagV = x.bagL.reduce((a, f) => a + fval(f), 0);
-    let fish = `<div><h3>Dein Fang · ${x.bagL.length} Fische<button class="smallBtn" data-k="sellall" data-i="0" ${x.bagL.length ? '' : 'disabled'}>Alles verkaufen ${money(bagV)}</button></h3><div class="fishList">`;
-    fish += x.bagL.length ? x.bagL.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· ${eur(fval(f) * AQUARIUM.rate)}/min im Aquarium</small></span>`
-      + `<button data-k="sell" data-i="${i}">+${money(fval(f))}</button><button class="aqb" data-k="aq" data-i="${i}" ${full || f[0] < 0 ? 'disabled' : ''}>Ins Aquarium</button></div>`).join('')
+    let fish = `<div><h3>Dein Fang · ${x.bagL.length} Fische`
+      + (base ? '' : `<button class="smallBtn" data-k="sellall" data-i="0" ${x.bagL.length ? '' : 'disabled'}>Alles verkaufen ${money(bagV)}</button>`) + '</h3><div class="fishList">';
+    fish += x.bagL.length ? x.bagL.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· ${base ? '+' + perSec(fval(f) * AQUARIUM.rate) + ' im Aquarium' : money(fval(f))}</small></span>`
+      + (base ? `<button class="aqb" data-k="aq" data-i="${i}" ${full || f[0] < 0 ? 'disabled' : ''}>Ins Aquarium</button>` : `<button data-k="sell" data-i="${i}">Verkaufen +${money(fval(f))}</button>`) + '</div>').join('')
       : '<div class="empty">Noch nichts gefangen – ab ins Wasser!</div>';
-    fish += `</div></div><div><h3>Aquarium · ${x.aq.length}/${cap} · +${eur(x.aqRate)}/min</h3><div class="fishList">`;
-    fish += x.aq.length ? x.aq.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· +${eur(fval(f) * AQUARIUM.rate)}/min</small></span><button data-k="aqsell" data-i="${i}">Verkaufen +${money(fval(f))}</button></div>`).join('')
-      : '<div class="empty">Leer. Setz Fische hinein – sie verdienen jede Minute Geld, je tiefer sie herkommen, desto mehr.</div>';
-    const nextCap = AQUARIUM.sizes[x.aqLvl + 1];
-    fish += '</div>' + (nextCap ? item(`▲ Größeres Aquarium`, `${cap} → ${nextCap} Plätze`, AQUARIUM.prices[x.aqLvl + 1], '', 'aqup', 0, '#3fa9f5') : item('Riesen-Aquarium!', 'Mehr Plätze gibt es nicht', null, 'Max')) + '</div>';
+    fish += `</div></div><div><h3>Aquarium · ${x.aq.length}/${cap} · +${perSec(x.aqRate)}</h3>`;
+    if (base) {
+      fish += '<div class="fishList">' + (x.aq.length ? x.aq.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· +${perSec(fval(f) * AQUARIUM.rate)}</small></span><button data-k="aqsell" data-i="${i}">Verkaufen +${money(fval(f))}</button></div>`).join('')
+        : '<div class="empty">Leer. Setz Fische hinein – sie verdienen jede Sekunde Geld, je tiefer sie herkommen, desto mehr.</div>');
+      const nextCap = AQUARIUM.sizes[x.aqLvl + 1];
+      fish += '</div>' + (nextCap ? item(`▲ Größeres Aquarium`, `${cap} → ${nextCap} Plätze`, AQUARIUM.prices[x.aqLvl + 1], '', 'aqup', 0, '#3fa9f5') : item('Riesen-Aquarium!', 'Mehr Plätze gibt es nicht', null, 'Max'));
+    } else fish += '<div class="empty">Fische ins Aquarium setzen kannst du in der <b>Unterwasser-Basis</b>: Etage 1, 50 m tief, links (Westen) – auf der Minikarte als <b>Basis</b>. Dort kannst du auch Luft tanken.</div>';
+    fish += '</div>';
     $('shopFish').innerHTML = fish;
     $('shopWeapons').innerHTML = SHOP_WEAPONS.map((it, i) => {
       const D = WEAPONS[it.wid], R = RARITY[it.rar], own = you.w.some(w => w && w[0] === it.wid && w[1] >= it.rar);
@@ -157,7 +170,7 @@ export class Hud {
     this.set('depth', 'text', `TIEFE ${Math.round(s.depth)} m`);
     if (this.mode === 'exp' && y && y.x) {
       const x = y.x, T = TANKS[x.tank], f = floorAt(s.depth), deep = s.depth > T.maxDepth;
-      this.set('alive', 'text', money(x.money) + (x.aqRate > 0 ? ` (+${Math.round(x.aqRate)}/min)` : ''));
+      this.set('alive', 'text', money(x.money) + (x.aqRate > 0 ? ` (+${(x.aqRate / 60).toLocaleString('de-DE', { maximumFractionDigits: 2 })}/s)` : ''));
       this.set('kills', 'text', x.bag ? `${x.bag} · ${money(x.bagV)}` : '0');
       this.set('airFill', 'width', Math.max(0, x.air / T.cap * 100) + '%');
       const secs = s.depth < 2.6 ? '' : ` · ~${Math.floor(x.air / (airUse(s.depth) * LUNGS[x.lung].mul))} s`;

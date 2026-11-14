@@ -1,7 +1,8 @@
 // Headless smoke test for the Tiefsee-Expedition mode (server must be running).
 // Plays a scripted diver: hunt fish -> sell at boat -> buy gear -> fight boss -> dive too deep -> respawn.
 import WebSocket from 'ws';
-import { FISH, BOSSES, SURFACE, EXP_BOAT } from './public/js/shared.js';
+import { FISH, BOSSES, SURFACE, EXP_BOAT, World } from './public/js/shared.js';
+let base = null;   // underwater base position (from the world seed)
 
 const ws = new WebSocket('ws://localhost:' + (process.env.PORT || 8080));
 const send = (o) => ws.send(JSON.stringify(o));
@@ -21,7 +22,7 @@ function aimAt(t) {
 ws.on('message', (raw) => {
   const m = JSON.parse(raw);
   if (m.t === 'welcome') { send({ t: 'set', name: 'Testtaucher', suit: 'triton', mode: 'exp' }); setTimeout(() => send({ t: 'start' }), 200); }
-  if (m.t === 'start') { log('start mode', m.mode); ok.start = m.mode === 'exp'; }
+  if (m.t === 'start') { log('start mode', m.mode); ok.start = m.mode === 'exp'; base = new World(m.seed, 'exp').base.c; log('base at', base.x.toFixed(1), (SURFACE - base.y) + ' m deep'); }
   if (m.t !== 's' || !m.you) return;
   const y = m.you, x = y.x; stepT++;
   for (const e of m.ye) {
@@ -37,13 +38,20 @@ ws.on('message', (raw) => {
     // first floor fish only (cheap ones in shallow water)
     const t = fish.filter(c => FISH[c[8]].floor === 0).sort((a, b) => Math.hypot(a[2] - pos.x, a[4] - pos.z) - Math.hypot(b[2] - pos.x, b[4] - pos.z))[0];
     if (t) aimAt(t);
-    if (caught >= 12 || stepT > 900) { log('bag', x.bag, 'fish worth', x.bagV, '€, air', x.air); ok.hunt = x.bag > 0; step = 'sell'; stepT = 0; }
+    if (caught >= 12 || stepT > 900) { log('bag', x.bag, 'fish worth', x.bagV, '€, air', x.air); ok.hunt = x.bag > 0; ok.airHunt = x.air; step = 'sell'; stepT = 0; }
   } else if (step === 'sell') {
-    // at the boat: two fish into the aquarium, sell the rest
-    pos = { x: EXP_BOAT.x + 7, y: SURFACE - 2, z: EXP_BOAT.z }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
-    if (stepT === 5) { send({ t: 'buy', k: 'aq', i: 0 }); send({ t: 'buy', k: 'aq', i: 0 }); }
-    if (stepT === 10) { log('aquarium', JSON.stringify(x.aq), 'income', x.aqRate, '€/min'); ok.aquarium = x.aq.length === 2 && x.aqRate > 0; send({ t: 'buy', k: 'sellall' }); }
-    if (stepT > 10 && x.bag === 0) { log('money after selling', x.money); ok.sell = x.money > 0; step = 'buy'; }
+    // at the underwater base: two fish into the aquarium (and air gets refilled there)
+    if (stepT < 40) {
+      pos = { x: base.x + 7, y: base.y + 1, z: base.z }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
+      if (stepT === 3) { send({ t: 'buy', k: 'sellall' }); }   // selling at the base must be refused
+      if (stepT === 6) { send({ t: 'buy', k: 'aq', i: 0 }); send({ t: 'buy', k: 'aq', i: 0 }); }
+      if (stepT === 39) { log('aquarium', JSON.stringify(x.aq), 'income', x.aqRate, '€/min, air', ok.airHunt, '->', x.air, 'at 50 m'); ok.aquarium = x.aq.length === 2 && x.aqRate > 0 && x.bag > 0; ok.airStation = x.air > ok.airHunt; }   // without the station the air would drop at 50 m
+    } else {
+      // then at the boat: sell the rest
+      pos = { x: EXP_BOAT.x + 7, y: SURFACE - 2, z: EXP_BOAT.z }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
+      if (stepT === 45) send({ t: 'buy', k: 'sellall' });
+      if (stepT > 45 && x.bag === 0) { log('money after selling', x.money); ok.sell = x.money > 0; step = 'buy'; }
+    }
   } else if (step === 'buy') {
     send({ t: 'buy', k: 'w', i: 0 }); send({ t: 'buy', k: 'tank' });
     step = 'boss'; stepT = 0;
@@ -61,7 +69,7 @@ ws.on('message', (raw) => {
 ws.on('close', () => log('closed'));
 const finish = () => {
   log('RESULT', JSON.stringify(ok), 'private events', JSON.stringify(seen));
-  process.exit(ok.start && ok.hunt && ok.aquarium && ok.sell && ok.respawn ? 0 : 1);
+  process.exit(ok.start && ok.hunt && ok.aquarium && ok.airStation && ok.sell && ok.respawn ? 0 : 1);
 };
 setInterval(() => { if (ok.respawn) finish(); }, 500);
 setTimeout(finish, 120000);

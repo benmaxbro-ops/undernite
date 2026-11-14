@@ -292,6 +292,18 @@ export class World {
       this.cols.push({ x, y, z, r: r * 0.92 });
     }
 
+    // expedition: underwater base on the left (west) edge of the first floor, platform at 50 m depth
+    this.base = null;
+    if (exp) {
+      let br = 240;
+      for (let r = 196; r <= 286; r += 0.5) if (SURFACE - this.heightAt(-r, 0) <= 53) { br = r; break; }
+      const c = { x: -br + 1.5, y: SURFACE - 50, z: 0 };   // right at the cliff edge, the abyss on the inner side
+      this.base = { c, dome: { x: c.x, y: c.y, z: c.z - 3.5 }, tank: { x: c.x, y: c.y, z: c.z + 4.5 } };
+      const near = (o) => (o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 14 * 14 && Math.abs(o.y - c.y) < 14;
+      this.rocks = this.rocks.filter(o => !near(o)); this.cols = this.cols.filter(o => !near(o));   // clear the building site
+      this.cols.push({ x: c.x, y: c.y + 1.2, z: c.z - 3.5, r: 4.6 }, { x: c.x, y: c.y + 2, z: c.z + 4.5, r: 3.1 }, { x: c.x, y: c.y + 2, z: c.z + 4.5 - 2, r: 2.2 });
+    }
+
     // collider hash
     this.hash = new Map();
     for (const c of this.cols) {
@@ -376,7 +388,7 @@ export class World {
       }
       return best;
     });
-    this.pois = exp ? [{ n: 'Boot', x: EXP_BOAT.x, z: EXP_BOAT.z }] : [
+    this.pois = exp ? [{ n: 'Boot', x: EXP_BOAT.x, z: EXP_BOAT.z }, { n: 'Basis', x: this.base.c.x, z: this.base.c.z }] : [
       { n: 'Wrack', x: ws.x, z: ws.z }, { n: 'Ruinen', x: rs.x, z: rs.z },
       { n: 'Seeberg', x: this.smx, z: this.smz }, { n: 'Kelpwald', x: kelpSites[0].x, z: kelpSites[0].z },
     ];
