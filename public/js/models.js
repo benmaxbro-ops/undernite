@@ -2,6 +2,8 @@
 // game ships without any binary assets. Forward is -z for all models.
 import * as THREE from 'three';
 import { SUITS, RARITY } from './shared.js';
+import { makeRealFish, makeRealShark, makeRealOcto, makeRealBoss } from './creatures.js';
+import { makeShip } from './ship.js';
 
 const TAU = Math.PI * 2;
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1, ...o });
@@ -163,75 +165,9 @@ export function makeScooter() {
   return root;
 }
 
-// ---------- creatures ----------
-function sharkBody() {
-  const pts = [[0, -2.3], [0.22, -2.05], [0.46, -1.3], [0.56, -0.4], [0.5, 0.5], [0.3, 1.5], [0.1, 2.2]].map(p => new THREE.Vector2(p[0], p[1]));
-  const g = new THREE.LatheGeometry(pts, 14).rotateX(Math.PI / 2);
-  const pos = g.attributes.position, col = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) {
-    const k = THREE.MathUtils.smoothstep(pos.getY(i), -0.25, 0.12);
-    col[i * 3] = 0.82 - 0.56 * k; col[i * 3 + 1] = 0.86 - 0.52 * k; col[i * 3 + 2] = 0.88 - 0.46 * k;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  return g;
-}
-let SHARK_GEO = null;
-export function makeShark(tint) {
-  SHARK_GEO ||= sharkBody();
-  const root = new THREE.Group(), g = new THREE.Group(); g.rotation.order = 'YXZ'; root.add(g);
-  const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, color: tint ?? 0xffffff });
-  const finM = new THREE.MeshStandardMaterial({ color: tint ? new THREE.Color(tint).multiplyScalar(0.55) : 0x4a5a68, roughness: 0.6, side: THREE.DoubleSide });
-  const body = add(g, SHARK_GEO, skin); body.scale.set(0.85, 1.05, 1);
-  add(g, tri([0, 0.5, -0.5], [0, 1.45, 0.35], [0, 0.48, 0.5]), finM);
-  add(g, tri([0.4, -0.2, -0.9], [1.5, -0.6, 0.1], [0.4, -0.25, -0.1]), finM);
-  add(g, tri([-0.4, -0.2, -0.9], [-0.4, -0.25, -0.1], [-1.5, -0.6, 0.1]), finM);
-  const eye = std(0x050505, { roughness: 0.2 });
-  add(g, GEO.sph, eye, 0.33, 0.12, -1.6).scale.setScalar(0.07); add(g, GEO.sph, eye, -0.33, 0.12, -1.6).scale.setScalar(0.07);
-  add(g, GEO.box, std(0xe8eef0), 0, -0.28, -1.75).scale.set(0.42, 0.04, 0.5);
-  const tail = new THREE.Group(); tail.position.z = 2.05; g.add(tail);
-  add(tail, tri([0, 0, -0.1], [0, 1.25, 0.9], [0, 0.1, 0.45]), finM);
-  add(tail, tri([0, 0, -0.1], [0, -0.1, 0.45], [0, -0.85, 0.75]), finM);
-  let ph = Math.random() * 6;
-  root.userData.update = (dt, s) => {
-    ph += dt * (s.state ? 13 : 5);
-    g.rotation.y = s.yaw + Math.sin(ph) * 0.06; g.rotation.x = s.pitch;
-    tail.rotation.y = Math.sin(ph - 0.8) * 0.55;
-  };
-  return root;
-}
-export function makeOcto(color) {
-  const root = new THREE.Group(), g = new THREE.Group(); g.rotation.order = 'YXZ'; root.add(g);
-  const skin = std(color ?? 0xd2452f, { roughness: 0.75, metalness: 0 }), pale = std(color ? new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.45) : 0xf0a070, { roughness: 0.8, metalness: 0 });
-  add(g, GEO.sph, skin, 0, 0.25, -0.6).scale.set(0.85, 0.9, 1.15);
-  for (const sx of [-1, 1]) { add(g, GEO.sph, glow(0xffe066, 1.6), sx * 0.5, 0.35, 0.15).scale.setScalar(0.16); add(g, GEO.sph, std(0x000000), sx * 0.6, 0.35, 0.2).scale.set(0.06, 0.12, 0.09); }
-  const seg = zCyl(0.16, 0.12, 0.55, 7).translate(0, 0, 0.275);
-  const arms = [];
-  for (let i = 0; i < 8; i++) {
-    const a = i / 8 * TAU + 0.2, base = new THREE.Group();
-    base.position.set(Math.cos(a) * 0.45, Math.sin(a) * 0.4 + 0.1, 0.35);
-    base.rotation.set(-Math.sin(a) * 0.75, Math.cos(a) * 0.75, 0);
-    g.add(base);
-    let parent = base; const chain = [];
-    for (let k = 0; k < 6; k++) {
-      const j = new THREE.Group(); j.position.z = k ? 0.5 : 0; parent.add(j);
-      const t = 1 - k * 0.13; add(j, seg, k % 2 ? pale : skin).scale.set(t, t, 1);
-      add(j, GEO.sph, skin).scale.setScalar(0.16 * t);
-      chain.push(j); parent = j;
-    }
-    arms.push({ chain, a });
-  }
-  let ph = Math.random() * 6;
-  root.userData.update = (dt, s) => {
-    ph += dt * (s.state === 1 ? 7 : 2.2);
-    g.rotation.y = s.yaw; g.rotation.x = s.pitch;
-    const curl = s.state === 2 ? 0.5 : s.state === 1 ? 0.05 : 0.22;
-    for (const arm of arms) for (let k = 0; k < arm.chain.length; k++) {
-      const w = Math.sin(ph + arm.a * 2 + k * 0.8) * 0.22;
-      arm.chain[k].rotation.x = Math.sin(arm.a) * (curl + w); arm.chain[k].rotation.y = -Math.cos(arm.a) * (curl + w);
-    }
-  };
-  return root;
-}
+// ---------- creatures (realistic versions live in creatures.js) ----------
+export function makeShark(tint) { return makeRealShark(tint ? { back: tint } : {}); }
+export function makeOcto(color) { return makeRealOcto(color); }
 const JELLY = { bell: new THREE.SphereGeometry(0.75, 14, 8, 0, TAU, 0, Math.PI / 2), skirt: new THREE.CylinderGeometry(0.5, 0.22, 1.7, 9, 3, true).translate(0, -0.85, 0) };
 export function makeJelly(id) {
   const root = new THREE.Group();
@@ -248,88 +184,17 @@ export function makeJelly(id) {
   return root;
 }
 
-// ---------- expedition: fish, bosses, boat ----------
-// Fish body profiles (radius along the length, nose at -z). shape: 0 normal, 1 tall, 2 long, 3 angler
-const FISH_PROFILE = [
-  [[0, -1], [0.3, -0.75], [0.5, -0.3], [0.48, 0.2], [0.28, 0.65], [0.08, 1]],
-  [[0, -1], [0.45, -0.6], [0.55, -0.1], [0.45, 0.35], [0.2, 0.75], [0.06, 1]],
-  [[0, -1], [0.18, -0.8], [0.24, -0.4], [0.24, 0.2], [0.18, 0.7], [0.05, 1]],
-  [[0, -1], [0.62, -0.7], [0.7, -0.25], [0.5, 0.25], [0.22, 0.7], [0.06, 1]],
-];
-const FISH_GEO = [];
-const fishGeo = (shape) => FISH_GEO[shape] ||= new THREE.LatheGeometry(FISH_PROFILE[shape].map(p => new THREE.Vector2(p[0], p[1])), 12).rotateX(Math.PI / 2);
-// S: entry from FISH (or a fish-type boss). Returns a group with userData.update(dt, {yaw, pitch, state}).
-export function makeFish(S, gold) {
-  const root = new THREE.Group(), g = new THREE.Group(); g.rotation.order = 'YXZ'; root.add(g);
-  const len = S.size ?? 1, shape = S.shape ?? 0;
-  const col = gold ? 0xffd34d : S.col;
-  const skin = new THREE.MeshStandardMaterial({ color: col, roughness: gold ? 0.25 : 0.5, metalness: gold ? 0.9 : 0.3,
-    emissive: gold ? 0x8a5a00 : (S.glow || 0x000000), emissiveIntensity: gold ? 0.6 : S.glow ? 0.08 : 0 });
-  const finM = new THREE.MeshStandardMaterial({ color: new THREE.Color(col).multiplyScalar(0.7), roughness: 0.6, side: THREE.DoubleSide,
-    transparent: true, opacity: 0.85, emissive: S.glow || 0x000000, emissiveIntensity: S.glow ? 0.5 : 0 });
-  const body = add(g, fishGeo(shape), skin);
-  const tall = shape === 1 ? 1.5 : 1, long = shape === 2 ? 2.2 : 1;
-  body.scale.set(len * 0.55, len * tall, len * long);
-  add(g, tri([0, len * 0.4 * tall, -len * 0.2 * long], [0, len * 0.95 * tall, len * 0.3 * long], [0, len * 0.35 * tall, len * 0.55 * long]), finM);
-  const eye = std(0x050505, { roughness: 0.1, metalness: 0.5 });
-  for (const sx of [-1, 1]) add(g, GEO.sph, eye, sx * len * 0.24, len * 0.12 * tall, -len * 0.7 * long).scale.setScalar(len * 0.07 + 0.02);
-  if (S.glow) {   // a row of glowing dots along each side
-    const dot = glow(S.glow, 2.2);
-    for (let i = 0; i < 4; i++) for (const sx of [-1, 1]) add(g, GEO.sph, dot, sx * len * 0.26, -len * 0.18 * tall, (-0.45 + i * 0.3) * len * long).scale.setScalar(len * 0.045 + 0.015);
-  }
-  if (shape === 3) {   // angler: fishing rod with a glowing lure
-    const stalk = add(g, zCyl(0.02, 0.02, 1, 5), std(0x3a2a22), 0, len * 0.75, -len * 0.75);
-    stalk.scale.set(len, len, len * 0.9); stalk.rotation.x = -0.9;
-    add(g, GEO.sph, glow(S.glow || 0xfff07a, 3), 0, len * 1.15, -len * 1.25).scale.setScalar(len * 0.12);
-    const tooth = std(0xf2f2e6);
-    for (let i = 0; i < 5; i++) add(g, new THREE.ConeGeometry(0.03, 0.12, 4), tooth, (i - 2) * len * 0.1, -len * 0.05, -len * 0.98).scale.setScalar(len * 1.2);
-  }
-  const tail = new THREE.Group(); tail.position.z = len * 0.95 * long; g.add(tail);
-  add(tail, tri([0, 0, 0], [0, len * 0.55 * tall, len * 0.5], [0, -len * 0.55 * tall, len * 0.5]), finM);
-  if (gold) add(g, GEO.sph, new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false })).scale.setScalar(len * 1.4 * long);
-  let ph = Math.random() * 6;
-  root.userData.update = (dt, s) => {
-    ph += dt * (s.state ? 16 : 7);
-    g.rotation.y = s.yaw + Math.sin(ph) * 0.05; g.rotation.x = s.pitch;
-    tail.rotation.y = Math.sin(ph - 0.8) * 0.6;
-  };
-  return root;
-}
-// Floor boss i (see BOSSES in shared.js), with a name tag.
+// ---------- expedition: fish, bosses, ship ----------
+export function makeFish(S, gold) { return makeRealFish(S, gold); }
+// Floor boss with a name tag above it.
 export function makeBoss(B) {
-  let inner;
-  if (B.model === 'shark') inner = makeShark(B.col);
-  else if (B.model === 'octo') inner = makeOcto(B.col);
-  else inner = makeFish({ size: 1, shape: B.shape, col: B.col, glow: B.glow });
-  inner.scale.setScalar(B.scale);
+  const inner = makeRealBoss(B);
   const root = new THREE.Group(); root.add(inner);
-  const tag = makeTag('☠ ' + B.name, '#ffc94d'); tag.scale.multiplyScalar(1.7); tag.position.y = B.r + 2.5; root.add(tag);
+  const tag = makeTag('☠ ' + B.name, '#ffc94d'); tag.scale.multiplyScalar(1.7); tag.position.y = B.r + 3; root.add(tag);
   root.userData.update = (dt, s) => inner.userData.update(dt, s);
   return root;
 }
-// The trader boat at the surface. y = 0 is the waterline.
-export function makeBoat() {
-  const g = new THREE.Group();
-  const hull = std(0xc8382c, { roughness: 0.5 }), white = std(0xf2f0e6), wood = std(0x7a5634, { roughness: 0.9 }), dark = std(0x26333f);
-  add(g, GEO.box, hull, 0, -0.6, 0).scale.set(5, 2.2, 13);
-  add(g, new THREE.ConeGeometry(2.5, 4, 4).rotateX(-Math.PI / 2).rotateZ(Math.PI / 4), hull, 0, -0.6, -8.4).scale.set(1.41, 0.62, 1);
-  add(g, GEO.box, dark, 0, -1.75, 0).scale.set(5.05, 0.25, 13.05);
-  add(g, GEO.box, wood, 0, 0.55, 0).scale.set(4.8, 0.15, 12.8);
-  add(g, GEO.box, white, 0, 2.1, 2.5).scale.set(3.6, 3, 4.5);
-  add(g, GEO.box, hull, 0, 3.75, 2.5).scale.set(4, 0.3, 5);
-  for (const sx of [-1, 1]) add(g, GEO.box, glow(0xffe8a0, 1.5), sx * 1.82, 2.4, 2.5).scale.set(0.05, 0.9, 2.6);
-  add(g, GEO.cyl, wood, 0, 6, -3).scale.set(0.15, 11, 0.15);
-  const flag = add(g, GEO.box, glow(0x5ef2e0, 0.8), 0.9, 10.5, -3); flag.scale.set(1.8, 1.1, 0.04);
-  add(g, GEO.sph, glow(0xffc94d, 3), 0, 4.3, 0).scale.setScalar(0.35);
-  const sign = makeTag('⚓ HÄNDLER', '#ffc94d'); sign.scale.multiplyScalar(2.2); sign.position.set(0, 7.5, 2.5); g.add(sign);
-  // light beam down into the water so you find your way back up
-  const beam = add(g, GEO.cyl, new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), 0, -90, 0);
-  beam.scale.set(3, 180, 3);
-  let t = 0;
-  g.userData.beam = beam;
-  g.userData.update = (dt) => { t += dt; g.rotation.z = Math.sin(t * 0.8) * 0.03; g.rotation.x = Math.sin(t * 0.6) * 0.02; flag.rotation.y = Math.sin(t * 3) * 0.3; };
-  return g;
-}
+export function makeBoat() { return makeShip(); }
 
 // ---------- loot ----------
 export function makeCrate() {

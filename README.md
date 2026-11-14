@@ -75,7 +75,9 @@ server.js            Node-Server: liefert public/ aus und simuliert das Spiel (2
 public/js/shared.js  Regeln, Werte und deterministische Welterzeugung (Server und Client)
 public/js/main.js    Client: Netzwerk, Eingabe, Kamera, Entity-Sync
 public/js/world.js   Meeresboden, Flora, Wasser, Partikel, Zonenwand
-public/js/models.js  prozedurale Modelle (Taucher, Mech, U-Boot, Hai, Oktopus …)
+public/js/models.js  prozedurale Modelle (Taucher, Mech, U-Boot, Kisten, Projektile)
+public/js/creatures.js realistische Meerestiere (Fische, Haie, Krake, Rochen, Bosse)
+public/js/ship.js    das Piratenschiff des Händlers
 public/js/hud.js     HUD, Lobby, Ergebnis
 public/js/audio.js   synthetische Sounds (WebAudio)
 ```

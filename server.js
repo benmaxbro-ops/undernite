@@ -670,7 +670,8 @@ function storeProgress(p) {
 }
 const depthOf = (o) => SURFACE - o.y;
 const nearBoat = (p, r = 16, d = 6) => dist2d(p, EXP_BOAT.x, EXP_BOAT.z) < r && depthOf(p) < d;
-const boatSpawn = () => { const a = rnd() * 6.283; return { x: EXP_BOAT.x + Math.cos(a) * 6, y: SURFACE - 2.5, z: EXP_BOAT.z + Math.sin(a) * 6, yaw: a }; };
+// wake up in the water next to the ship (it is 24 m long along z, 7 m wide)
+const boatSpawn = () => { const s = rnd() < 0.5 ? -1 : 1; return { x: EXP_BOAT.x + s * (6 + rnd() * 2), y: SURFACE - 2.5, z: EXP_BOAT.z + (rnd() - 0.5) * 12, yaw: s > 0 ? 1.57 : -1.57 }; };
 
 function expJoin(c) {
   const p = mkPlayer(c.id, c.name, 'triton', false);
