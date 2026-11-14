@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere,
-  creatureR, FISH, BOSSES, EXP_BOAT } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS } from './shared.js';
 import { buildEnvironment } from './world.js';
 import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeFish, makeBoss } from './models.js';
 import { Hud } from './hud.js';
@@ -18,6 +18,14 @@ const hemi = new THREE.HemisphereLight(0xb5e8ff, 0x12303c, 1.25); scene.add(hemi
 const sun = new THREE.DirectionalLight(0xdff6ff, 1.35); sun.position.set(0.35, 1, 0.2); scene.add(sun);
 const lamp = new THREE.SpotLight(0xe6fbff, 0, 90, 0.42, 0.8, 1.1); lamp.position.set(0, -1.2, 0);
 camera.add(lamp); lamp.target.position.set(0, 0, -1); camera.add(lamp.target);
+// visible light cone of the expedition flashlight (apex at the diver, opening towards -z)
+const torchBeam = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).translate(0, -0.5, 0).rotateX(Math.PI / 2),
+  new THREE.ShaderMaterial({   // bright at the lamp, fading out towards the end of the cone
+    uniforms: { c: { value: new THREE.Color(0xfff3c4) }, o: { value: 0.11 } },
+    vertexShader: 'varying float vz; void main() { vz = -position.z; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 c; uniform float o; varying float vz; void main() { gl_FragColor = vec4(c, o * pow(1.0 - vz, 1.8)); }',
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+torchBeam.rotation.order = 'YXZ'; torchBeam.visible = false; scene.add(torchBeam);
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
@@ -30,6 +38,8 @@ let crates = [];
 const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, energy: 100, boost: false, exhaust: false };
 let camYaw = 0, camPitch = -0.35, camDist = 5, firing = false, nextFire = 0, specId = 0, shockUntil = 0, shake = 0, deadInfo = null, promptT = 0, sendT = 0;
 let vehSince = 0;
+// expedition flashlight: on/off with L, battery in seconds, recharges at the surface
+const torch = { on: false, bat: LAMPS[0].battery, lvl: 0, hinted: false };
 const keys = {};
 const lerpAngle = (a, b, k) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
 const approachAngle = (a, b, step) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2; return a + Math.max(-step, Math.min(step, d)); };
@@ -73,6 +83,7 @@ function onStart(m) {
   mode = m.mode || 'br';
   ensureWorld(m.seed, mode); clearDyn();
   phase = 'play'; meta.clear(); hud.setMode(mode);
+  torch.on = false; torchBeam.visible = false;
   for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] });
   if (meta.has(myId)) mySuit = meta.get(myId).suit;
   if (mode === 'br') crates = W.crates.map((c, i) => { const g = makeCrate(); g.position.set(c.x, c.y, c.z); g.rotation.y = c.yaw; if (m.crates[i]) g.userData.open(); dyn.add(g); return g; });
@@ -158,7 +169,7 @@ function onPrivate(e) {
     case 'shock': shockUntil = time + 0.8; hud.shock(); sfx.shock(); break;
     case 'got': sfx.pickup(); hud.feed(e[1] === 'w' ? `Aufgenommen: <b style="color:${RARITY[e[3]].color}">${WEAPONS[e[2]].name}</b> · ${RARITY[e[3]].name}` : e[1] === 'med' ? 'Reparaturkit: <b>+50 Leben</b>' : 'Schildzelle: <b>+50 Schild</b>', true); break;
     case 'dead': deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop(); break;
-    case 'spawn': me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
+    case 'spawn': torch.on = false; torch.bat = LAMPS[torch.lvl].battery; me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
     case 'fish': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`${e[2] ? '⭐ <b style="color:#ffd34d">Goldener</b> ' : 'Gefangen: '}<b>${S.name}</b> · +${e[3]} $`, true); break; }
     case 'sold': hud.banner(`${e[1]} Fische verkauft: +${e[2].toLocaleString('de-DE')} $`, 3); sfx.ping(); break;
     case 'bought': hud.shopMsg(`Gekauft: ${e[1]}`, true); hud.feed(`Gekauft: <b>${esc(e[1])}</b>`, true); sfx.crate(); break;
@@ -176,6 +187,11 @@ addEventListener('keydown', (e) => {
   if (e.repeat) return;
   keys[e.code] = true;
   if (phase !== 'play' || !you || !you.alive) return;
+  if (mode === 'exp' && e.code === 'KeyL') {
+    if (torch.bat <= 0) hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 2);
+    else { torch.on = !torch.on; sfx.hitmark(false); }
+    return;
+  }
   if (mode === 'exp' && e.code === 'KeyE') { if (hud.shopOpen) closeShop(); else if (nearBoat()) openShop(); return; }
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i]) send({ t: 'slot', i }); }
   else if (e.code === 'KeyR') send({ t: 'r' });
@@ -222,6 +238,24 @@ function controlMe(dt) {
   me.vx += (wx * speed - me.vx) * k; me.vy += (wy * speed - me.vy) * k; me.vz += (wz * speed - me.vz) * k;
   me.x += me.vx * dt; me.y += me.vy * dt; me.z += me.vz * dt;
   W.collide(me, r);
+}
+function updateTorch(dt, depth) {
+  const lvl = you.x.lamp || 0, L = LAMPS[lvl];
+  if (lvl !== torch.lvl) { torch.lvl = lvl; torch.bat = L.battery; }   // new lamp bought: comes fully charged
+  if (depth < 2.6) torch.bat = Math.min(L.battery, torch.bat + L.battery * 0.25 * dt);
+  else if (torch.on && you.alive) {
+    torch.bat = Math.max(0, torch.bat - dt);
+    if (torch.bat <= 0) { torch.on = false; hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 3); }
+  }
+  if (!torch.hinted && !torch.on && depth > 70 && torch.bat > 0) { torch.hinted = true; hud.banner('Zu dunkel? Drück L für die Taschenlampe!', 3.5); }
+  lamp.intensity = torch.on && you.alive ? L.power : 0; lamp.distance = L.range; lamp.angle = L.angle;
+  torchBeam.visible = lamp.intensity > 0;
+  if (torchBeam.visible) {
+    const len = L.range * 0.6, r = len * Math.tan(L.angle) * 0.75;
+    torchBeam.scale.set(r, r, len);
+    torchBeam.position.set(me.x, me.y + 0.3, me.z);
+    torchBeam.rotation.set(camPitch, camYaw, 0);
+  }
 }
 function aimDir() {
   const cd = dirFrom(camYaw, camPitch), cp = camera.position;
@@ -344,7 +378,9 @@ function frame(now) {
     const fx = alive ? me : camera.position;
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
     promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }
-    hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y, suit: mySuit, outside, time, dt });
+    if (mode === 'exp' && you && you.x) updateTorch(dt, SURFACE - fx.y);
+    hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y, suit: mySuit, outside, time, dt,
+      lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null });
     let marks = [];
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap
@@ -359,14 +395,16 @@ function frame(now) {
       if (hud.shopOpen && !nearBoat()) hud.closeShop();
       // it gets darker the deeper you dive
       const df = Math.max(0, Math.min(1, (SURFACE - camera.position.y) / 300));
-      hemi.intensity = 1.25 * (1 - 0.85 * df); sun.intensity = 1.35 * (1 - 0.95 * df);
+      // below ~150 m it is almost pitch black without a lamp
+      const dep = SURFACE - camera.position.y;
+      hemi.intensity = 1.25 * Math.max(0.04, 1 - dep / 160); sun.intensity = 1.35 * Math.max(0, 1 - dep / 120);
     } else { hemi.intensity = 1.25; sun.intensity = 1.35; }
     hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, marks);
     if (mode === 'exp' && you && !you.alive && deadInfo) hud.spec(`<b>Ohnmächtig!</b>Erwischt von ${esc(deadInfo.by)}${deadInfo.lost ? ` · ${deadInfo.lost} Fische verloren` : ''} · aufwachen in ${Math.ceil(you.x?.rt || 0)} s`);
     else if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }
     else if (!you) { const s = players.get(specId); hud.spec(`Zuschauer${s ? ` · ${esc(s.name)}` : ''}`); }
     else if (you.alive) hud.spec(null);
-    lamp.intensity = 150 * Math.min(1, Math.max(0, (SURFACE - camera.position.y - 55) / 55));
+    if (mode !== 'exp') { lamp.intensity = 150 * Math.min(1, Math.max(0, (SURFACE - camera.position.y - 55) / 55)); lamp.distance = 90; lamp.angle = 0.42; }
   } else lobbyCamera();
   if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);
   renderer.render(scene, camera);

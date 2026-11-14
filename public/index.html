@@ -98,7 +98,7 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
 #end h1{font-size:clamp(40px,7vw,84px)} #end .place{font:600 20px var(--display);color:var(--mute);margin:12px 0 22px;letter-spacing:.2em}
 #rank{width:min(520px,100%);padding:8px 18px;font:15px var(--display)} #rank div{display:grid;grid-template-columns:36px 1fr 70px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)} #rank div.me{color:var(--gold);font-weight:700} #rank small{color:var(--mute)}
 /* ---------- expedition ---------- */
-#airBar{display:none} #airBar.on{display:block} #airFill{background:linear-gradient(90deg,#1f7fb8,#5fc8f0)} #airBar.low #airFill{background:linear-gradient(90deg,#ff6b5e,#ffb0a8)}
+#airBar,#lampBar{display:none} #airBar.on,#lampBar.on{display:block} #lampFill{background:linear-gradient(90deg,#b08a1e,#ffe58a)} #lampBar.off #lampFill{opacity:.35} #airFill{background:linear-gradient(90deg,#1f7fb8,#5fc8f0)} #airBar.low #airFill{background:linear-gradient(90deg,#ff6b5e,#ffb0a8)}
 #bossBar{position:absolute;top:66px;left:50%;transform:translateX(-50%);width:min(420px,70vw);padding:7px 14px;text-align:center}
 #bossBar .n{font-size:15px;font-weight:700;color:var(--gold);letter-spacing:.08em} #bossBar .bar{height:10px} #bossFill{background:linear-gradient(90deg,#b0201a,#ff6b5e)}
 .modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
@@ -141,6 +141,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
     <div class="bar"><i id="shFill"></i><b class="num" id="shTxt"></b></div>
     <div class="bar"><i id="hpFill"></i><b class="num" id="hpTxt"></b></div>
     <div class="bar" id="airBar"><i id="airFill"></i><b class="num" id="airTxt"></b></div>
+    <div class="bar" id="lampBar"><i id="lampFill"></i><b class="num" id="lampTxt"></b></div>
     <div class="bar" id="enBar"><i id="enFill"></i></div>
     <div class="bar" id="vehBar"><i id="vhFill"></i><b class="num" id="vhTxt"></b></div>
     <div id="depth" class="num"></div>
@@ -174,7 +175,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
   <div class="keys panel">
     <span><kbd>W A S D</kbd>schwimmen</span><span><kbd>Maus</kbd>zielen</span><span><kbd>Leertaste</kbd>auf</span><span><kbd>C</kbd>ab</span>
     <span><kbd>Shift</kbd>Schub</span><span><kbd>Linksklick</kbd>feuern</span><span><kbd>1 2 3</kbd>Waffe</span><span><kbd>R</kbd>nachladen</span>
-    <span><kbd>E</kbd>öffnen / aufheben / einsteigen</span><span><kbd>F</kbd>aus Oktopusgriff befreien</span>
+    <span><kbd>E</kbd>öffnen / aufheben / einsteigen</span><span><kbd>F</kbd>aus Oktopusgriff befreien</span><span><kbd>L</kbd>Taschenlampe (Expedition)</span>
   </div>
 </div>
 

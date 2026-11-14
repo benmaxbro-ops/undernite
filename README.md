@@ -29,6 +29,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | R | nachladen |
 | E | Truhe öffnen, Waffe aufheben/tauschen, Fahrzeug ein-/aussteigen |
 | F | aus dem Oktopusgriff befreien (hämmern) |
+| L | Taschenlampe an/aus (Expedition) |
 
 ## Was drin ist (v0.1)
 
@@ -52,7 +53,9 @@ In der Lobby rechts zwischen **Battle Royale** und **Tiefsee-Expedition** wähle
 - **Fische jagen:** 15 Fischarten, 3 pro Etage, tauchen zufällig auf. Je tiefer, desto wertvoller. Selten gibt es
   **goldene Fische** (5× Wert). Manche beißen zurück (Barrakuda, Viperfisch, Anglerfisch, Drachenfisch).
 - **Verkaufen:** Am Boot auftauchen – der Fang wird automatisch verkauft.
-- **Laden (E am Boot):** bessere Waffen, größere **Flaschen** (mehr Luft, tiefer erlaubt) und **Atemtraining** (weniger Luftverbrauch).
+- **Laden (E am Boot):** bessere Waffen, größere **Flaschen** (mehr Luft, tiefer erlaubt), **Atemtraining** (weniger Luftverbrauch) und hellere **Lampen**.
+- **Taschenlampe (L):** hast du von Anfang an. Unten ist es stockdunkel! Der Akku lädt sich an der Oberfläche wieder auf.
+- **Reichweite:** jede Waffe schießt nur so weit wie ihre Reichweite (Bolzenpistole 22 m, Splitterwerfer 26 m, Nadler 38 m, Harpune 65 m, Torpedowerfer 80 m).
 - **Luft:** sinkt unter Wasser, je tiefer desto schneller. Unter der Maximaltiefe der Flasche macht der Druck Schaden.
   An der Oberfläche füllt sich die Luft wieder.
 - **Bosse:** einer pro Etage, jeder Biss macht **20 Schaden**, du hast **100 Leben**. Alle, die mitkämpfen, kassieren die Belohnung.

@@ -17,7 +17,9 @@ float caustic(vec2 uv, float t){
   c /= 4.0; c = 1.17 - pow(c, 1.4);
   return pow(abs(c), 8.0);
 }`;
+let causticFade = '1.0';   // expedition: sunlight patterns fade out in the deep
 function addCaustics(mat, uTime, strength = 1) {
+  const fade = causticFade;
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = uTime;
     sh.vertexShader = sh.vertexShader
@@ -33,7 +35,7 @@ function addCaustics(mat, uTime, strength = 1) {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         { float cz = caustic(vWp.xz * 0.035, uTime * 0.55);
           float df = smoothstep(-25.0, 100.0, vWp.y);
-          totalEmissiveRadiance += vec3(0.45, 0.8, 0.85) * cz * (0.10 + 0.5 * df) * ${strength.toFixed(2)}; }`);
+          totalEmissiveRadiance += vec3(0.45, 0.8, 0.85) * cz * (0.10 + 0.5 * df) * ${strength.toFixed(2)} * ${fade}; }`);
   };
   return mat;
 }
@@ -47,6 +49,7 @@ function noiseTexture(size, draw) {
 export function buildEnvironment(scene, W) {
   const root = new THREE.Group(); scene.add(root);
   const exp = W.mode === 'exp';
+  causticFade = exp ? 'smoothstep(-60.0, 70.0, vWp.y)' : '1.0';
   const uTime = { value: 0 };
   const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S = new THREE.Vector3(), E = new THREE.Euler(), C = new THREE.Color();
   const put = (im, i, x, y, z, rx, ry, rz, sx, sy, sz) => { Q.setFromEuler(E.set(rx, ry, rz)); im.setMatrixAt(i, M4.compose(V.set(x, y, z), Q, S.set(sx, sy, sz))); };

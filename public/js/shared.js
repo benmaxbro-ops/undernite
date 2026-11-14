@@ -23,14 +23,16 @@ export const SUITS = {
 };
 
 export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp'];
+// range = how far (metres) a shot flies before it is gone. The starter pistol has the shortest.
 export const WEAPONS = {
-  pistol:  { name: 'Bolzenpistole',  dmg: 14, rate: 3.5, speed: 95,  mag: 12, reload: 1.3, spread: 0.008, life: 1.3, pellets: 1, splash: 0 },
-  needler: { name: 'Nadler',         dmg: 10, rate: 9,   speed: 115, mag: 30, reload: 1.8, spread: 0.022, life: 1.1, pellets: 1, splash: 0 },
-  scatter: { name: 'Splitterwerfer', dmg: 9,  rate: 1.3, speed: 85,  mag: 5,  reload: 2.0, spread: 0.085, life: 0.45, pellets: 7, splash: 0 },
-  harpoon: { name: 'Harpune',        dmg: 68, rate: 0.9, speed: 150, mag: 3,  reload: 2.2, spread: 0.002, life: 1.6, pellets: 1, splash: 0 },
-  torpedo: { name: 'Torpedowerfer',  dmg: 80, rate: 0.7, speed: 44,  mag: 2,  reload: 2.8, spread: 0.004, life: 3.5, pellets: 1, splash: 9 },
-  subtorp: { name: 'Bordtorpedo',    dmg: 60, rate: 1.1, speed: 58,  mag: 99, reload: 0,   spread: 0.004, life: 3.0, pellets: 1, splash: 8 },
+  pistol:  { name: 'Bolzenpistole',  dmg: 14, rate: 3.5, speed: 95,  mag: 12, reload: 1.3, spread: 0.008, range: 22, pellets: 1, splash: 0 },
+  needler: { name: 'Nadler',         dmg: 10, rate: 9,   speed: 115, mag: 30, reload: 1.8, spread: 0.022, range: 38, pellets: 1, splash: 0 },
+  scatter: { name: 'Splitterwerfer', dmg: 9,  rate: 1.3, speed: 85,  mag: 5,  reload: 2.0, spread: 0.085, range: 26, pellets: 7, splash: 0 },
+  harpoon: { name: 'Harpune',        dmg: 68, rate: 0.9, speed: 150, mag: 3,  reload: 2.2, spread: 0.002, range: 65, pellets: 1, splash: 0 },
+  torpedo: { name: 'Torpedowerfer',  dmg: 80, rate: 0.7, speed: 44,  mag: 2,  reload: 2.8, spread: 0.004, range: 80, pellets: 1, splash: 9 },
+  subtorp: { name: 'Bordtorpedo',    dmg: 60, rate: 1.1, speed: 58,  mag: 99, reload: 0,   spread: 0.004, range: 90, pellets: 1, splash: 8 },
 };
+for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
 
 export const RARITY = [
   { name: 'Gewöhnlich', color: '#9fb2bd', mul: 1.0 },
@@ -116,6 +118,13 @@ export const LUNGS = [
   { name: 'Atemtraining II', mul: 0.72, price: 1000 },
   { name: 'Atemtraining III', mul: 0.6, price: 3000 },
   { name: 'Freitaucher-Profi', mul: 0.5, price: 8000 },
+];
+// Flashlights: toggle with L, battery (seconds) recharges at the surface.
+export const LAMPS = [
+  { name: 'Taschenlampe',      range: 40,  power: 120, angle: 0.38, battery: 60,  price: 0 },
+  { name: 'Tauchlampe',        range: 60,  power: 200, angle: 0.42, battery: 120, price: 300 },
+  { name: 'Halogen-Strahler',  range: 85,  power: 300, angle: 0.47, battery: 200, price: 1200 },
+  { name: 'Tiefsee-Flutlicht', range: 120, power: 450, angle: 0.55, battery: 320, price: 4000 },
 ];
 // Air used per second at a given depth (before training).
 export const airUse = (depth) => 1 + Math.max(0, depth) / 60;

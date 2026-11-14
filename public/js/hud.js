@@ -1,5 +1,5 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, SHOP_WEAPONS, airUse } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse } from './shared.js';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' $';
 
 const $ = (id) => document.getElementById(id);
@@ -61,6 +61,7 @@ export class Hud {
     $('cntA').textContent = exp ? 'Geld' : 'Überlebende';
     $('cntK').textContent = exp ? 'Fang' : 'Kills';
     $('airBar').classList.toggle('on', exp);
+    $('lampBar').classList.toggle('on', exp);
     if (!exp) { this.boss(null); this.closeShop(); }
   }
   boss(b) {
@@ -79,7 +80,7 @@ export class Hud {
   shopMsg(t, good) { const el = $('shopMsg'); el.textContent = t; el.style.color = good ? 'var(--hp)' : 'var(--warn)'; }
   renderShop(you) {
     if (!you || !you.x || !this.shopOpen) return;
-    const x = you.x, key = [x.money, x.tank, x.lung, you.w.map(w => w && w[0] + w[1]).join()].join('|');
+    const x = you.x, key = [x.money, x.tank, x.lung, x.lamp, you.w.map(w => w && w[0] + w[1]).join()].join('|');
     if (key === this.shopKey) return; this.shopKey = key;
     $('shopMoney').textContent = 'Dein Geld: ' + money(x.money);
     const item = (title, sub, price, can, k, i, rar) => `<div class="item" style="--rar:${rar || '#55626c'}"><b>${title}</b><small>${sub}</small>`
@@ -89,10 +90,13 @@ export class Hud {
     gear += NT ? item(`▲ ${NT.name}`, `${NT.cap} Luft · sicher bis ${NT.maxDepth} m`, NT.price, '', 'tank', 0, '#3fa9f5') : item('Beste Flasche!', 'Mehr geht nicht', null, 'Max');
     gear += item(`Atmung: ${L.name}`, `Luftverbrauch ${Math.round(L.mul * 100)} %`, null, 'Hast du');
     gear += NL ? item(`▲ ${NL.name}`, `Luftverbrauch nur noch ${Math.round(NL.mul * 100)} %`, NL.price, '', 'lung', 0, '#3fa9f5') : item('Profi-Atmung!', 'Mehr geht nicht', null, 'Max');
+    const LA = LAMPS[x.lamp], NLA = LAMPS[x.lamp + 1];
+    gear += item(`Lampe: ${LA.name}`, `leuchtet ${LA.range} m · Akku ${LA.battery} s`, null, 'Hast du');
+    gear += NLA ? item(`▲ ${NLA.name}`, `leuchtet ${NLA.range} m · Akku ${NLA.battery} s`, NLA.price, '', 'lamp', 0, '#3fa9f5') : item('Hellste Lampe!', 'Mehr geht nicht', null, 'Max');
     $('shopGear').innerHTML = gear;
     $('shopWeapons').innerHTML = SHOP_WEAPONS.map((it, i) => {
       const D = WEAPONS[it.wid], R = RARITY[it.rar], own = you.w.some(w => w && w[0] === it.wid && w[1] >= it.rar);
-      return item(`${D.name} <small style="display:inline;color:${R.color}">${R.name}</small>`, `${Math.round(D.dmg * R.mul * D.pellets)} Schaden · ${D.rate}/s · Magazin ${D.mag}`,
+      return item(`${D.name} <small style="display:inline;color:${R.color}">${R.name}</small>`, `${Math.round(D.dmg * R.mul * D.pellets)} Schaden · ${D.rate}/s · Reichweite ${D.range} m`,
         own ? null : it.price, own ? 'Hast du' : '', 'w', i, R.color);
     }).join('');
     for (const b of document.querySelectorAll('#shop .item button[data-k]')) b.onclick = () => this.onBuy(b.dataset.k, +b.dataset.i);
@@ -128,7 +132,7 @@ export class Hud {
         if (w) {
           const def = WEAPONS[w[0]];
           sl.n.textContent = def.name; sl.d.style.setProperty('--rar', RARITY[w[1]].color);
-          sl.a.innerHTML = y.slot === i && y.rl > 0 ? 'lädt nach …' : `<b class="num">${w[2]}</b> / ${def.mag}`;
+          sl.a.innerHTML = y.slot === i && y.rl > 0 ? 'lädt nach …' : `<b class="num">${w[2]}</b> / ${def.mag} · ${def.range} m`;
           sl.rl.style.width = y.slot === i && y.rl > 0 ? (1 - y.rl / y.rlT) * 100 + '%' : '0';
         } else { sl.n.textContent = '–'; sl.a.textContent = 'leer'; sl.d.style.setProperty('--rar', '#35424b'); sl.rl.style.width = '0'; }
       }
@@ -144,6 +148,11 @@ export class Hud {
       const secs = s.depth < 2.6 ? '' : ` · ~${Math.floor(x.air / (airUse(s.depth) * LUNGS[x.lung].mul))} s`;
       this.set('airTxt', 'text', `Luft ${Math.round(x.air)}${secs}`);
       $('airBar').classList.toggle('low', x.air < T.cap * 0.25);
+      if (s.lamp) {
+        this.set('lampFill', 'width', Math.max(0, s.lamp.bat / s.lamp.cap * 100) + '%');
+        this.set('lampTxt', 'text', s.lamp.bat <= 0 ? 'Lampe leer – oben aufladen' : `Lampe ${s.lamp.on ? 'AN' : 'aus [L]'} · ${Math.ceil(s.lamp.bat)} s`);
+        $('lampBar').classList.toggle('off', !s.lamp.on);
+      }
       this.set('depth', 'text', `TIEFE ${Math.round(s.depth)} m · FLASCHE BIS ${T.maxDepth} m${deep ? ' ⚠ DRUCK!' : ''}`);
       this.set('zoneTxt', 'text', s.depth < 2.6 ? 'An der Oberfläche · Luft tanken' : `Etage ${f + 1} · ${FLOORS[f].name}`);
       $('zoneTxt').classList.toggle('hot', deep);

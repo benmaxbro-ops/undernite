@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, airUse, SHOP_WEAPONS, PLAY,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -630,7 +630,7 @@ function botStep(b, dt) {
     b.yaw = Math.atan2(-ax, -az); b.pitch = Math.asin(clamp(ay / ad, -1, 1));
     b.reactT -= dt;
     const w = b.weapons[b.slot];
-    if (w && b.reactT <= 0 && ad < 42 && G.time >= b.nextFire && G.time >= b.holdT && b.reload <= 0) {
+    if (w && b.reactT <= 0 && ad < Math.min(42, WEAPONS[w.id].range * 0.9) && G.time >= b.nextFire && G.time >= b.holdT && b.reload <= 0) {
       const def = WEAPONS[w.id], tt = ad / def.speed, e = b.skill;
       const px = tgt.x + (tgt.vx || 0) * tt - b.x, py = tgt.y + (tgt.vy || 0) * tt - b.y, pz = tgt.z + (tgt.vz || 0) * tt - b.z;
       const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
@@ -658,7 +658,7 @@ try { saves = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8')); } catch { saves = 
 let saveTimer = null;
 const saveKey = (name) => name.toLowerCase();
 function storeProgress(p) {
-  saves[saveKey(p.name)] = { money: p.money, tank: p.tank, lung: p.lung, bag: p.bag,
+  saves[saveKey(p.name)] = { money: p.money, tank: p.tank, lung: p.lung, lamp: p.lamp, bag: p.bag,
     weapons: p.weapons.map(w => w ? { id: w.id, rar: w.rar } : null) };
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
@@ -675,6 +675,7 @@ function expJoin(c) {
   const p = mkPlayer(c.id, c.name, 'triton', false);
   const s = saves[saveKey(c.name)];
   p.money = s?.money || 0; p.tank = clamp(s?.tank || 0, 0, TANKS.length - 1); p.lung = clamp(s?.lung || 0, 0, LUNGS.length - 1);
+  p.lamp = clamp(s?.lamp || 0, 0, LAMPS.length - 1);
   p.bag = Array.isArray(s?.bag) ? s.bag : [];
   if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? { id: w.id, rar: w.rar, ammo: WEAPONS[w.id].mag } : null);
   if (!p.weapons.some(Boolean)) p.weapons[0] = { id: 'pistol', rar: 0, ammo: WEAPONS.pistol.mag };
@@ -840,6 +841,8 @@ function expBuy(p, m) {
   let price, label, apply;
   if (m.k === 'tank' && TANKS[p.tank + 1]) {
     const T = TANKS[p.tank + 1]; price = T.price; label = T.name; apply = () => { p.tank++; p.air = T.cap; };
+  } else if (m.k === 'lamp' && LAMPS[p.lamp + 1]) {
+    const L = LAMPS[p.lamp + 1]; price = L.price; label = L.name; apply = () => { p.lamp++; };
   } else if (m.k === 'lung' && LUNGS[p.lung + 1]) {
     const L = LUNGS[p.lung + 1]; price = L.price; label = L.name; apply = () => { p.lung++; };
   } else if (m.k === 'w' && SHOP_WEAPONS[m.i]) {
@@ -973,7 +976,7 @@ function snapshot() {
         w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)) };
       if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, v) => a + v, 0), air: r2(p.air),
-        tank: p.tank, lung: p.lung, rt: r2(Math.max(0, p.respawnT)) };
+        tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)) };
       ye = p.ye; p.ye = [];
     }
     send(c.ws, `{"t":"s","c":${cs},"you":${JSON.stringify(you)},"ye":${JSON.stringify(ye)}}`);
