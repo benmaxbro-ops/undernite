@@ -260,7 +260,7 @@ export function buildEnvironment(scene, W) {
 
   const shallow = new THREE.Color(0x2b8fb0), deepC = new THREE.Color(0x05202e), toxic = new THREE.Color(0x1d0a33), abyss = new THREE.Color(0x010307);
   return {
-    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood,
+    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat,
     update(dt, t, cam, zone, outside) {
       uTime.value = t;
       surfTex.offset.x = t * 0.004; surfTex.offset.y = t * 0.0025;

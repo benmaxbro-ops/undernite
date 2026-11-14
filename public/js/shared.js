@@ -97,6 +97,17 @@ export const FISH = [
   { name: 'Leuchtrochen',   floor: 4, value: 1100, hp: 220, size: 1.8,  speed: 8,  col: 0x251a40, glow: 0xb06bff, shape: 1, w: 15 },
 ];
 export const GOLD_CHANCE = 0.04, GOLD_MUL = 5;
+// Money a caught fish is worth. Bag/aquarium entries are { s: species index, g: 1 if golden }.
+// (Very old saves only kept the value: { v: euros }.)
+export const fishValue = (e) => e.v ?? FISH[e.s].value * (e.g ? GOLD_MUL : 1);
+// Aquarium: fish living there earn RATE x their value every minute.
+export const AQUARIUM = {
+  rate: 0.08,                                   // 8 % of the fish value per minute
+  sizes: [3, 6, 10, 15, 20],                    // places per upgrade level
+  prices: [0, 500, 2000, 6000, 15000],          // price of each upgrade level
+  offlineMax: 2 * 3600,                         // earns at most 2 hours while you are away
+};
+export const aqIncome = (aq) => aq.reduce((a, e) => a + fishValue(e), 0) * AQUARIUM.rate;   // € per minute
 // One boss per floor. dmg is per bite.
 export const BOSSES = [
   { name: 'Riffkönig',      hp: 450,  dmg: 20, reward: 300,   model: 'shark', scale: 2.2, col: 0xffc94d, r: 3.0, speed: 10 },

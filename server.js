@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -661,7 +661,7 @@ try { saves = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8')); } catch { saves = 
 let saveTimer = null;
 const saveKey = (name) => name.toLowerCase();
 function storeProgress(p) {
-  saves[saveKey(p.name)] = { money: p.money, tank: p.tank, lung: p.lung, lamp: p.lamp, bag: p.bag,
+  saves[saveKey(p.name)] = { money: p.money, tank: p.tank, lung: p.lung, lamp: p.lamp, bag: p.bag, aq: p.aq, aqLvl: p.aqLvl, last: Date.now(),
     weapons: p.weapons.map(w => w ? { id: w.id, rar: w.rar } : null) };
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
@@ -681,7 +681,16 @@ function expJoin(c) {
   p.money = s ? (s.money || 0) : EXP_START_MONEY;   // brand-new divers get starting money
   p.tank = clamp(s?.tank || 0, 0, TANKS.length - 1); p.lung = clamp(s?.lung || 0, 0, LUNGS.length - 1);
   p.lamp = clamp(s?.lamp || 0, 0, LAMPS.length - 1);
-  p.bag = Array.isArray(s?.bag) ? s.bag : [];
+  // caught fish: { s: species, g: golden } (very old saves stored only the value)
+  const fishList = (l) => Array.isArray(l) ? l.map(e => typeof e === 'number' ? { v: e } : e).filter(e => e && (e.v != null || FISH[e.s])) : [];
+  p.bag = fishList(s?.bag);
+  p.aq = fishList(s?.aq).filter(e => e.v == null); p.aqLvl = clamp(s?.aqLvl || 0, 0, AQUARIUM.sizes.length - 1); p.aqAcc = 0;
+  // the aquarium kept earning while you were away (up to 2 hours)
+  if (s?.last && p.aq.length) {
+    const away = Math.min(AQUARIUM.offlineMax, Math.max(0, (Date.now() - s.last) / 1000));
+    const earned = Math.floor(aqIncome(p.aq) * away / 60);
+    if (earned > 0) { p.money += earned; p.ye.push(['aqoffline', earned, Math.round(away / 60)]); }
+  }
   if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? { id: w.id, rar: w.rar, ammo: WEAPONS[w.id].mag } : null);
   if (!p.weapons.some(Boolean)) p.weapons[0] = { id: 'pistol', rar: 0, ammo: WEAPONS.pistol.mag };
   p.slot = Math.max(0, p.weapons.findIndex(Boolean));
@@ -818,7 +827,7 @@ function expCreatureHurt(c, src) {
   if (c.type === 'fish') {
     if (!src || !src.id || !G.players.has(src.id)) return;
     const S = FISH[c.sub], value = S.value * (c.gold ? GOLD_MUL : 1);
-    src.bag.push(value);
+    src.bag.push({ s: c.sub, g: c.gold ? 1 : 0 });
     src.ye.push(['fish', c.sub, c.gold ? 1 : 0, value]);
   } else {
     const B = BOSSES[c.sub];
@@ -841,10 +850,32 @@ function expDown(p, src, how) {
   p.ye.push(['dead', 0, by, lost]);
   storeProgress(p);
 }
+// selling fish and the aquarium (no money needed for these)
+function expFishAction(p, m) {
+  const i = m.i | 0;
+  if (m.k === 'sellall' && p.bag.length) {
+    const value = p.bag.reduce((a, e) => a + fishValue(e), 0), n = p.bag.length;
+    p.money += value; p.bag = []; p.ye.push(['sold', n, value]);
+  } else if (m.k === 'sell' && p.bag[i]) {
+    const value = fishValue(p.bag[i]); p.money += value; p.bag.splice(i, 1); p.ye.push(['sold', 1, value]);
+  } else if (m.k === 'aq' && p.bag[i]) {
+    if (p.bag[i].v != null) { p.ye.push(['shop', 'Dieser alte Fang kann nur verkauft werden.']); return true; }
+    if (p.aq.length >= AQUARIUM.sizes[p.aqLvl]) { p.ye.push(['shop', 'Dein Aquarium ist voll – vergrößere es oder verkaufe einen Fisch daraus.']); return true; }
+    const f = p.bag.splice(i, 1)[0]; p.aq.push(f);
+    p.ye.push(['aqin', f.s, f.g]);
+  } else if (m.k === 'aqsell' && p.aq[i]) {
+    const value = fishValue(p.aq[i]); p.money += value; p.aq.splice(i, 1); p.ye.push(['sold', 1, value]);
+  } else return false;
+  storeProgress(p);
+  return true;
+}
 function expBuy(p, m) {
   if (!p.alive || !nearBoat(p, 22, 10)) { p.ye.push(['shop', 'Du musst am Boot sein!']); return; }
+  if (expFishAction(p, m)) return;
   let price, label, apply;
-  if (m.k === 'tank' && TANKS[p.tank + 1]) {
+  if (m.k === 'aqup' && AQUARIUM.sizes[p.aqLvl + 1]) {
+    price = AQUARIUM.prices[p.aqLvl + 1]; label = `Aquarium mit ${AQUARIUM.sizes[p.aqLvl + 1]} Plätzen`; apply = () => { p.aqLvl++; };
+  } else if (m.k === 'tank' && TANKS[p.tank + 1]) {
     const T = TANKS[p.tank + 1]; price = T.price; label = T.name; apply = () => { p.tank++; p.air = T.cap; };
   } else if (m.k === 'lamp' && LAMPS[p.lamp + 1]) {
     const L = LAMPS[p.lamp + 1]; price = L.price; label = L.name; apply = () => { p.lamp++; };
@@ -897,13 +928,16 @@ function tickExp(dt) {
     // health regeneration after a few seconds without damage, faster at the surface
     if (p.hp < p.maxhp && G.time - (p.hurtT || 0) > REGEN_DELAY) p.hp = Math.min(p.maxhp, p.hp + (depth < 2.6 ? REGEN_RATE_SURFACE : REGEN_RATE) * dt);
     if (hurt) { p.envAcc += hurt * dt; if (p.envAcc >= 1) { const a = Math.floor(p.envAcc); p.envAcc -= a; damage(p, a, null, 'zone', p.x, p.z); } }
-    // sell the catch at the boat
-    if (p.alive && p.bag.length && nearBoat(p)) {
-      const value = p.bag.reduce((a, v) => a + v, 0), n = p.bag.length;
-      p.money += value; p.bag = [];
-      p.ye.push(['sold', n, value]);
-      storeProgress(p);
-    }
+    // back at the boat with fish: remind once to sell them or put them into the aquarium
+    const atBoat = nearBoat(p);
+    if (atBoat && !p.atBoat && p.bag.length) p.ye.push(['bagHint', p.bag.length, p.bag.reduce((a, e) => a + fishValue(e), 0)]);
+    p.atBoat = atBoat;
+  }
+  // aquarium income (also while dead or swimming far away)
+  for (const p of G.players.values()) {
+    if (!p.aq || !p.aq.length) continue;
+    p.aqAcc += aqIncome(p.aq) / 60 * dt;
+    if (p.aqAcc >= 1) { const a = Math.floor(p.aqAcc); p.aqAcc -= a; p.money += a; if ((p.aqSaveT = (p.aqSaveT || 0) + a) > 50) { p.aqSaveT = 0; storeProgress(p); } }
   }
   // creatures + respawning
   for (const c of G.creatures) {
@@ -982,8 +1016,9 @@ function snapshot() {
       you = { alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxhp, sh: Math.round(p.shield), slot: p.slot, kills: p.kills, place: p.place,
         w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)) };
-      if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, v) => a + v, 0), air: r2(p.air),
-        tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)) };
+      if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, e) => a + fishValue(e), 0), air: r2(p.air),
+        tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)),
+        bagL: p.bag.map(e => e.v != null ? [-1, e.v] : [e.s, e.g]), aq: p.aq.map(e => [e.s, e.g]), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 10) / 10 };
       ye = p.ye; p.ye = [];
     }
     send(c.ws, `{"t":"s","c":${cs},"you":${JSON.stringify(you)},"ye":${JSON.stringify(ye)}}`);

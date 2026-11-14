@@ -1,5 +1,5 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, FISH, GOLD_MUL, AQUARIUM } from './shared.js';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
 const $ = (id) => document.getElementById(id);
@@ -80,7 +80,7 @@ export class Hud {
   shopMsg(t, good) { const el = $('shopMsg'); el.textContent = t; el.style.color = good ? 'var(--hp)' : 'var(--warn)'; }
   renderShop(you) {
     if (!you || !you.x || !this.shopOpen) return;
-    const x = you.x, key = [x.money, x.tank, x.lung, x.lamp, you.w.map(w => w && w[0] + w[1]).join()].join('|');
+    const x = you.x, key = [x.money, x.tank, x.lung, x.lamp, JSON.stringify(x.bagL), JSON.stringify(x.aq), x.aqLvl, you.w.map(w => w && w[0] + w[1]).join()].join('|');
     if (key === this.shopKey) return; this.shopKey = key;
     $('shopMoney').textContent = 'Dein Geld: ' + money(x.money);
     const item = (title, sub, price, can, k, i, rar) => `<div class="item" style="--rar:${rar || '#55626c'}"><b>${title}</b><small>${sub}</small>`
@@ -94,12 +94,27 @@ export class Hud {
     gear += item(`Lampe: ${LA.name}`, `leuchtet ${LA.range} m · Akku ${LA.battery} s`, null, 'Hast du');
     gear += NLA ? item(`▲ ${NLA.name}`, `leuchtet ${NLA.range} m · Akku ${NLA.battery} s`, NLA.price, '', 'lamp', 0, '#3fa9f5') : item('Hellste Lampe!', 'Mehr geht nicht', null, 'Max');
     $('shopGear').innerHTML = gear;
+    // ----- your catch + aquarium -----
+    const fname = (f) => f[0] < 0 ? 'Alter Fang' : (f[1] ? '⭐ Goldener ' : '') + FISH[f[0]].name;
+    const fval = (f) => f[0] < 0 ? f[1] : FISH[f[0]].value * (f[1] ? GOLD_MUL : 1);
+    const cap = AQUARIUM.sizes[x.aqLvl], full = x.aq.length >= cap, eur = (v) => v.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' €';
+    const bagV = x.bagL.reduce((a, f) => a + fval(f), 0);
+    let fish = `<div><h3>Dein Fang · ${x.bagL.length} Fische<button class="smallBtn" data-k="sellall" data-i="0" ${x.bagL.length ? '' : 'disabled'}>Alles verkaufen ${money(bagV)}</button></h3><div class="fishList">`;
+    fish += x.bagL.length ? x.bagL.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· ${eur(fval(f) * AQUARIUM.rate)}/min im Aquarium</small></span>`
+      + `<button data-k="sell" data-i="${i}">+${money(fval(f))}</button><button class="aqb" data-k="aq" data-i="${i}" ${full || f[0] < 0 ? 'disabled' : ''}>Ins Aquarium</button></div>`).join('')
+      : '<div class="empty">Noch nichts gefangen – ab ins Wasser!</div>';
+    fish += `</div></div><div><h3>Aquarium · ${x.aq.length}/${cap} · +${eur(x.aqRate)}/min</h3><div class="fishList">`;
+    fish += x.aq.length ? x.aq.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· +${eur(fval(f) * AQUARIUM.rate)}/min</small></span><button data-k="aqsell" data-i="${i}">Verkaufen +${money(fval(f))}</button></div>`).join('')
+      : '<div class="empty">Leer. Setz Fische hinein – sie verdienen jede Minute Geld, je tiefer sie herkommen, desto mehr.</div>';
+    const nextCap = AQUARIUM.sizes[x.aqLvl + 1];
+    fish += '</div>' + (nextCap ? item(`▲ Größeres Aquarium`, `${cap} → ${nextCap} Plätze`, AQUARIUM.prices[x.aqLvl + 1], '', 'aqup', 0, '#3fa9f5') : item('Riesen-Aquarium!', 'Mehr Plätze gibt es nicht', null, 'Max')) + '</div>';
+    $('shopFish').innerHTML = fish;
     $('shopWeapons').innerHTML = SHOP_WEAPONS.map((it, i) => {
       const D = WEAPONS[it.wid], R = RARITY[it.rar], own = you.w.some(w => w && w[0] === it.wid && w[1] >= it.rar);
       return item(`${D.name} <small style="display:inline;color:${R.color}">${R.name}</small>`, `${Math.round(D.dmg * R.mul * D.pellets)} Schaden · ${D.rate}/s · Reichweite ${D.range} m`,
         own ? null : it.price, own ? 'Hast du' : '', 'w', i, R.color);
     }).join('');
-    for (const b of document.querySelectorAll('#shop .item button[data-k]')) b.onclick = () => this.onBuy(b.dataset.k, +b.dataset.i);
+    for (const b of document.querySelectorAll('#shop button[data-k]')) b.onclick = () => this.onBuy(b.dataset.k, +b.dataset.i);
   }
   show(which) {
     $('lobby').classList.toggle('hidden', which !== 'lobby');
@@ -142,7 +157,7 @@ export class Hud {
     this.set('depth', 'text', `TIEFE ${Math.round(s.depth)} m`);
     if (this.mode === 'exp' && y && y.x) {
       const x = y.x, T = TANKS[x.tank], f = floorAt(s.depth), deep = s.depth > T.maxDepth;
-      this.set('alive', 'text', money(x.money));
+      this.set('alive', 'text', money(x.money) + (x.aqRate > 0 ? ` (+${Math.round(x.aqRate)}/min)` : ''));
       this.set('kills', 'text', x.bag ? `${x.bag} · ${money(x.bagV)}` : '0');
       this.set('airFill', 'width', Math.max(0, x.air / T.cap * 100) + '%');
       const secs = s.depth < 2.6 ? '' : ` · ~${Math.floor(x.air / (airUse(s.depth) * LUNGS[x.lung].mul))} s`;

@@ -174,6 +174,9 @@ function onPrivate(e) {
     case 'sold': hud.banner(`${e[1]} Fische verkauft: +${e[2].toLocaleString('de-DE')} €`, 3); sfx.ping(); break;
     case 'bought': hud.shopMsg(`Gekauft: ${e[1]}`, true); hud.feed(`Gekauft: <b>${esc(e[1])}</b>`, true); sfx.crate(); break;
     case 'shop': hud.shopMsg(e[1]); hud.banner(e[1], 2); break;
+    case 'bagHint': hud.banner(`${e[1]} Fische dabei (${e[2].toLocaleString('de-DE')} €) – drück E: verkaufen oder ins Aquarium!`, 4); break;
+    case 'aqin': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`Ins Aquarium: <b>${e[2] ? '⭐ Goldener ' : ''}${S.name}</b>`, true); break; }
+    case 'aqoffline': hud.banner(`Während du weg warst, hat dein Aquarium ${e[1].toLocaleString('de-DE')} € verdient!`, 5); sfx.ping(); break;
     case 'boss': hud.banner(`${BOSSES[e[1]].name} besiegt! +${e[2].toLocaleString('de-DE')} €`, 4); sfx.ping(); break;
   }
 }
@@ -244,6 +247,47 @@ function controlMe(dt) {
   if (atTop && !me.surfaced && me.vy > 0.5) { env.bubble(me.x, SURFACE - 0.4, me.z, 28, 1.4, 1.5); sfx.noise(0.45, 1100, 0.7, 0.35, 'lowpass', 250); }
   me.surfaced = atTop;
 }
+// ---------- aquarium on the ship deck: a glass tank with your own fish ----------
+const aqView = { boat: null, tank: null, fish: [], key: '' };
+function updateAquarium(dt) {
+  if (mode !== 'exp' || !env || !env.boat || !you || !you.x) return;
+  if (aqView.boat !== env.boat) {   // new world: build the tank on this ship
+    aqView.boat = env.boat; aqView.fish = []; aqView.key = '';
+    const t = new THREE.Group(); t.position.set(0, 1.85, -4.6); env.boat.add(t); aqView.tank = t;
+    const glass = new THREE.MeshStandardMaterial({ color: 0xbfefff, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.3, depthWrite: false });
+    const water = new THREE.MeshStandardMaterial({ color: 0x2aa8d8, transparent: true, opacity: 0.32, roughness: 0.1, depthWrite: false });
+    const frame = new THREE.MeshStandardMaterial({ color: 0x3a2616, roughness: 0.7 });
+    const box = (m, x, y, z, sx, sy, sz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); t.add(o); return o; };
+    box(frame, 0, 0.08, 0, 2.9, 0.16, 1.7);                           // base
+    box(new THREE.MeshStandardMaterial({ color: 0xe8d6a0, roughness: 1 }), 0, 0.22, 0, 2.7, 0.12, 1.5);   // sand
+    box(water, 0, 0.92, 0, 2.66, 1.3, 1.46);                          // water
+    box(glass, 0, 0.92, 0, 2.76, 1.42, 1.56);                         // glass
+    for (const [x, z] of [[-1.38, -0.78], [1.38, -0.78], [-1.38, 0.78], [1.38, 0.78]]) box(frame, x, 0.92, z, 0.07, 1.46, 0.07);
+    box(frame, 0, 1.66, 0, 2.9, 0.08, 1.7);                           // lid rim
+    for (let i = 0; i < 5; i++) { const p = box(new THREE.MeshStandardMaterial({ color: 0x2f8f4a }), -1.1 + i * 0.55, 0.5, 0.45 - (i % 2) * 0.9, 0.06, 0.5 + (i % 3) * 0.18, 0.06); p.rotation.z = (i - 2) * 0.12; }   // plants
+    box(new THREE.MeshStandardMaterial({ color: 0x7d7a74, roughness: 0.9 }), 0.8, 0.36, -0.3, 0.4, 0.22, 0.32);   // a stone
+    const lamp = new THREE.PointLight(0xbff4ff, 1.5, 4); lamp.position.set(0, 1.5, 0); t.add(lamp);
+  }
+  const key = JSON.stringify(you.x.aq);
+  if (key !== aqView.key) {   // the fish in the tank changed: rebuild them
+    aqView.key = key;
+    for (const f of aqView.fish) aqView.tank.remove(f.mesh);
+    aqView.fish = you.x.aq.map(([s, g]) => {
+      const S = FISH[s], mesh = makeFish(S, g); mesh.scale.setScalar(0.17 / S.size); aqView.tank.add(mesh);
+      return { mesh, x: (Math.random() - 0.5) * 2, y: 0.5 + Math.random() * 0.9, z: (Math.random() - 0.5) * 1, tx: 0, ty: 0.9, tz: 0, yaw: 0, t: 0 };
+    });
+  }
+  // only animate when you are close enough to see it
+  if (Math.hypot(camera.position.x - EXP_BOAT.x, camera.position.z - EXP_BOAT.z) > 70) return;
+  for (const f of aqView.fish) {
+    if ((f.t -= dt) <= 0) { f.t = 2 + Math.random() * 3; f.tx = (Math.random() - 0.5) * 2.2; f.ty = 0.45 + Math.random() * 1.0; f.tz = (Math.random() - 0.5) * 1.1; }
+    const dx = f.tx - f.x, dy = f.ty - f.y, dz = f.tz - f.z, d = Math.hypot(dx, dy, dz) || 1, sp = Math.min(d, 0.35 * dt);
+    f.x += dx / d * sp; f.y += dy / d * sp; f.z += dz / d * sp;
+    f.yaw = lerpAngle(f.yaw, Math.atan2(-dx, -dz), Math.min(1, dt * 3));
+    f.mesh.position.set(f.x, f.y, f.z);
+    f.mesh.userData.update(dt, { yaw: f.yaw, pitch: Math.asin(Math.max(-0.5, Math.min(0.5, dy / d))) * 0.5, state: 0 });
+  }
+}
 function updateTorch(dt, depth) {
   const lvl = you.x.lamp || 0, L = LAMPS[lvl];
   if (lvl !== torch.lvl) { torch.lvl = lvl; torch.bat = L.battery; }   // new lamp bought: comes fully charged
@@ -288,7 +332,7 @@ function tryFire(now) {
 function computePrompt() {
   if (!you || !you.alive) return null;
   if (you.grab) return ['F', 'Befreien – mehrfach drücken!'];
-  if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Laden öffnen'] : null;
+  if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Laden & Aquarium'] : null;
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
   const S = SUITS[mySuit]; let best = null, bd = 1e9;
@@ -394,7 +438,7 @@ function frame(now) {
     const fx = alive ? me : camera.position;
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
     promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }
-    if (mode === 'exp' && you && you.x) updateTorch(dt, SURFACE - fx.y);
+    if (mode === 'exp' && you && you.x) { updateTorch(dt, SURFACE - fx.y); updateAquarium(dt); }
     hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y, suit: mySuit, outside, time, dt,
       lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null });
     let marks = [];

@@ -104,18 +104,26 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
 .modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .mode{pointer-events:auto;cursor:pointer;padding:10px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);color:var(--ink);font:700 15px var(--display);text-align:left}
 .mode small{display:block;font:400 11.5px var(--display);color:var(--mute);margin-top:3px} .mode.on{border-color:var(--glow);background:rgba(94,242,224,.1)}
-#shop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,12,20,.55);padding:20px;overflow:auto}
-.shopBox{width:min(820px,100%);padding:20px 22px;pointer-events:auto}
+#shop{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;background:rgba(2,12,20,.55);padding:20px;overflow:auto}
+.shopBox{width:min(860px,100%);padding:18px 22px;pointer-events:auto;margin:auto}
 .shopBox h2{margin:0;font:800 30px var(--display);letter-spacing:.12em} .shopBox h2 span{color:var(--glow)}
 #shopMoney{font:700 22px var(--display);color:var(--gold);margin:6px 0 4px} #shopMsg{min-height:20px;font-size:14px;color:var(--warn)}
 .shopGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px} @media(max-width:720px){.shopGrid{grid-template-columns:1fr}}
 .shopGrid h3{margin:0 0 8px;font:600 13px var(--display);letter-spacing:.22em;text-transform:uppercase;color:var(--mute)}
-.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-left:3px solid var(--rar,#55626c);margin-bottom:6px}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-left:3px solid var(--rar,#55626c);margin-bottom:6px}
 .item b{font:600 15px var(--display)} .item small{grid-column:1;color:var(--mute);font-size:12px}
 .item button{grid-row:1/3;grid-column:2;pointer-events:auto;cursor:pointer;border:0;border-radius:7px;padding:8px 12px;background:var(--glow);color:#03222a;font:800 14px var(--display);min-width:92px}
 .item button:disabled{background:rgba(255,255,255,.12);color:var(--mute);cursor:default}
 .shopFoot{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap} .shopFoot button.go{margin-top:0;flex:1}
 button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--mute);border-radius:9px;padding:10px 14px;font:600 13px var(--display)}
+#shopFish{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:6px 0 10px} @media(max-width:720px){#shopFish{grid-template-columns:1fr}}
+#shopFish h3{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fishList{max-height:190px;overflow:auto;padding-right:4px}
+.frow{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;background:rgba(0,0,0,.25);margin-bottom:4px;font-size:13.5px}
+.frow span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .frow small{color:var(--mute)}
+.frow button,.smallBtn{pointer-events:auto;cursor:pointer;border:0;border-radius:6px;padding:5px 8px;font:700 12px var(--display);background:var(--glow);color:#03222a;white-space:nowrap}
+.frow button.aqb{background:#3fa9f5;color:#031a2a} .frow button:disabled{background:rgba(255,255,255,.12);color:var(--mute);cursor:default}
+.empty{color:var(--mute);font-size:13px;padding:6px 2px}
 #conn{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:8px 16px;color:var(--warn);font:600 14px var(--display)}
 </style>
 </head>
@@ -190,6 +198,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
     <h2>HÄNDLER<span>-BOOT</span></h2>
     <div id="shopMoney" class="num"></div>
     <div id="shopMsg"></div>
+    <div id="shopFish"></div>
     <div class="shopGrid">
       <div><h3>Ausrüstung</h3><div id="shopGear"></div></div>
       <div><h3>Waffen</h3><div id="shopWeapons"></div></div>

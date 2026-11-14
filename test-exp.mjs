@@ -37,10 +37,13 @@ ws.on('message', (raw) => {
     // first floor fish only (cheap ones in shallow water)
     const t = fish.filter(c => FISH[c[8]].floor === 0).sort((a, b) => Math.hypot(a[2] - pos.x, a[4] - pos.z) - Math.hypot(b[2] - pos.x, b[4] - pos.z))[0];
     if (t) aimAt(t);
-    if (caught >= 12 || stepT > 900) { log('bag', x.bag, 'fish worth', x.bagV, '$, air', x.air); ok.hunt = x.bag > 0; step = 'sell'; }
+    if (caught >= 12 || stepT > 900) { log('bag', x.bag, 'fish worth', x.bagV, '€, air', x.air); ok.hunt = x.bag > 0; step = 'sell'; stepT = 0; }
   } else if (step === 'sell') {
-    pos = { x: EXP_BOAT.x + 3, y: SURFACE - 2, z: EXP_BOAT.z }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
-    if (x.bag === 0) { log('money after selling', x.money); ok.sell = x.money > 0; step = 'buy'; }
+    // at the boat: two fish into the aquarium, sell the rest
+    pos = { x: EXP_BOAT.x + 7, y: SURFACE - 2, z: EXP_BOAT.z }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
+    if (stepT === 5) { send({ t: 'buy', k: 'aq', i: 0 }); send({ t: 'buy', k: 'aq', i: 0 }); }
+    if (stepT === 10) { log('aquarium', JSON.stringify(x.aq), 'income', x.aqRate, '€/min'); ok.aquarium = x.aq.length === 2 && x.aqRate > 0; send({ t: 'buy', k: 'sellall' }); }
+    if (stepT > 10 && x.bag === 0) { log('money after selling', x.money); ok.sell = x.money > 0; step = 'buy'; }
   } else if (step === 'buy') {
     send({ t: 'buy', k: 'w', i: 0 }); send({ t: 'buy', k: 'tank' });
     step = 'boss'; stepT = 0;
@@ -58,7 +61,7 @@ ws.on('message', (raw) => {
 ws.on('close', () => log('closed'));
 const finish = () => {
   log('RESULT', JSON.stringify(ok), 'private events', JSON.stringify(seen));
-  process.exit(ok.start && ok.hunt && ok.sell && ok.respawn ? 0 : 1);
+  process.exit(ok.start && ok.hunt && ok.aquarium && ok.sell && ok.respawn ? 0 : 1);
 };
 setInterval(() => { if (ok.respawn) finish(); }, 500);
 setTimeout(finish, 120000);

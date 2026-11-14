@@ -52,7 +52,9 @@ In der Lobby rechts zwischen **Battle Royale** und **Tiefsee-Expedition** wähle
   Abgrund (bis 290 m), Tiefseegraben (bis ca. 355 m). In der Mitte an der Oberfläche liegt das **Händler-Boot**.
 - **Fische jagen:** 15 Fischarten, 3 pro Etage, tauchen zufällig auf. Je tiefer, desto wertvoller. Selten gibt es
   **goldene Fische** (5× Wert). Manche beißen zurück (Barrakuda, Viperfisch, Anglerfisch, Drachenfisch).
-- **Verkaufen:** Am Boot auftauchen – der Fang wird automatisch verkauft.
+- **Verkaufen oder Aquarium:** Am Boot E drücken – jeden Fisch verkaufen (sofort Geld) oder ins **Aquarium** setzen.
+- **Aquarium:** Fische darin verdienen jede Minute 8 % ihres Werts (Tiefseefische viel mehr, goldene 5×), auch bis zu 2 Stunden, während du offline bist.
+  Es steht als Glasbecken auf dem Schiffsdeck. Start mit 3 Plätzen, im Laden vergrößerbar bis 20.
 - **Laden (E am Boot):** bessere Waffen, größere **Flaschen** (mehr Luft, tiefer erlaubt), **Atemtraining** (weniger Luftverbrauch) und hellere **Lampen**.
 - **Taschenlampe (L):** hast du von Anfang an. Unten ist es stockdunkel! Der Akku lädt sich an der Oberfläche wieder auf.
 - **Reichweite:** jede Waffe schießt nur so weit wie ihre Reichweite (Bolzenpistole 22 m, Splitterwerfer 26 m, Nadler 38 m, Harpune 65 m, Torpedowerfer 80 m).
