@@ -1,0 +1,338 @@
+// Undernite - browser client: networking, input, camera, entity sync, effects.
+import * as THREE from 'three';
+import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere } from './shared.js';
+import { buildEnvironment } from './world.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile } from './models.js';
+import { Hud } from './hud.js';
+import { Sfx } from './audio.js';
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+const scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0x2b8fb0, 0.01);
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.25, 900);
+camera.rotation.order = 'YXZ'; scene.add(camera);
+scene.add(new THREE.HemisphereLight(0xb5e8ff, 0x12303c, 1.25));
+const sun = new THREE.DirectionalLight(0xdff6ff, 1.35); sun.position.set(0.35, 1, 0.2); scene.add(sun);
+const lamp = new THREE.SpotLight(0xe6fbff, 0, 90, 0.42, 0.8, 1.1); lamp.position.set(0, -1.2, 0);
+camera.add(lamp); lamp.target.position.set(0, 0, -1); camera.add(lamp.target);
+function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+const hud = new Hud(), sfx = new Sfx();
+const dyn = new THREE.Group(); scene.add(dyn);
+let W = null, env = null;
+let phase = 'connecting', myId = 0, mySuit = 'triton', you = null, zone = null, aliveN = 0, frameNo = 0, time = 0;
+const meta = new Map(), players = new Map(), creatures = new Map(), vehicles = new Map(), pickups = new Map(), projs = new Map();
+let crates = [];
+const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, energy: 100, boost: false, exhaust: false };
+let camYaw = 0, camPitch = -0.35, camDist = 5, firing = false, nextFire = 0, specId = 0, shockUntil = 0, shake = 0, deadInfo = null, promptT = 0, sendT = 0;
+let vehSince = 0;
+const keys = {};
+const lerpAngle = (a, b, k) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
+const approachAngle = (a, b, step) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2; return a + Math.max(-step, Math.min(step, d)); };
+const volAt = (x, y, z) => { const d = Math.hypot(x - camera.position.x, y - camera.position.y, z - camera.position.z); return Math.max(0, 1 - d / 95) ** 2; };
+
+// ---------- network ----------
+const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
+const send = (o) => { if (ws.readyState === 1) ws.send(JSON.stringify(o)); };
+ws.onclose = () => hud.conn(true);
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  if (m.t === 's') onSnap(m);
+  else if (m.t === 'welcome') { myId = m.id; send({ t: 'set', name: prefs.name, suit: prefs.suit }); }
+  else if (m.t === 'lobby') { ensureWorld(m.seed); if (phase !== 'play') { phase = 'lobby'; clearDyn(); hud.show('lobby'); if (document.pointerLockElement) document.exitPointerLock(); } hud.setLobby(m, myId); const mine = m.players.find(p => p.id === myId); if (mine) mySuit = mine.suit; }
+  else if (m.t === 'start') onStart(m);
+  else if (m.t === 'end') { phase = 'end'; hud.end(m, myId); hud.show('end'); if (document.pointerLockElement) document.exitPointerLock(); }
+};
+const prefs = hud.buildLobby((c) => {
+  sfx.init();
+  if (c.start) { send({ t: 'start' }); canvas.requestPointerLock?.(); }
+  else send({ t: 'set', ...c });
+});
+
+function ensureWorld(seed) {
+  if (env && env.seed === seed) return;
+  if (env) env.dispose();
+  W = new World(seed); env = buildEnvironment(scene, W);
+}
+function clearDyn() {
+  dyn.clear(); players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
+  you = null; zone = null; deadInfo = null; specId = 0;
+}
+function onStart(m) {
+  ensureWorld(m.seed); clearDyn();
+  phase = 'play'; meta.clear();
+  for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] });
+  if (meta.has(myId)) mySuit = meta.get(myId).suit;
+  crates = W.crates.map((c, i) => { const g = makeCrate(); g.position.set(c.x, c.y, c.z); g.rotation.y = c.yaw; if (m.crates[i]) g.userData.open(); dyn.add(g); return g; });
+  for (const p of m.pickups) addPickup(p);
+  if (m.spawn) { me.x = m.spawn[0]; me.y = m.spawn[1]; me.z = m.spawn[2]; me.vx = me.vy = me.vz = 0; camYaw = m.spawn[3]; camPitch = -0.55; me.energy = 100; }
+  hud.show('game'); hud.spec(null);
+  hud.banner(m.spectator ? 'Runde läuft – du schaust zu' : 'Abtauchen! Such dir Ausrüstung.', 3.5);
+  hud.pause(!document.pointerLockElement);
+}
+function addPickup(p) {
+  const mesh = makePickup(p[1], p[2], p[3]); mesh.position.set(p[4], p[5], p[6]); dyn.add(mesh);
+  pickups.set(p[0], { id: p[0], k: p[1], wid: p[2], rar: p[3], x: p[4], y: p[5], z: p[6], mesh });
+}
+function spawnPlayer(id) {
+  const m = meta.get(id) || { name: '?', suit: 'triton' };
+  const mesh = makePlayerModel(m.suit, id, id === myId ? null : m.name); dyn.add(mesh);
+  const e = { id, mesh, suit: m.suit, name: m.name, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, tx: 0, ty: 0, tz: 0, tyaw: 0, tpitch: 0, hp: 0, fl: 0, w: 0, veh: 0, fresh: true, speed: 0, seen: 0, bubT: 0 };
+  players.set(id, e); return e;
+}
+function sync(map, id, make) {
+  let e = map.get(id);
+  if (!e) { e = make(); e.fresh = true; e.speed = 0; dyn.add(e.mesh); map.set(id, e); }
+  e.seen = frameNo; return e;
+}
+function prune(map) { for (const [id, e] of map) if (e.seen !== frameNo) { dyn.remove(e.mesh); map.delete(id); } }
+function target(e, a, o) { e.tx = a[o]; e.ty = a[o + 1]; e.tz = a[o + 2]; e.tyaw = a[o + 3]; e.tpitch = a[o + 4]; if (e.fresh) { e.x = e.tx; e.y = e.ty; e.z = e.tz; e.yaw = e.tyaw; e.pitch = e.tpitch; e.fresh = false; } }
+
+function onSnap(m) {
+  if (phase !== 'play') return;
+  const c = m.c; frameNo++;
+  zone = c.z; aliveN = c.n;
+  const wasAlive = you && you.alive;
+  you = m.you;
+  for (const a of c.p) { const e = players.get(a[0]) || spawnPlayer(a[0]); e.seen = frameNo; target(e, a, 1); e.hp = a[6]; e.fl = a[8]; e.w = e.weapon = a[9]; e.veh = a[10]; }
+  prune(players);
+  for (const a of c.c) { const type = CREATURE_IDS[a[1]]; const e = sync(creatures, a[0], () => ({ type, mesh: type === 'shark' ? makeShark() : type === 'octo' ? makeOcto() : makeJelly(a[0]) })); target(e, a, 2); e.state = a[7]; }
+  prune(creatures);
+  for (const a of c.v) { const type = VEHICLE_IDS[a[1]]; const e = sync(vehicles, a[0], () => ({ type, mesh: type === 'sub' ? makeSub() : makeScooter() })); target(e, a, 2); e.hp = a[7]; e.driver = a[8]; }
+  prune(vehicles);
+  for (const e of c.e) onEvent(e);
+  for (const e of m.ye) onPrivate(e);
+  if (wasAlive && you && !you.alive && document.pointerLockElement) { /* keep lock for spectating */ }
+}
+
+function onEvent(e) {
+  switch (e[0]) {
+    case 'pj': {
+      const widx = e[2], def = WEAPONS[WEAPON_IDS[widx]], mesh = makeProjectile(widx);
+      mesh.position.set(e[4], e[5], e[6]); mesh.lookAt(e[4] + e[7], e[5] + e[8], e[6] + e[9]); dyn.add(mesh);
+      projs.set(e[1], { mesh, x: e[4], y: e[5], z: e[6], dx: e[7], dy: e[8], dz: e[9], sp: def.speed, life: def.life, trail: widx >= 4 ? 0.03 : 0.09, tt: 0 });
+      if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]));
+      projs.lastShot = time;
+      if (e[3] === myId) shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08);
+      break;
+    }
+    case 'hit': removeProj(e[1]); env.bubble(e[2], e[3], e[4], 7, 0.4, 2); if (e[5] === 1 || e[5] === 3) env.blood(e[2], e[3], e[4]); sfx.hit(volAt(e[2], e[3], e[4])); break;
+    case 'boom': { removeProj(e[1]); env.explosion(e[2], e[3], e[4], e[5]); const v = volAt(e[2], e[3], e[4]); sfx.boom(v); shake = Math.max(shake, v * 0.9); break; }
+    case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); break; }
+    case 'pk+': addPickup(e.slice(1)); break;
+    case 'pk-': { const p = pickups.get(e[1]); if (p) { dyn.remove(p.mesh); pickups.delete(e[1]); } break; }
+    case 'crate': { const c = crates[e[1]]; if (c) { c.userData.open(); env.bubble(c.position.x, c.position.y + 1, c.position.z, 14, 1, 1); if (volAt(c.position.x, c.position.y, c.position.z) > 0.3) sfx.crate(); } break; }
+    case 'msg': hud.banner(e[1], 3.2); sfx.ping(); break;
+    case 'cdie': env.blood(e[2], e[3], e[4]); env.bubble(e[2], e[3], e[4], 22, 1.5, 2); break;
+    case 'bite': env.blood(e[1], e[2], e[3]); sfx.bite(volAt(e[1], e[2], e[3])); break;
+    case 'ink': env.ink(e[1], e[2], e[3]); break;
+  }
+}
+function onPrivate(e) {
+  switch (e[0]) {
+    case 'hurt': {
+      if (e[4]) { hud.hurt(null); break; }
+      const rel = Math.atan2(e[2] - me.x, -(e[3] - me.z)) + camYaw;
+      hud.hurt(rel); sfx.hurt(); shake = Math.max(shake, 0.2); break;
+    }
+    case 'hm': hud.hitmark(e[1], e[2]); sfx.hitmark(e[2]); break;
+    case 'warn': hud.banner(e[1], 2.5); break;
+    case 'grab': hud.banner('Ein Oktopus hat dich gepackt – F hämmern!', 3); break;
+    case 'shock': shockUntil = time + 0.8; hud.shock(); sfx.shock(); break;
+    case 'got': sfx.pickup(); hud.feed(e[1] === 'w' ? `Aufgenommen: <b style="color:${RARITY[e[3]].color}">${WEAPONS[e[2]].name}</b> · ${RARITY[e[3]].name}` : e[1] === 'med' ? 'Reparaturkit: <b>+50 Leben</b>' : 'Schildzelle: <b>+50 Schild</b>', true); break;
+    case 'dead': deadInfo = { place: e[1], by: e[2] }; firing = false; break;
+  }
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function removeProj(id) { const p = projs.get(id); if (p) { dyn.remove(p.mesh); projs.delete(id); } }
+
+// ---------- input ----------
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  keys[e.code] = true;
+  if (phase !== 'play' || !you || !you.alive) return;
+  if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i]) send({ t: 'slot', i }); }
+  else if (e.code === 'KeyR') send({ t: 'r' });
+  else if (e.code === 'KeyE') send({ t: 'e' });
+  else if (e.code === 'KeyF') { send({ t: 'x' }); env.bubble(me.x, me.y, me.z, 4, 1, 2); }
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; firing = false; });
+document.addEventListener('mousemove', (e) => {
+  if (document.pointerLockElement !== canvas) return;
+  camYaw -= e.movementX * 0.0022; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - e.movementY * 0.0022));
+});
+const lock = () => { sfx.init(); if (phase === 'play' && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); };
+canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !== canvas) { lock(); return; } if (e.button === 0) firing = true; });
+document.getElementById('pause').addEventListener('click', lock);
+addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; });
+addEventListener('wheel', (e) => {
+  if (phase !== 'play' || !you || !you.alive) return;
+  const dir = e.deltaY > 0 ? 1 : -1;
+  for (let k = 1; k <= 3; k++) { const i = (you.slot + dir * k + 6) % 3; if (you.w[i]) { if (i !== you.slot) send({ t: 'slot', i }); break; } }
+}, { passive: true });
+addEventListener('contextmenu', (e) => e.preventDefault());
+document.addEventListener('pointerlockchange', () => { hud.pause(phase === 'play' && document.pointerLockElement !== canvas); if (document.pointerLockElement !== canvas) firing = false; });
+
+// ---------- local player ----------
+function controlMe(dt) {
+  const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
+  let speed = S.speed, accel = 5, r = S.r, strafe = 1, canBoost = true;
+  if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
+  else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
+  if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
+  else { me.hyaw = camYaw; me.hpitch = camPitch; }
+  const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), u = (keys.Space ? 1 : 0) - (keys.KeyC || keys.KeyX ? 1 : 0);
+  const fw = dirFrom(me.hyaw, me.hpitch), rx = Math.cos(me.hyaw), rz = -Math.sin(me.hyaw);
+  let wx = fw[0] * f + rx * s * strafe, wy = fw[1] * f + u, wz = fw[2] * f + rz * s * strafe;
+  const wl = Math.hypot(wx, wy, wz); if (wl > 1) { wx /= wl; wy /= wl; wz /= wl; }
+  me.boost = canBoost && (keys.ShiftLeft || keys.ShiftRight) && wl > 0.1 && !me.exhaust;
+  if (me.boost) { me.energy = Math.max(0, me.energy - 26 * dt); if (me.energy <= 0) me.exhaust = true; speed *= S.boost; }
+  else { me.energy = Math.min(100, me.energy + 13 * dt); if (me.energy > 20) me.exhaust = false; }
+  if (you.grab) speed *= 0.3;
+  if (time < shockUntil) speed *= 0.5;
+  const k = Math.min(1, accel * dt);
+  me.vx += (wx * speed - me.vx) * k; me.vy += (wy * speed - me.vy) * k; me.vz += (wz * speed - me.vz) * k;
+  me.x += me.vx * dt; me.y += me.vy * dt; me.z += me.vz * dt;
+  W.collide(me, r);
+}
+function aimDir() {
+  const cd = dirFrom(camYaw, camPitch), cp = camera.position;
+  let D = 150;
+  const t = W.segmentHit(cp.x, cp.y, cp.z, cp.x + cd[0] * D, cp.y + cd[1] * D, cp.z + cd[2] * D);
+  if (t > 0) D *= t;
+  const test = (x, y, z, r) => { const tt = segSphere(cp.x, cp.y, cp.z, cd[0] * D, cd[1] * D, cd[2] * D, x, y, z, r); if (tt > 0) D *= tt; };
+  for (const e of players.values()) if (e.id !== myId) test(e.x, e.y, e.z, SUITS[e.suit].r);
+  for (const c of creatures.values()) test(c.x, c.y, c.z, CREATURES[c.type].r);
+  D = Math.max(D, camDist + 5);
+  const ax = cp.x + cd[0] * D - me.x, ay = cp.y + cd[1] * D - me.y, az = cp.z + cd[2] * D - me.z, l = Math.hypot(ax, ay, az) || 1;
+  return [ax / l, ay / l, az / l];
+}
+function tryFire(now) {
+  if (!firing) return;
+  const v = you.veh ? vehicles.get(you.veh) : null;
+  let rate, w = null;
+  if (v && v.type === 'sub') rate = WEAPONS.subtorp.rate;
+  else { w = you.w[you.slot]; if (!w || you.rl > 0 || w[2] <= 0) return; rate = WEAPONS[w[0]].rate; }
+  if (now < nextFire) return;
+  nextFire = now + 1000 / rate;
+  if (w) w[2]--;
+  send({ t: 'f', d: aimDir().map(x => +x.toFixed(4)) });
+}
+function computePrompt() {
+  if (!you || !you.alive) return null;
+  if (you.grab) return ['F', 'Befreien – mehrfach drücken!'];
+  if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
+  vehSince = 0;
+  const S = SUITS[mySuit]; let best = null, bd = 1e9;
+  const d3 = (o) => Math.hypot(o.x - me.x, o.y - me.y, o.z - me.z);
+  for (const p of pickups.values()) if (p.k === 'w') { const d = d3(p); if (d < S.r + 3.5 && d < bd) { bd = d; best = ['E', `${WEAPONS[p.wid].name} (${RARITY[p.rar].name}) ${you.w.includes(0) ? 'aufheben' : 'tauschen'}`]; } }
+  crates.forEach((c) => { if (!c.userData.isOpen) { const d = d3(c.position); if (d < S.r + 4.5 && d < bd) { bd = d; best = ['E', 'Truhe öffnen']; } } });
+  if (!S.mech) for (const v of vehicles.values()) if (!v.driver) { const d = d3(v) - (v.type === 'sub' ? 2 : 0); if (d < S.r + 4.5 && d < bd) { bd = d; best = ['E', `${VEHICLES[v.type].name} steuern`]; } }
+  return best;
+}
+
+// ---------- per-frame updates ----------
+function updateEntities(dt) {
+  const k = 1 - Math.exp(-dt * 14), alive = you && you.alive;
+  for (const e of players.values()) {
+    if (e.id === myId && alive) { e.x = me.x; e.y = me.y; e.z = me.z; e.yaw = me.hyaw; e.pitch = me.hpitch; e.speed = Math.hypot(me.vx, me.vy, me.vz); }
+    else {
+      const ox = e.x, oy = e.y, oz = e.z;
+      e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; e.z += (e.tz - e.z) * k; e.yaw = lerpAngle(e.yaw, e.tyaw, k); e.pitch += (e.tpitch - e.pitch) * k;
+      e.speed += (Math.hypot(e.x - ox, e.y - oy, e.z - oz) / dt - e.speed) * 0.2;
+    }
+    const veh = e.veh ? vehicles.get(e.veh) : null;
+    e.mesh.visible = !(veh && veh.type === 'sub');
+    e.mesh.position.set(e.x, e.y, e.z);
+    e.mesh.userData.update(dt, e);
+    const near = e.mesh.position.distanceToSquared(camera.position);
+    if (e.mesh.userData.tag) e.mesh.userData.tag.visible = near < 55 * 55;
+    e.bubT -= dt;
+    if (e.bubT <= 0 && near < 80 * 80) { e.bubT = e.fl & 2 ? 0.04 : e.speed > 3 ? 0.14 : 0.9; const f = dirFrom(e.yaw, e.pitch); env.bubble(e.x - f[0] * 0.6, e.y + 0.3, e.z - f[2] * 0.6, 1, 0.4); }
+  }
+  for (const v of vehicles.values()) {
+    if (v.driver === myId && alive) { v.x = me.x; v.y = me.y; v.z = me.z; v.yaw = me.hyaw; v.pitch = me.hpitch; v.speed = Math.hypot(me.vx, me.vy, me.vz); }
+    else { const ox = v.x, oz = v.z, oy = v.y; v.x += (v.tx - v.x) * k; v.y += (v.ty - v.y) * k; v.z += (v.tz - v.z) * k; v.yaw = lerpAngle(v.yaw, v.tyaw, k); v.pitch += (v.tpitch - v.pitch) * k; v.speed += (Math.hypot(v.x - ox, v.y - oy, v.z - oz) / dt - v.speed) * 0.2; }
+    v.mesh.position.set(v.x, v.y, v.z); v.driven = !!v.driver;
+    v.mesh.userData.update(dt, v);
+    if (v.driver && v.speed > 3 && Math.random() < dt * 25) { const f = dirFrom(v.yaw, v.pitch), o = v.type === 'sub' ? 4.2 : 0.6; env.bubble(v.x - f[0] * o, v.y - f[1] * o, v.z - f[2] * o, 1, 0.8, 1); }
+  }
+  for (const c of creatures.values()) {
+    c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k; c.z += (c.tz - c.z) * k; c.yaw = lerpAngle(c.yaw, c.tyaw, k); c.pitch += (c.tpitch - c.pitch) * k;
+    c.mesh.position.set(c.x, c.y, c.z); c.mesh.userData.update(dt, c);
+  }
+  for (const p of pickups.values()) p.mesh.userData.update(time);
+  for (const [id, p] of projs) {
+    const st = p.sp * dt; p.x += p.dx * st; p.y += p.dy * st; p.z += p.dz * st; p.life -= dt;
+    p.mesh.position.set(p.x, p.y, p.z);
+    p.tt -= dt; if (p.tt <= 0) { p.tt = p.trail; env.bubble(p.x, p.y, p.z, 1, 0.1); }
+    if (p.life <= -0.15 || p.y < W.heightAt(p.x, p.z) - 0.5) removeProj(id);
+  }
+}
+const V = new THREE.Vector3();
+function updateCamera(dt) {
+  let tx, ty, tz, want, side = 0.9, up = 0.5;
+  const alive = you && you.alive;
+  if (alive) {
+    const v = you.veh ? vehicles.get(you.veh) : null;
+    want = v ? VEHICLES[v.type].cam : SUITS[mySuit].cam;
+    if (v && v.type === 'sub') { side = 0; up = 2.2; }
+    tx = me.x; ty = me.y + (SUITS[mySuit].mech ? 1.4 : 0.5); tz = me.z;
+  } else {
+    let e = players.get(specId);
+    if (!e) { for (const p of players.values()) { if (!e || (!meta.get(p.id)?.bot && meta.get(e.id)?.bot)) e = p; } specId = e ? e.id : 0; }
+    if (e) { tx = e.x; ty = e.y + 0.6; tz = e.z; } else { tx = me.x; ty = me.y; tz = me.z; }
+    want = 8; side = 0;
+  }
+  camDist += (want - camDist) * Math.min(1, dt * 5);
+  const cd = dirFrom(camYaw, camPitch), rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
+  let px = tx - cd[0] * camDist + rx * side, py = ty - cd[1] * camDist + up, pz = tz - cd[2] * camDist + rz * side;
+  const t = W.segmentHit(tx, ty, tz, px, py, pz);
+  if (t > 0) { const q = Math.max(0.15, t - 0.08); px = tx + (px - tx) * q; py = ty + (py - ty) * q; pz = tz + (pz - tz) * q; }
+  py = Math.min(SURFACE - 0.6, Math.max(py, W.heightAt(px, pz) + 0.5));
+  shake = Math.max(0, shake - dt * 2.2);
+  camera.position.set(px + (Math.random() - 0.5) * shake, py + (Math.random() - 0.5) * shake, pz + (Math.random() - 0.5) * shake);
+  camera.rotation.set(camPitch, camYaw, 0);
+}
+function lobbyCamera() {
+  if (!W) return;
+  const a = time * 0.05, w = W.wreck;
+  camera.position.set(w.x + Math.cos(a) * 46, w.y + 20, w.z + Math.sin(a) * 46);
+  camera.lookAt(V.set(w.x, w.y + 6, w.z));
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
+  let outside = false;
+  if (phase === 'play' && W) {
+    const alive = you && you.alive;
+    if (alive) {
+      controlMe(dt); tryFire(now);
+      sendT += dt; if (sendT >= 1 / 30) { sendT = 0; send({ t: 'm', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), yaw: +me.hyaw.toFixed(3), pitch: +me.hpitch.toFixed(3), b: me.boost ? 1 : 0 }); }
+    }
+    updateEntities(dt); updateCamera(dt);
+    const fx = alive ? me : camera.position;
+    outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
+    promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }
+    hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y, suit: mySuit, outside, time, dt });
+    hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois);
+    if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }
+    else if (!you) { const s = players.get(specId); hud.spec(`Zuschauer${s ? ` · ${esc(s.name)}` : ''}`); }
+    lamp.intensity = 150 * Math.min(1, Math.max(0, (SURFACE - camera.position.y - 55) / 55));
+  } else lobbyCamera();
+  if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// small hook for automated smoke tests
+window.__un = { get state() { return { phase, myId, you, aliveN, me, players: players.size, creatures: creatures.size, pickups: pickups.size, projs: projs.size }; },
+  look(y, p) { camYaw = y; camPitch = p; }, key(c, d) { keys[c] = d; }, fire(b) { firing = b; }, send, tp(x, y, z) { me.x = x; me.y = y; me.z = z; }, world: () => W, ents: () => ({ players, creatures, vehicles, crates, pickups }) };
