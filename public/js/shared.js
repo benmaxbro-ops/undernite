@@ -403,7 +403,8 @@ export class World {
   }
 
   // Push a sphere {x,y,z,vx,vy,vz} out of terrain, colliders and world bounds.
-  collide(p, r) {
+  // top: highest allowed y (default keeps the sphere just under the water surface)
+  collide(p, r, top = SURFACE - r - 0.4) {
     if (p.x < -PLAY) { p.x = -PLAY; if (p.vx < 0) p.vx = 0; } else if (p.x > PLAY) { p.x = PLAY; if (p.vx > 0) p.vx = 0; }
     if (p.z < -PLAY) { p.z = -PLAY; if (p.vz < 0) p.vz = 0; } else if (p.z > PLAY) { p.z = PLAY; if (p.vz > 0) p.vz = 0; }
     const list = this.hash.get(hkey(Math.floor(p.x / HC), Math.floor(p.z / HC)));
@@ -417,7 +418,6 @@ export class World {
     }
     const g = this.heightAt(p.x, p.z) + r;
     if (p.y < g) { p.y = g; if (p.vy < 0) p.vy = 0; }
-    const top = SURFACE - r - 0.4;
     if (p.y > top) { p.y = top; if (p.vy > 0) p.vy = 0; }
   }
 

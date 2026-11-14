@@ -109,7 +109,7 @@ export function makePlayerModel(suit, id, name) {
   const parts = suit === 'goliath' ? buildMech(accent) : buildRealDiver(suit, accent);
   const inner = parts.g; inner.rotation.order = 'YXZ'; root.add(inner);
   if (name) { const tag = makeTag(name); tag.position.y = suit === 'goliath' ? 3.0 : 1.5; root.add(tag); root.userData.tag = tag; }
-  let phase = Math.random() * 6, lastW = -2;
+  let phase = Math.random() * 6, lastW = -2, tilt = 0;
   root.userData.inner = inner;
   root.userData.update = (dt, s) => {
     inner.rotation.y = s.yaw;
@@ -120,7 +120,9 @@ export function makePlayerModel(suit, id, name) {
       for (const a of parts.arms) a.rotation.x = s.pitch;
       parts.legs[0].rotation.x = Math.sin(phase * 0.6) * amp; parts.legs[1].rotation.x = -Math.sin(phase * 0.6) * amp;
     } else {
-      inner.rotation.x = s.pitch;
+      // at the surface the diver turns upright and treads water, head out of the water
+      tilt += ((s.surf ? 1 : 0) - tilt) * Math.min(1, dt * 3);
+      inner.rotation.x = s.pitch * (1 - tilt) + 1.15 * tilt;
       inner.rotation.z = Math.sin(phase * 0.5) * 0.05;
       if (parts.animate) parts.animate(dt, s, phase, 0.5 + amp * 1.6);
       else { parts.legs[0].rotation.x = Math.sin(phase) * amp; parts.legs[1].rotation.x = -Math.sin(phase) * amp; }

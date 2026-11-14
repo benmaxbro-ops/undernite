@@ -237,7 +237,12 @@ function controlMe(dt) {
   const k = Math.min(1, accel * dt);
   me.vx += (wx * speed - me.vx) * k; me.vy += (wy * speed - me.vy) * k; me.vz += (wz * speed - me.vz) * k;
   me.x += me.vx * dt; me.y += me.vy * dt; me.z += me.vz * dt;
-  W.collide(me, r);
+  // divers may swim right up until head and shoulders are out of the water (vehicles stay below)
+  W.collide(me, r, vt ? undefined : SURFACE - 0.15);
+  // splash when breaking through the surface
+  const atTop = SURFACE - me.y < 0.6;
+  if (atTop && !me.surfaced && me.vy > 0.5) { env.bubble(me.x, SURFACE - 0.4, me.z, 28, 1.4, 1.5); sfx.noise(0.45, 1100, 0.7, 0.35, 'lowpass', 250); }
+  me.surfaced = atTop;
 }
 function updateTorch(dt, depth) {
   const lvl = you.x.lamp || 0, L = LAMPS[lvl];
@@ -304,6 +309,7 @@ function updateEntities(dt) {
       e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; e.z += (e.tz - e.z) * k; e.yaw = lerpAngle(e.yaw, e.tyaw, k); e.pitch += (e.tpitch - e.pitch) * k;
       e.speed += (Math.hypot(e.x - ox, e.y - oy, e.z - oz) / dt - e.speed) * 0.2;
     }
+    e.surf = SURFACE - e.y < 1.3;   // at the surface the diver floats upright
     const veh = e.veh ? vehicles.get(e.veh) : null;
     e.mesh.visible = !(veh && veh.type === 'sub');
     e.mesh.position.set(e.x, e.y, e.z);
@@ -348,7 +354,7 @@ function updateCamera(dt) {
     if (v && v.type === 'sub') { side = 0; up = 2.2; }
     tx = me.x; ty = me.y + (SUITS[mySuit].mech ? 1.4 : 0.5); tz = me.z;
     // swimming at the surface: head out of the water, the camera looks across the sea
-    if (mode === 'exp' && SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
+    if (SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
     ty += headUp * 2.2;
   } else {
     let e = players.get(specId);
