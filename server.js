@@ -89,7 +89,7 @@ function mkPlayer(id, name, suit, bot) {
     hp: S.hp, maxhp: S.hp, shield: 0, alive: true, weapons: [{ id: 'pistol', rar: 0, ammo: WEAPONS.pistol.mag }, null, null],
     slot: 0, reload: 0, reloadT: 1, nextFire: 0, veh: 0, kills: 0, grabbed: 0, ink: 0, shockT: 0, boost: false, place: 0,
     zoneAcc: 0, ye: [],
-    thinkT: rnd() * 0.4, goal: null, crate: -1, target: null, mode: 'loot', skill: 0.06 + rnd() * 0.06, reactT: 0,
+    thinkT: rnd() * 0.4, goal: null, crate: -1, target: null, mode: 'loot', skill: 0.12 + rnd() * 0.08, reactT: 0,   // skill = aim error (higher = worse)
     phase: rnd() * 6.28, stuckT: 0, burst: 0, holdT: 0, strT: 0, fightUntil: 0, peaceUntil: 0 };
 }
 function rollRarity(bonus = 0) { const r = rnd() - bonus; return r < 0.05 ? 3 : r < 0.2 ? 2 : r < 0.5 ? 1 : 0; }
@@ -540,7 +540,7 @@ function botThink(b) {
     if (d < 24 && d < bd + 10) { bd = d; best = { k: 'c', ref: c }; }
   }
   const prev = b.target;
-  if (best && (!prev || prev.ref !== best.ref)) { b.reactT = 0.35 + rnd() * 0.5; if (best.k === 'p' && best.ref.bot) b.fightUntil = G.time + 5 + rnd() * 4; }
+  if (best && (!prev || prev.ref !== best.ref)) { b.reactT = 0.6 + rnd() * 0.7; if (best.k === 'p' && best.ref.bot) b.fightUntil = G.time + 5 + rnd() * 4; }
   if (best || !prev || !targetOk(prev) || dist(b, prev.ref) > 60) b.target = best;
   // choose weapon for the range
   if (b.target) {
@@ -633,7 +633,9 @@ function botStep(b, dt) {
     const w = b.weapons[b.slot];
     if (w && b.reactT <= 0 && ad < Math.min(42, WEAPONS[w.id].range * 0.9) && G.time >= b.nextFire && G.time >= b.holdT && b.reload <= 0) {
       const def = WEAPONS[w.id], tt = ad / def.speed, e = b.skill;
-      const px = tgt.x + (tgt.vx || 0) * tt - b.x, py = tgt.y + (tgt.vy || 0) * tt - b.y, pz = tgt.z + (tgt.vz || 0) * tt - b.z;
+      // bots only half-predict where you are going, so moving targets are harder for them to hit
+      const lead = tt * (0.3 + rnd() * 0.4);
+      const px = tgt.x + (tgt.vx || 0) * lead - b.x, py = tgt.y + (tgt.vy || 0) * lead - b.y, pz = tgt.z + (tgt.vz || 0) * lead - b.z;
       const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
       fire(b, [px / pl + (rnd() + rnd() - 1) * e, py / pl + (rnd() + rnd() - 1) * e, pz / pl + (rnd() + rnd() - 1) * e]);
       b.burst++;
