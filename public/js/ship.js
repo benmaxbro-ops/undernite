@@ -1,6 +1,7 @@
-// Undernite - the trader's pirate ship at the surface (own design: "Seeschwalbe").
-// Wooden hull lofted from cross-sections, two masts with square sails, crow's nest,
-// bowsprit with a swordfish figurehead, captain's cabin, cannons, lanterns, rigging.
+// Undernite - the trader's pirate ship at the surface. Own cartoon design
+// ("Seehund"): toon shading with black outlines, chubby wooden hull, white curly
+// railings, a big main sail with our own fish-skeleton emblem, a red/white striped
+// rear sail, a bow cannon and a friendly seal figurehead on a long curved neck.
 // y = 0 is the waterline, the bow points to -z.
 import * as THREE from 'three';
 import { makeTag } from './models.js';
@@ -15,48 +16,59 @@ function spline(keys, t) {
   const u = (t - keys[i][0]) / (keys[i + 1][0] - keys[i][0]);
   return 0.5 * (2 * p1 + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (-p0 + 3 * p1 - 3 * p2 + p3) * u * u * u);
 }
-const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.05, ...o });
+// 3-step toon shading
+let GRAD = null;
+function gradient() {
+  if (GRAD) return GRAD;
+  GRAD = new THREE.DataTexture(new Uint8Array([90, 90, 90, 255, 175, 175, 175, 255, 255, 255, 255, 255]), 3, 1);
+  GRAD.minFilter = GRAD.magFilter = THREE.NearestFilter; GRAD.needsUpdate = true;
+  return GRAD;
+}
+const toon = (color, o = {}) => new THREE.MeshToonMaterial({ color, gradientMap: gradient(), ...o });
 const glow = (color, i = 2) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: i, roughness: 0.4 });
-const BOX = new THREE.BoxGeometry(1, 1, 1), CYL = new THREE.CylinderGeometry(1, 1, 1, 12), SPH = new THREE.SphereGeometry(1, 14, 10);
+const LINE = new THREE.MeshBasicMaterial({ color: 0x14100c, side: THREE.BackSide });
+const BOX = new THREE.BoxGeometry(1, 1, 1), CYL = new THREE.CylinderGeometry(1, 1, 1, 14), SPH = new THREE.SphereGeometry(1, 20, 14);
 function put(p, geo, mat, x, y, z, sx = 1, sy = sx, sz = sx) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); p.add(m); return m; }
+// cartoon outline: a slightly inflated black copy rendered from the back
+function outline(mesh, w = 0.06) {
+  const g = mesh.geometry.clone(); if (!g.attributes.normal) g.computeVertexNormals();
+  const p = g.attributes.position, n = g.attributes.normal, s = mesh.scale;
+  for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) + n.getX(i) * w / s.x, p.getY(i) + n.getY(i) * w / s.y, p.getZ(i) + n.getZ(i) * w / s.z);
+  const o = new THREE.Mesh(g, LINE); mesh.add(o); return mesh;
+}
 function canvasTex(w, h, draw) {
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
-// hull shape along t (0 = bow, 1 = stern)
-const LEN = 24, Z0 = -12;
-const HB = [[0, 0.1], [0.08, 1.5], [0.22, 3.0], [0.5, 3.6], [0.8, 3.4], [1, 2.9]];      // half beam
-const DEP = [[0, 1.4], [0.1, 3.6], [0.5, 4.6], [0.9, 4.2], [1, 3.4]];                   // keel depth below the deck edge
-const SHEER = [[0, 3.6], [0.15, 2.6], [0.5, 2.1], [0.78, 2.7], [1, 3.8]];               // height of the deck edge
+// chubby hull shape along t (0 = bow, 1 = stern)
+const LEN = 20, Z0 = -10;
+const HB = [[0, 0.5], [0.1, 2.2], [0.3, 3.4], [0.6, 3.6], [0.85, 3.4], [1, 2.8]];
+const DEP = [[0, 2.4], [0.15, 3.8], [0.5, 4.3], [0.9, 4.0], [1, 3.3]];
+const SHEER = [[0, 3.3], [0.2, 2.5], [0.55, 2.2], [0.8, 2.8], [1, 3.5]];
 const zAt = (t) => Z0 + LEN * t;
-const DECK_Y = 1.75;
+const DECK_Y = 1.85;
 
 function hullGeometry() {
-  const rings = 48, seg = 64, pos = [], col = [], idx = [];
-  const C = new THREE.Color();
+  const rings = 44, seg = 64, pos = [], col = [], idx = [], C = new THREE.Color();
   for (let i = 0; i <= rings; i++) {
     const t = i / rings, hb = spline(HB, t), dep = spline(DEP, t), sh = spline(SHEER, t), z = zAt(t);
     for (let j = 0; j <= seg; j++) {
       const a = j / seg * Math.PI, c = Math.cos(a), s = Math.sin(a);
-      const x = hb * Math.sign(c) * Math.abs(c) ** 0.55, y = sh - dep * s ** 1.5;
+      const x = hb * Math.sign(c) * Math.abs(c) ** 0.45, y = sh - dep * s ** 1.3;
       pos.push(x, y, z);
-      // below the waterline: dark red antifouling, white waterline stripe, wooden planks above
-      if (y < -0.35) C.setHex(0x8a3a2c);
-      else if (y < 0.05) C.setHex(0xe8e2d4);
-      else {
-        const plank = Math.floor((y + 0.05) / 0.42);
-        C.setHex(plank % 2 ? 0x8a5a34 : 0x9c6a40);
-        if (sh - y < 0.35) C.setHex(0x3e2616);                               // dark wale at the top
-        if (((y + 0.05) % 0.42) < 0.035) C.multiplyScalar(0.6);             // plank seams
-        C.multiplyScalar(0.92 + 0.08 * Math.sin(z * 3.1 + plank * 1.7));
+      if (sh - y < 0.28) C.setHex(0xf4efe2);                       // white trim along the top
+      else if (y < -0.2) C.setHex(0x4a2c1a);                       // dark bottom
+      else {                                                      // big cartoon planks
+        const plank = Math.floor((y + 0.2) / 0.55);
+        C.setHex(plank % 2 ? 0xb3743e : 0x9a5f2c);
       }
       col.push(C.r, C.g, C.b);
     }
   }
   for (let i = 0; i < rings; i++) for (let j = 0; j < seg; j++) {
     const a = i * (seg + 1) + j, b = a + 1, c = a + seg + 1, d = c + 1;
-    idx.push(a, c, b, b, c, d);   // outward facing
+    idx.push(a, c, b, b, c, d);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -64,151 +76,152 @@ function hullGeometry() {
   g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
-// flat polygon (closed outline in the xy plane) -> mesh
-function shapeMesh(pts, mat) { const s = new THREE.Shape(pts.map(p => new THREE.Vector2(p[0], p[1]))); return new THREE.Mesh(new THREE.ShapeGeometry(s), mat); }
-// billowing square sail
-function sail(w, h, tex, bulge = 0.9) {
-  const g = new THREE.PlaneGeometry(w, h, 10, 8), p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i) / (w / 2), y = p.getY(i) / (h / 2); p.setZ(i, -bulge * (1 - x * x * 0.8) * (1 - (y * 0.85) ** 2)); }
+function shapeMesh(pts, mat) { return new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(pts.map(p => new THREE.Vector2(p[0], p[1])))), mat); }
+function sail(w, h, tex, bulge = 1.0) {
+  const g = new THREE.PlaneGeometry(w, h, 12, 10), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i) / (w / 2), y = p.getY(i) / (h / 2); p.setZ(i, -bulge * (1 - x * x * 0.7) * (1 - (y * 0.8) ** 2)); }
   g.computeVertexNormals();
-  return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.95 }));
+  return new THREE.Mesh(g, toon(0xffffff, { map: tex, side: THREE.DoubleSide }));
 }
 
 export function makeShip() {
   const ship = new THREE.Group();
-  const wood = std(0x6e4a2c), darkWood = std(0x3e2616), gold = std(0xc9a24a, { metalness: 0.6, roughness: 0.35 }), iron = std(0x23262a, { metalness: 0.7, roughness: 0.4 }), rope = new THREE.LineBasicMaterial({ color: 0x2a2018 });
+  const wood = toon(0x8a5a32), darkWood = toon(0x4a2e1a), white = toon(0xf4efe2), iron = toon(0x2c3036), gold = toon(0xe8b84a);
 
-  // ----- hull + deck + stern -----
-  // a little self-light so the hull does not turn into a black blob when seen from below
-  ship.add(new THREE.Mesh(hullGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide, emissive: 0x3a2014, emissiveIntensity: 0.6 })));
+  // ----- hull, deck, stern -----
+  ship.add(outline(new THREE.Mesh(hullGeometry(), new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient(), side: THREE.DoubleSide, emissive: 0x2a1408, emissiveIntensity: 0.5 })), 0.09));
   const deckTex = canvasTex(256, 256, (c, w, h) => {
-    c.fillStyle = '#8a6440'; c.fillRect(0, 0, w, h);
-    for (let i = 0; i < 16; i++) { c.fillStyle = i % 2 ? '#7d5a38' : '#94704a'; c.fillRect(i * 16, 0, 15, h); c.fillStyle = '#4a3220'; c.fillRect(i * 16 + 15, 0, 1, h); }
-    for (let i = 0; i < 40; i++) { c.fillStyle = '#3a2818'; c.fillRect(((Math.random() * 16) | 0) * 16 + 7, Math.random() * h, 2, 2); }
+    c.fillStyle = '#c99a62'; c.fillRect(0, 0, w, h);
+    for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#bd8d56' : '#d2a46c'; c.fillRect(i * 32, 0, 30, h); c.fillStyle = '#7a5530'; c.fillRect(i * 32 + 30, 0, 2, h); }
   });
-  deckTex.wrapS = deckTex.wrapT = THREE.RepeatWrapping; deckTex.repeat.set(0.35, 0.12);
+  deckTex.wrapS = deckTex.wrapT = THREE.RepeatWrapping; deckTex.repeat.set(0.3, 0.1);
   const deckPts = [];
-  for (let i = 0; i <= 30; i++) { const t = 0.06 + 0.94 * i / 30; deckPts.push([spline(HB, t) * 0.96, zAt(t)]); }
-  for (let i = 30; i >= 0; i--) { const t = 0.06 + 0.94 * i / 30; deckPts.push([-spline(HB, t) * 0.96, zAt(t)]); }
-  const deck = shapeMesh(deckPts, std(0xffffff, { map: deckTex, side: THREE.DoubleSide }));
-  deck.rotation.x = Math.PI / 2; deck.position.y = DECK_Y; ship.add(deck);
-  // stern transom with glowing windows
+  for (let i = 0; i <= 30; i++) { const t = 0.04 + 0.96 * i / 30; deckPts.push([spline(HB, t) * 0.97, zAt(t)]); }
+  for (let i = 30; i >= 0; i--) { const t = 0.04 + 0.96 * i / 30; deckPts.push([-spline(HB, t) * 0.97, zAt(t)]); }
+  const deck = shapeMesh(deckPts, toon(0xffffff, { map: deckTex, side: THREE.DoubleSide })); deck.rotation.x = Math.PI / 2; deck.position.y = DECK_Y; ship.add(deck);
   const sternPts = [];
-  for (let j = 0; j <= 16; j++) { const a = j / 16 * Math.PI, c = Math.cos(a), s = Math.sin(a); sternPts.push([spline(HB, 1) * Math.sign(c) * Math.abs(c) ** 0.55, spline(SHEER, 1) - spline(DEP, 1) * s ** 1.5]); }
-  const transom = shapeMesh(sternPts, std(0x5c3a22, { side: THREE.DoubleSide })); transom.position.z = zAt(1) - 0.01; ship.add(transom);
-  for (let i = -1; i <= 1; i++) { put(ship, BOX, glow(0xffc870, 1.6), i * 1.2, 2.9, zAt(1) + 0.02, 0.7, 0.8, 0.05); put(ship, BOX, gold, i * 1.2, 2.9, zAt(1) + 0.03, 0.82, 0.08, 0.05); }
-  put(ship, BOX, darkWood, 0, -1.2, zAt(1) + 0.3, 0.25, 3.2, 1.2);     // rudder
+  for (let j = 0; j <= 16; j++) { const a = j / 16 * Math.PI, c = Math.cos(a), s = Math.sin(a); sternPts.push([spline(HB, 1) * Math.sign(c) * Math.abs(c) ** 0.45, spline(SHEER, 1) - spline(DEP, 1) * s ** 1.3]); }
+  const transom = shapeMesh(sternPts, toon(0x8a5530, { side: THREE.DoubleSide })); transom.position.z = zAt(1) - 0.01; ship.add(transom);
+  // round stern window with a golden frame
+  const win = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20), glow(0xffd27a, 1.3)); win.position.set(0, 2.2, zAt(1) + 0.03); ship.add(win);
+  const frame = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.11, 8, 24), gold); frame.position.set(0, 2.2, zAt(1) + 0.05); ship.add(frame);
+  put(ship, BOX, darkWood, 0, -1.3, zAt(1) + 0.25, 0.25, 3, 1);   // rudder
 
-  // ----- railings -----
+  // ----- white curly railings -----
   for (const s of [-1, 1]) {
-    const pts = [];
-    for (let i = 0; i <= 24; i++) { const t = 0.04 + 0.96 * i / 24; pts.push(new THREE.Vector3(s * spline(HB, t) * 0.97, spline(SHEER, t) + 0.8, zAt(t))); }
-    ship.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 0.07, 6), darkWood));
-    for (let i = 0; i <= 24; i += 2) { const p = pts[i]; put(ship, CYL, darkWood, p.x, p.y - 0.42, p.z, 0.06, 0.85, 0.06); }
-  }
-
-  // ----- captain's cabin (stern) + forecastle -----
-  put(ship, BOX, std(0x7a5232), 0, DECK_Y + 1.3, 8.6, 5.4, 2.6, 5.4);
-  put(ship, BOX, darkWood, 0, DECK_Y + 2.7, 8.6, 6.0, 0.25, 6.0);
-  for (const s of [-1, 1]) for (const z of [7.4, 9.8]) { put(ship, BOX, glow(0xffc870, 1.4), s * 2.71, DECK_Y + 1.5, z, 0.05, 0.75, 0.9); put(ship, BOX, gold, s * 2.73, DECK_Y + 1.5, z, 0.05, 0.85, 0.08); }
-  put(ship, BOX, std(0x5a3a22), 0, DECK_Y + 1.05, 5.88, 1.1, 2.0, 0.08);   // cabin door
-  put(ship, SPH, gold, 0.38, DECK_Y + 1.05, 5.82, 0.07);
-  put(ship, BOX, std(0x7a5232), 0, DECK_Y + 0.6, -8.3, 3.2, 1.2, 3.2);     // forecastle
-  // ship's wheel on the cabin roof
-  const wheel = new THREE.Group(); wheel.position.set(0, DECK_Y + 3.6, 7.2); ship.add(wheel);
-  wheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20), darkWood));
-  for (let i = 0; i < 8; i++) { const sp = put(wheel, CYL, darkWood, 0, 0, 0, 0.03, 1.4, 0.03); sp.rotation.z = i / 8 * Math.PI; }
-  put(ship, CYL, darkWood, 0, DECK_Y + 3.2, 7.35, 0.1, 0.9, 0.1);
-
-  // ----- masts, yards, sails, crow's nest -----
-  const sailTex = canvasTex(256, 256, (c, w, h) => {
-    c.fillStyle = '#ece2c6'; c.fillRect(0, 0, w, h);
-    c.strokeStyle = 'rgba(120,100,70,.35)'; c.lineWidth = 2;
-    for (let x = 32; x < w; x += 32) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
-    c.fillStyle = 'rgba(200,180,140,.6)'; c.fillRect(170, 150, 40, 34); c.strokeRect(170, 150, 40, 34);   // a patch
-    c.fillStyle = 'rgba(90,70,50,.18)'; for (let i = 0; i < 30; i++) c.fillRect(Math.random() * w, Math.random() * h, 3, 3);
-  });
-  const emblemTex = canvasTex(256, 256, (c, w, h) => {
-    c.drawImage(sailTex.image, 0, 0);
-    drawEmblem(c, w / 2, h / 2 + 6, 0.9, '#7a1f1a');
-  });
-  const masts = [{ z: 0.5, h: 17, sails: [[8.2, 6.2, 6.6, emblemTex], [6.4, 4.2, 12.3, sailTex]] }, { z: -6.2, h: 14, sails: [[6.6, 5.2, 6.1, sailTex], [5.2, 3.6, 10.6, sailTex]] }];
-  for (const M of masts) {
-    put(ship, CYL, wood, 0, DECK_Y + M.h / 2, M.z, 0.24, M.h, 0.24);
-    for (const [w, h, y, tex] of M.sails) {
-      const yard = put(ship, CYL, darkWood, 0, DECK_Y + y + h / 2 + 0.15, M.z - 0.2, 0.12, w + 1.2, 0.12); yard.rotation.z = Math.PI / 2;
-      const s = sail(w, h, tex); s.position.set(0, DECK_Y + y, M.z - 0.35); ship.add(s);
+    for (const [dy, r] of [[1.0, 0.11], [0.25, 0.08]]) {
+      const pts = [];
+      for (let i = 0; i <= 26; i++) { const t = 0.03 + 0.94 * i / 26; pts.push(new THREE.Vector3(s * spline(HB, t) * 0.98, spline(SHEER, t) + dy, zAt(t))); }
+      ship.add(outline(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 70, r, 8), white), 0.035));
+    }
+    for (let i = 0; i <= 30; i++) {   // balusters
+      const t = 0.05 + 0.9 * i / 30, x = s * spline(HB, t) * 0.98, y = spline(SHEER, t);
+      put(ship, CYL, white, x, y + 0.62, zAt(t), 0.06, 0.75, 0.06);
+    }
+    // scroll curls at both ends of the railing
+    for (const [t, flip] of [[0.06, 1], [0.95, -1]]) {
+      const curl = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.13, 8, 22, Math.PI * 1.55), white);
+      curl.position.set(s * spline(HB, t) * 1.02, spline(SHEER, t) + 0.55, zAt(t));
+      curl.rotation.set(0, Math.PI / 2, flip > 0 ? 0.6 : Math.PI + 0.6);
+      ship.add(outline(curl, 0.03));
     }
   }
-  // crow's nest on the main mast
-  const nestY = DECK_Y + 14.6;
-  put(ship, CYL, darkWood, 0, nestY, 0.5, 0.95, 0.12, 0.95);
-  const nest = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.9, 1, 14, 1, true), std(0x6e4a2c, { side: THREE.DoubleSide })); nest.position.set(0, nestY + 0.5, 0.5); nest.scale.set(0.95, 0.9, 0.95); ship.add(nest);
-  // pirate flag on top (own emblem: fish skeleton and harpoons)
-  const flagTex = canvasTex(256, 160, (c, w, h) => { c.fillStyle = '#111316'; c.fillRect(0, 0, w, h); drawEmblem(c, w / 2, h / 2, 0.6, '#f2efe6'); });
+
+  // ----- stern cabin + bow deck -----
+  const cab = put(ship, BOX, toon(0xa06a3a), 0, DECK_Y + 1.15, 6.6, 5.0, 2.3, 4.6); outline(cab, 0.05);
+  put(ship, BOX, white, 0, DECK_Y + 2.4, 6.6, 5.4, 0.22, 5.0);
+  for (const s of [-1, 1]) { put(ship, new THREE.CircleGeometry(0.42, 18), glow(0xffd27a, 1.2), s * 2.51, DECK_Y + 1.3, 6.6, 1).rotation.y = s * Math.PI / 2; }
+  const door = put(ship, BOX, toon(0x6a4022), 0, DECK_Y + 0.95, 4.28, 1.1, 1.9, 0.08); outline(door, 0.03);
+  put(ship, SPH, gold, 0.36, DECK_Y + 0.95, 4.22, 0.08);
+  // little railing around the cabin roof
+  for (const [x, z, w, d] of [[0, 4.2, 5.2, 0.08], [0, 9.0, 5.2, 0.08], [-2.6, 6.6, 0.08, 4.8], [2.6, 6.6, 0.08, 4.8]]) put(ship, BOX, white, x, DECK_Y + 3.05, z, w, 0.12, d);
+  for (const [x, z] of [[-2.6, 4.2], [2.6, 4.2], [-2.6, 9], [2.6, 9], [0, 9], [-1.3, 4.2], [1.3, 4.2]]) put(ship, CYL, white, x, DECK_Y + 2.8, z, 0.06, 0.55, 0.06);
+  const wheel = new THREE.Group(); wheel.position.set(0, DECK_Y + 3.3, 5.0); ship.add(wheel);
+  wheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 6, 20), wood));
+  for (let i = 0; i < 8; i++) { const sp = put(wheel, CYL, wood, 0, 0, 0, 0.035, 1.3, 0.035); sp.rotation.z = i / 8 * Math.PI; }
+  put(ship, CYL, wood, 0, DECK_Y + 2.9, 5.15, 0.1, 0.8, 0.1);
+
+  // ----- sails -----
+  const emblemSail = canvasTex(256, 256, (c, w, h) => {
+    c.fillStyle = '#f1e6c8'; c.fillRect(0, 0, w, h);
+    c.strokeStyle = 'rgba(150,120,80,.45)'; c.lineWidth = 3;
+    for (let x = 42; x < w; x += 42) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+    drawEmblem(c, w / 2, h / 2 + 4, 0.95, '#26201a');
+  });
+  const stripes = canvasTex(256, 256, (c, w, h) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#f4efe2' : '#c8322a'; c.fillRect(i * 32, 0, 32, h); } });
+  // main mast with the big emblem sail and a crow's nest
+  const mainZ = -1.2, mainH = 16;
+  put(ship, CYL, wood, 0, DECK_Y + mainH / 2, mainZ, 0.3, mainH, 0.3);
+  for (const y of [11.6, 3.4]) { const yard = put(ship, CYL, darkWood, 0, DECK_Y + y, mainZ - 0.25, 0.14, 10.4, 0.14); yard.rotation.z = Math.PI / 2; }
+  const ms = sail(9.6, 8.2, emblemSail, 1.3); ms.position.set(0, DECK_Y + 7.5, mainZ - 0.45); ship.add(ms);
+  const nest = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.85, 1.1, 18, 1, true), toon(0x8a5a32, { side: THREE.DoubleSide }));
+  nest.position.set(0, DECK_Y + 13.4, mainZ); ship.add(outline(nest, 0.04));
+  put(ship, CYL, darkWood, 0, DECK_Y + 12.85, mainZ, 0.9, 0.1, 0.9);
+  for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; put(ship, BOX, darkWood, Math.cos(a) * 0.95, DECK_Y + 13.4, mainZ + Math.sin(a) * 0.95, 0.06, 1.1, 0.06); }
+  // rear mast with the red/white striped sail
+  const rearZ = 6.6, rearH = 11.5;
+  put(ship, CYL, wood, 0, DECK_Y + 2.4 + rearH / 2, rearZ, 0.2, rearH, 0.2);
+  const rs = sail(4.8, 5.4, stripes, 0.8); rs.position.set(0, DECK_Y + 2.4 + 6.0, rearZ - 0.3); ship.add(rs);
+  for (const y of [8.9, 3.5]) { const yard = put(ship, CYL, darkWood, 0, DECK_Y + 2.4 + y, rearZ - 0.15, 0.1, 5.6, 0.1); yard.rotation.z = Math.PI / 2; }
+  // pirate flag on top of the main mast
+  const flagTex = canvasTex(256, 160, (c, w, h) => { c.fillStyle = '#121418'; c.fillRect(0, 0, w, h); drawEmblem(c, w / 2, h / 2, 0.6, '#f4efe2'); });
   const flagG = new THREE.PlaneGeometry(2.6, 1.6, 10, 4).translate(1.3, 0, 0);
-  const flag = new THREE.Mesh(flagG, new THREE.MeshStandardMaterial({ map: flagTex, side: THREE.DoubleSide, roughness: 0.9 }));
-  flag.position.set(0, DECK_Y + 17.3, 0.5); flag.rotation.y = Math.PI / 2; ship.add(flag);
+  const flag = new THREE.Mesh(flagG, new THREE.MeshBasicMaterial({ map: flagTex, side: THREE.DoubleSide }));
+  flag.position.set(0, DECK_Y + mainH + 0.4, mainZ); flag.rotation.y = Math.PI / 2; ship.add(flag);
   const flagBase = flagG.attributes.position.array.slice();
 
-  // ----- bowsprit, jib sail and swordfish figurehead -----
-  const bowY = spline(SHEER, 0.04) + 0.2, bowZ = zAt(0.03);
-  const sprit = put(ship, CYL, wood, 0, bowY + 1.1, bowZ - 3.2, 0.16, 7.5, 0.16); sprit.rotation.x = Math.PI / 2 - 0.3;
-  const tipY = bowY + 2.2, tipZ = bowZ - 6.8;
-  const jib = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, tipY, tipZ), new THREE.Vector3(0, DECK_Y + 13, -6.2), new THREE.Vector3(0, DECK_Y + 2.2, -9.8)]);
-  jib.setIndex([0, 1, 2]); jib.computeVertexNormals();
-  ship.add(new THREE.Mesh(jib, new THREE.MeshStandardMaterial({ map: sailTex, side: THREE.DoubleSide, roughness: 0.95 })));
-  const fig = new THREE.Group(); fig.position.set(0, bowY - 0.6, bowZ - 0.9); fig.rotation.x = -0.35; ship.add(fig);
-  put(fig, SPH, gold, 0, 0, 0, 0.45, 0.55, 1.3);                                          // body
-  const sword = put(fig, new THREE.ConeGeometry(0.12, 2.4, 8), gold, 0, 0.05, -2.3); sword.rotation.x = -Math.PI / 2;   // sword
-  const dors = put(fig, new THREE.ConeGeometry(0.5, 1.0, 3), gold, 0, 0.6, 0.1, 0.25, 1, 1);
-  dors.rotation.x = 0.4;
-  for (const s of [-1, 1]) put(fig, SPH, std(0x111111, { roughness: 0.1 }), s * 0.3, 0.12, -0.75, 0.09);
+  // ----- bow cannon -----
+  const bowY = spline(SHEER, 0.08), bowZ = zAt(0.08);
+  const cannon = new THREE.Group(); cannon.position.set(1.0, bowY + 0.6, bowZ + 0.6); cannon.rotation.y = 0.12; ship.add(cannon);
+  const barrel = put(cannon, new THREE.CylinderGeometry(0.28, 0.4, 2.8, 16), iron, 0, 0.1, -0.9); barrel.rotation.x = Math.PI / 2 - 0.08; outline(barrel, 0.035);
+  put(cannon, new THREE.TorusGeometry(0.33, 0.07, 8, 16), iron, 0, 0.2, -2.3);
+  for (const s of [-1, 1]) put(cannon, new THREE.CylinderGeometry(0.42, 0.42, 0.14, 16), wood, s * 0.45, -0.35, 0.1).rotation.z = Math.PI / 2;
+  put(cannon, BOX, darkWood, 0, -0.2, 0.2, 0.7, 0.4, 1.2);
 
-  // ----- cannons -----
-  for (const s of [-1, 1]) for (const z of [-3.5, -0.5, 2.5]) {
-    const t = (z - Z0) / LEN, x = spline(HB, t);
-    put(ship, BOX, std(0x1a120c), s * (x + 0.02), 1.1, z, 0.06, 0.75, 0.85);
-    const barrel = put(ship, CYL, iron, s * (x + 0.45), 1.1, z, 0.17, 1.1, 0.17); barrel.rotation.z = Math.PI / 2;
-    put(ship, CYL, iron, s * (x + 0.98), 1.1, z, 0.21, 0.12, 0.21).rotation.z = Math.PI / 2;
-  }
-
-  // ----- lanterns -----
-  const lanternM = glow(0xffc46a, 3);
-  for (const [x, y, z] of [[2.6, DECK_Y + 3.5, 11.4], [-2.6, DECK_Y + 3.5, 11.4], [0, bowY + 1.2, bowZ + 0.4]]) {
-    put(ship, BOX, iron, x, y + 0.4, z, 0.12, 0.6, 0.12);
-    put(ship, SPH, lanternM, x, y, z, 0.22);
-  }
-
-  // ----- anchor hanging at the bow -----
-  const anc = new THREE.Group(); anc.position.set(2.1, 0.4, -9); ship.add(anc);
-  put(anc, CYL, iron, 0, 0, 0, 0.08, 1.6, 0.08);
-  const arc = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.08, 6, 12, Math.PI), iron); arc.rotation.z = Math.PI; arc.position.y = -0.65; anc.add(arc);
-  put(anc, BOX, iron, 0, 0.75, 0, 0.8, 0.1, 0.1);
-
-  // ----- rigging (ropes from the mast tops to the sides) -----
-  const lines = [];
-  for (const M of masts) {
-    const top = new THREE.Vector3(0, DECK_Y + M.h - 0.5, M.z);
-    for (const s of [-1, 1]) for (const dz of [-1.2, 0, 1.2]) {
-      const t = (M.z + dz - Z0) / LEN;
-      lines.push(top, new THREE.Vector3(s * spline(HB, t), spline(SHEER, t) + 0.8, M.z + dz + 1.5));
+  // ----- seal figurehead on a long curved neck -----
+  const seal = toon(0xa9b3ba), sealLight = toon(0xe2e6e8), black = toon(0x0d0d0f);
+  const neckCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, spline(SHEER, 0.02) - 0.6, zAt(0.02) + 0.6), new THREE.Vector3(0, 3.9, zAt(0) - 0.9),
+    new THREE.Vector3(0, 5.4, zAt(0) - 1.5), new THREE.Vector3(0, 6.8, zAt(0) - 1.3)]);
+  const neck = new THREE.Mesh(new THREE.TubeGeometry(neckCurve, 40, 0.5, 14), seal); ship.add(outline(neck, 0.06));
+  const headP = new THREE.Vector3(0, 7.45, zAt(0) - 1.55);
+  const head = new THREE.Group(); head.position.copy(headP); ship.add(head);
+  outline(put(head, SPH, seal, 0, 0, 0, 1.15, 1.0, 1.1), 0.07);
+  for (const s of [-1, 1]) {
+    outline(put(head, SPH, sealLight, s * 0.3, -0.3, -0.92, 0.42, 0.34, 0.36), 0.04);      // muzzle cheeks
+    put(head, SPH, black, s * 0.45, 0.28, -0.88, 0.24, 0.27, 0.16);                         // big shiny eyes
+    put(head, SPH, white, s * 0.4, 0.38, -1.0, 0.07, 0.07, 0.04);                           // eye highlight
+    for (let k = -1; k <= 1; k++) {                                                         // whiskers
+      const w = put(head, CYL, toon(0x3a3a3a), s * 0.75, -0.3 + k * 0.08, -1.0, 0.012, 0.6, 0.012);
+      w.rotation.z = s * (Math.PI / 2 - k * 0.18); w.rotation.y = s * -0.25;
     }
+    for (const [x, y, z, r] of [[0.55, 0.55, -0.2, 0.12], [0.75, -0.05, 0.25, 0.1], [0.35, 0.75, 0.3, 0.09]]) put(head, SPH, toon(0x7f8a92), s * x, y, z, r, r * 0.4, r);   // spots
+    const flip = put(ship, SPH, seal, s * 0.75, 4.2, zAt(0) - 0.9, 0.18, 0.55, 0.35); flip.rotation.z = s * 0.7; outline(flip, 0.03);   // little flippers
   }
-  lines.push(new THREE.Vector3(0, DECK_Y + 16.5, 0.5), new THREE.Vector3(0, DECK_Y + 13.5, -6.2), new THREE.Vector3(0, DECK_Y + 13.5, -6.2), new THREE.Vector3(0, tipY, tipZ));
-  lines.push(new THREE.Vector3(0, DECK_Y + 16.5, 0.5), new THREE.Vector3(0, DECK_Y + 3.4, 11));
-  ship.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(lines), rope));
+  put(head, SPH, black, 0, -0.08, -1.15, 0.2, 0.14, 0.12);                                   // nose
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.035, 6, 16, Math.PI), black); smile.position.set(0, -0.48, -1.04); smile.rotation.z = Math.PI; head.add(smile);
 
-  // ----- shop sign + light beam down into the water -----
-  const sign = makeTag('⚓ HÄNDLER', '#ffc94d'); sign.scale.multiplyScalar(2.4); sign.position.set(0, DECK_Y + 5.4, 8.6); ship.add(sign);
+  // ----- lanterns, rigging, sign, light beam -----
+  for (const [x, y, z] of [[2.4, DECK_Y + 3.6, 9.0], [-2.4, DECK_Y + 3.6, 9.0]]) { put(ship, BOX, iron, x, y + 0.4, z, 0.1, 0.5, 0.1); put(ship, SPH, glow(0xffc46a, 3), x, y, z, 0.22); }
+  const lines = [];
+  for (const [mz, top] of [[mainZ, DECK_Y + mainH - 0.4], [rearZ, DECK_Y + 2.4 + rearH - 0.3]]) for (const s of [-1, 1]) for (const dz of [-1, 0.6]) {
+    const t = (mz + dz + 1.4 - Z0) / LEN;
+    lines.push(new THREE.Vector3(0, top, mz), new THREE.Vector3(s * spline(HB, t), spline(SHEER, t) + 1, mz + dz + 1.4));
+  }
+  lines.push(new THREE.Vector3(0, DECK_Y + mainH - 0.4, mainZ), new THREE.Vector3(0, 6.6, zAt(0) - 1.3));
+  lines.push(new THREE.Vector3(0, DECK_Y + mainH - 0.4, mainZ), new THREE.Vector3(0, DECK_Y + 2.4 + rearH - 0.3, rearZ));
+  ship.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(lines), new THREE.LineBasicMaterial({ color: 0x2a2018 })));
+  const sign = makeTag('⚓ HÄNDLER', '#ffc94d'); sign.scale.multiplyScalar(2.4); sign.position.set(0, DECK_Y + 5.0, 6.6); ship.add(sign);
   const beam = put(ship, CYL, new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), 0, -92, 0, 3, 180, 3);
 
-  // gentle rocking on the waves + waving flag
+  // rocking on the waves, waving flag, the seal nods a little
   let t = 0;
   ship.userData.beam = beam;
   ship.userData.update = (dt) => {
     t += dt;
-    ship.rotation.z = Math.sin(t * 0.7) * 0.035; ship.rotation.x = Math.sin(t * 0.5) * 0.015; ship.position.y = (ship.userData.baseY ??= ship.position.y) + Math.sin(t * 0.9) * 0.12;
+    ship.rotation.z = Math.sin(t * 0.7) * 0.035; ship.rotation.x = Math.sin(t * 0.5) * 0.02;
+    ship.position.y = (ship.userData.baseY ??= ship.position.y) + Math.sin(t * 0.9) * 0.15;
+    head.rotation.x = Math.sin(t * 0.9) * 0.08; head.rotation.y = Math.sin(t * 0.4) * 0.12;
     const fp = flagG.attributes.position;
     for (let i = 0; i < fp.count; i++) { const x = flagBase[i * 3]; fp.setZ(i, Math.sin(x * 2.2 - t * 5) * 0.18 * (x / 2.6)); }
     fp.needsUpdate = true;
@@ -220,15 +233,15 @@ export function makeShip() {
 function drawEmblem(c, cx, cy, s, color) {
   c.save(); c.translate(cx, cy); c.scale(s, s); c.strokeStyle = color; c.fillStyle = color; c.lineCap = 'round';
   c.lineWidth = 9;
-  for (const a of [-0.6, 0.6]) {   // crossed harpoons
+  for (const a of [-0.6, 0.6]) {
     c.save(); c.rotate(a); c.beginPath(); c.moveTo(0, -95); c.lineTo(0, 95); c.stroke();
     c.beginPath(); c.moveTo(0, -112); c.lineTo(-15, -86); c.lineTo(15, -86); c.closePath(); c.fill(); c.restore();
   }
   c.lineWidth = 7;
-  c.beginPath(); c.moveTo(-58, -8); c.lineTo(52, -8); c.stroke();                          // spine
-  c.beginPath(); c.arc(-62, -8, 22, 0, TAU); c.fill();                                       // skull
-  c.fillStyle = '#111316'; c.beginPath(); c.arc(-67, -14, 6, 0, TAU); c.fill(); c.fillStyle = color;
+  c.beginPath(); c.moveTo(-58, -8); c.lineTo(52, -8); c.stroke();
+  c.beginPath(); c.arc(-62, -8, 22, 0, TAU); c.fill();
+  c.fillStyle = color === '#26201a' ? '#f1e6c8' : '#121418'; c.beginPath(); c.arc(-67, -14, 6, 0, TAU); c.fill(); c.fillStyle = color;
   for (let i = 0; i < 6; i++) { const x = -30 + i * 14; c.beginPath(); c.moveTo(x, -8); c.lineTo(x + 6, -34 + i * 3); c.moveTo(x, -8); c.lineTo(x + 6, 18 - i * 3); c.stroke(); }
-  c.beginPath(); c.moveTo(52, -8); c.lineTo(76, -30); c.lineTo(70, -8); c.lineTo(76, 14); c.closePath(); c.fill();  // tail
+  c.beginPath(); c.moveTo(52, -8); c.lineTo(76, -30); c.lineTo(70, -8); c.lineTo(76, 14); c.closePath(); c.fill();
   c.restore();
 }
