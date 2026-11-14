@@ -1,5 +1,6 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, SHOP_WEAPONS, airUse } from './shared.js';
+const money = (v) => Math.round(v).toLocaleString('de-DE') + ' $';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -39,15 +40,62 @@ export class Hud {
     }
     $('bots').addEventListener('input', (e) => { $('botsN').textContent = e.target.value; cb({ bots: +e.target.value }); });
     $('go').addEventListener('click', () => cb({ start: true }));
+    for (const b of $('modes').children) b.addEventListener('click', () => cb({ mode: b.dataset.mode }));
     return { name: name.value, suit: cur };
   }
   setLobby(m, myId) {
     $('plist').innerHTML = m.players.map(p => `<li><span>${esc(p.name)}${p.id === myId ? ' <small>(du)</small>' : ''}</span><small>${SUITS[p.suit].name}</small></li>`).join('')
       + `<li><span><small>+ ${m.bots} Bots</small></span></li>`;
     if (document.activeElement !== $('bots')) { $('bots').value = m.bots; $('botsN').textContent = m.bots; }
+    const exp = m.mode === 'exp';
+    for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === m.mode);
+    $('botsRow').classList.toggle('hidden', exp);
+    $('plist').lastElementChild.classList.toggle('hidden', exp);
+    $('go').textContent = exp ? 'EXPEDITION STARTEN' : 'ABTAUCHEN';
     $('lan').innerHTML = m.urls && m.urls.length
       ? `<b>Mitspieler im Heimnetz</b> öffnen im Browser:<br>${m.urls.map(u => `<code>${esc(u)}</code>`).join('<br>')}`
       : 'Kein Netzwerk gefunden – Solo-Runde gegen Bots.';
+  }
+  setMode(mode) {
+    this.mode = mode; const exp = mode === 'exp';
+    $('cntA').textContent = exp ? 'Geld' : 'Überlebende';
+    $('cntK').textContent = exp ? 'Fang' : 'Kills';
+    $('airBar').classList.toggle('on', exp);
+    if (!exp) { this.boss(null); this.closeShop(); }
+  }
+  boss(b) {
+    $('bossBar').classList.toggle('hidden', !b);
+    if (b) { this.set('bossName', 'text', '☠ ' + b.name); this.set('bossFill', 'width', b.hp + '%'); }
+  }
+  // ----- trader boat shop (expedition) -----
+  initShop(onBuy, onClose, onQuit) {
+    this.onBuy = onBuy;
+    $('shopClose').addEventListener('click', onClose);
+    $('shopQuit').addEventListener('click', onQuit);
+  }
+  get shopOpen() { return !$('shop').classList.contains('hidden'); }
+  openShop(you) { $('shop').classList.remove('hidden'); this.shopMsg(''); this.shopKey = ''; this.renderShop(you); }
+  closeShop() { $('shop').classList.add('hidden'); }
+  shopMsg(t, good) { const el = $('shopMsg'); el.textContent = t; el.style.color = good ? 'var(--hp)' : 'var(--warn)'; }
+  renderShop(you) {
+    if (!you || !you.x || !this.shopOpen) return;
+    const x = you.x, key = [x.money, x.tank, x.lung, you.w.map(w => w && w[0] + w[1]).join()].join('|');
+    if (key === this.shopKey) return; this.shopKey = key;
+    $('shopMoney').textContent = 'Dein Geld: ' + money(x.money);
+    const item = (title, sub, price, can, k, i, rar) => `<div class="item" style="--rar:${rar || '#55626c'}"><b>${title}</b><small>${sub}</small>`
+      + (price === null ? `<button disabled>${can}</button>` : `<button data-k="${k}" data-i="${i}" ${x.money < price ? 'disabled' : ''}>${money(price)}</button>`) + '</div>';
+    const T = TANKS[x.tank], NT = TANKS[x.tank + 1], L = LUNGS[x.lung], NL = LUNGS[x.lung + 1];
+    let gear = item(`Flasche: ${T.name}`, `${T.cap} Luft · sicher bis ${T.maxDepth} m`, null, 'Hast du');
+    gear += NT ? item(`▲ ${NT.name}`, `${NT.cap} Luft · sicher bis ${NT.maxDepth} m`, NT.price, '', 'tank', 0, '#3fa9f5') : item('Beste Flasche!', 'Mehr geht nicht', null, 'Max');
+    gear += item(`Atmung: ${L.name}`, `Luftverbrauch ${Math.round(L.mul * 100)} %`, null, 'Hast du');
+    gear += NL ? item(`▲ ${NL.name}`, `Luftverbrauch nur noch ${Math.round(NL.mul * 100)} %`, NL.price, '', 'lung', 0, '#3fa9f5') : item('Profi-Atmung!', 'Mehr geht nicht', null, 'Max');
+    $('shopGear').innerHTML = gear;
+    $('shopWeapons').innerHTML = SHOP_WEAPONS.map((it, i) => {
+      const D = WEAPONS[it.wid], R = RARITY[it.rar], own = you.w.some(w => w && w[0] === it.wid && w[1] >= it.rar);
+      return item(`${D.name} <small style="display:inline;color:${R.color}">${R.name}</small>`, `${Math.round(D.dmg * R.mul * D.pellets)} Schaden · ${D.rate}/s · Magazin ${D.mag}`,
+        own ? null : it.price, own ? 'Hast du' : '', 'w', i, R.color);
+    }).join('');
+    for (const b of document.querySelectorAll('#shop .item button[data-k]')) b.onclick = () => this.onBuy(b.dataset.k, +b.dataset.i);
   }
   show(which) {
     $('lobby').classList.toggle('hidden', which !== 'lobby');
@@ -88,6 +136,18 @@ export class Hud {
     }
     this.set('alive', 'text', String(s.alive));
     this.set('depth', 'text', `TIEFE ${Math.round(s.depth)} m`);
+    if (this.mode === 'exp' && y && y.x) {
+      const x = y.x, T = TANKS[x.tank], f = floorAt(s.depth), deep = s.depth > T.maxDepth;
+      this.set('alive', 'text', money(x.money));
+      this.set('kills', 'text', x.bag ? `${x.bag} · ${money(x.bagV)}` : '0');
+      this.set('airFill', 'width', Math.max(0, x.air / T.cap * 100) + '%');
+      const secs = s.depth < 2.6 ? '' : ` · ~${Math.floor(x.air / (airUse(s.depth) * LUNGS[x.lung].mul))} s`;
+      this.set('airTxt', 'text', `Luft ${Math.round(x.air)}${secs}`);
+      $('airBar').classList.toggle('low', x.air < T.cap * 0.25);
+      this.set('depth', 'text', `TIEFE ${Math.round(s.depth)} m · FLASCHE BIS ${T.maxDepth} m${deep ? ' ⚠ DRUCK!' : ''}`);
+      this.set('zoneTxt', 'text', s.depth < 2.6 ? 'An der Oberfläche · Luft tanken' : `Etage ${f + 1} · ${FLOORS[f].name}`);
+      $('zoneTxt').classList.toggle('hot', deep);
+    }
     const z = s.zone;
     if (z) {
       const txt = z[5] <= 0 && !z[8] ? 'Schwarzwasser überall – letzter Kampf!' : z[8] ? `Schwarzwasser rückt vor · ${mmss(z[7])}` : `Schwarzwasser kommt in ${mmss(z[7])}`;
@@ -99,7 +159,7 @@ export class Hud {
     const low = y && y.alive && y.hp < y.mhp * 0.3 ? 0.35 + 0.15 * Math.sin(s.time * 6) : 0;
     $('vign').style.opacity = Math.max(this.vign, low);
   }
-  drawMini(base, zone, me, vehicles, pois) {
+  drawMini(base, zone, me, vehicles, pois, marks = []) {
     const c = this.mini, n = 190, k = n / (HALF * 2), px = (x) => (x + HALF) * k;
     c.drawImage(base, 0, 0, n, n);
     c.font = '10px Bahnschrift, sans-serif'; c.textAlign = 'center'; c.fillStyle = 'rgba(230,251,255,.75)';
@@ -109,6 +169,7 @@ export class Hud {
       c.fillStyle = 'rgba(120,40,220,.42)'; const zr = Math.max(0, zone[2] * k); c.beginPath(); c.rect(0, 0, n, n); c.moveTo(px(zone[0]) + zr, px(zone[1])); c.arc(px(zone[0]), px(zone[1]), zr, 0, Math.PI * 2); c.closePath(); c.fill('evenodd');
       c.strokeStyle = '#c58bff'; c.lineWidth = 1.6; c.beginPath(); c.arc(px(zone[0]), px(zone[1]), Math.max(0, zone[2] * k), 0, 7); c.stroke();
     }
+    for (const m of marks) { c.fillStyle = m.c; c.beginPath(); c.arc(px(m.x), px(m.z), m.s, 0, 7); c.fill(); }
     c.fillStyle = '#ffc94d';
     for (const v of vehicles) if (!v.driver) { const s = v.type === 'sub' ? 5 : 3; c.fillRect(px(v.x) - s / 2, px(v.z) - s / 2, s, s); }
     c.save(); c.translate(px(me.x), px(me.z)); c.rotate(-me.yaw);

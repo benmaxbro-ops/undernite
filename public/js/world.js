@@ -1,7 +1,8 @@
 // Undernite - environment rendering: seafloor, flora, wreck, ruins, water
 // surface, light shafts, plankton, bubbles, effects and the zone wall.
 import * as THREE from 'three';
-import { SIZE, HALF, GRID_N, SURFACE } from './shared.js';
+import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT } from './shared.js';
+import { makeBoat } from './models.js';
 
 const TAU = Math.PI * 2;
 const CAUSTIC = `
@@ -45,6 +46,7 @@ function noiseTexture(size, draw) {
 
 export function buildEnvironment(scene, W) {
   const root = new THREE.Group(); scene.add(root);
+  const exp = W.mode === 'exp';
   const uTime = { value: 0 };
   const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S = new THREE.Vector3(), E = new THREE.Euler(), C = new THREE.Color();
   const put = (im, i, x, y, z, rx, ry, rz, sx, sy, sz) => { Q.setFromEuler(E.set(rx, ry, rz)); im.setMatrixAt(i, M4.compose(V.set(x, y, z), Q, S.set(sx, sy, sz))); };
@@ -61,6 +63,7 @@ export function buildEnvironment(scene, W) {
     const j = 0.92 + ((Math.sin(pos.getX(i) * 12.9898 + pos.getZ(i) * 78.233) * 43758.5453) % 1) * 0.08;
     let r = 0.50 + (0.22 - 0.50) * rock, g = 0.45 + (0.26 - 0.45) * rock, b = 0.31 + (0.30 - 0.31) * rock;
     r += (0.12 - r) * deep * 0.7; g += (0.19 - g) * deep * 0.7; b += (0.27 - b) * deep * 0.7;
+    if (exp) { const ab = 1 - THREE.MathUtils.smoothstep(y, -200, -40); r += (0.10 - r) * ab * 0.6; g += (0.07 - g) * ab * 0.6; b += (0.18 - b) * ab * 0.6; }
     col[i * 3] = r * j; col[i * 3 + 1] = g * j; col[i * 3 + 2] = b * j;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -135,6 +138,21 @@ export function buildEnvironment(scene, W) {
   for (let i = 0; i < 6; i++) { const w = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.2), new THREE.MeshStandardMaterial({ color: 0x0c1418, emissive: 0x39d6c6, emissiveIntensity: i % 3 ? 0 : 0.6 })); w.position.set(-8.5 + i * 1.4, 6.3, 3.02); wr.add(w); }
   root.add(wr);
 
+  // ----- expedition: glowing crystals in the deep + trader boat -----
+  let boat = null;
+  if (exp) {
+    if (W.crystals.length) {
+      const cg = new THREE.OctahedronGeometry(0.5, 0).scale(0.6, 2.2, 0.6).translate(0, 0.9, 0);
+      const cm = new THREE.MeshStandardMaterial({ roughness: 0.2, metalness: 0.1, emissive: 0xffffff, emissiveIntensity: 0.9, flatShading: true, transparent: true, opacity: 0.9 });
+      const im = new THREE.InstancedMesh(cg, cm, W.crystals.length);
+      W.crystals.forEach((c, i) => { put(im, i, c.x, c.y, c.z, c.tilt, c.rot, c.tilt * 0.5, c.s, c.s, c.s); im.setColorAt(i, C.setHex(c.col)); });
+      im.instanceColor.needsUpdate = true;
+      cm.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance *= diffuseColor.rgb;'); };
+      root.add(im);
+    }
+    boat = makeBoat(); boat.position.set(EXP_BOAT.x, SURFACE, EXP_BOAT.z); root.add(boat);
+  }
+
   // ----- water surface + light shafts -----
   const surfTex = noiseTexture(256, (c, n) => {
     c.fillStyle = '#7fd8ee'; c.fillRect(0, 0, n, n);
@@ -204,14 +222,14 @@ export function buildEnvironment(scene, W) {
   const mini = document.createElement('canvas'); mini.width = mini.height = 128;
   { const c = mini.getContext('2d'), img = c.createImageData(128, 128);
     for (let py = 0; py < 128; py++) for (let px = 0; px < 128; px++) {
-      const h = W.heightAt((px / 127 * 2 - 1) * HALF, (py / 127 * 2 - 1) * HALF), k = Math.max(0, Math.min(1, (h + 15) / 110)), o = (py * 128 + px) * 4;
+      const h = W.heightAt((px / 127 * 2 - 1) * HALF, (py / 127 * 2 - 1) * HALF), k = Math.max(0, Math.min(1, exp ? (h + 230) / 330 : (h + 15) / 110)), o = (py * 128 + px) * 4;
       img.data[o] = 8 + 70 * k * k; img.data[o + 1] = 34 + 120 * k; img.data[o + 2] = 58 + 110 * k; img.data[o + 3] = 255;
     }
     c.putImageData(img, 0, 0); }
 
-  const shallow = new THREE.Color(0x2b8fb0), deepC = new THREE.Color(0x05202e), toxic = new THREE.Color(0x1d0a33);
+  const shallow = new THREE.Color(0x2b8fb0), deepC = new THREE.Color(0x05202e), toxic = new THREE.Color(0x1d0a33), abyss = new THREE.Color(0x010307);
   return {
-    seed: W.seed, mini, bubble, explosion, ink, blood,
+    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood,
     update(dt, t, cam, zone, outside) {
       uTime.value = t;
       surfTex.offset.x = t * 0.004; surfTex.offset.y = t * 0.0025;
@@ -244,6 +262,13 @@ export function buildEnvironment(scene, W) {
       const fog = scene.fog; fog.color.copy(shallow).lerp(deepC, Math.pow(d, 0.8));
       if (outside) fog.color.lerp(toxic, 0.75);
       fog.density = 0.0085 + 0.006 * d + (outside ? 0.012 : 0);
+      if (exp) {   // the deeper, the darker
+        const dd = Math.max(0, Math.min(1, (SURFACE - cy - 120) / 220));
+        fog.color.lerp(abyss, dd); fog.density += 0.008 * dd;
+        boat.userData.update(dt);
+        // the guiding light beam only shows once you are deeper down
+        boat.userData.beam.material.opacity = 0.07 * Math.max(0, Math.min(1, (SURFACE - cy - 10) / 30));
+      }
       scene.background = fog.color;
       if (zone) { zoneWall.visible = zone[2] > 0.5 && zone[2] < 400; zoneWall.position.set(zone[0], 60, zone[1]); zoneWall.scale.set(zone[2], 1, zone[2]); }
       else zoneWall.visible = false;

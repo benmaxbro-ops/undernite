@@ -45,12 +45,95 @@ export const VEHICLES = {
   sub:     { name: 'Mini-U-Boot', hp: 450, speed: 17, accel: 1.6, r: 3.0, cam: 16 },
 };
 
-export const CREATURE_IDS = ['shark', 'octo', 'jelly'];
+export const CREATURE_IDS = ['shark', 'octo', 'jelly', 'fish', 'boss'];
 export const CREATURES = {
   shark: { name: 'Hai',     r: 1.5, hp: 90 },
   octo:  { name: 'Oktopus', r: 1.3, hp: 80 },
   jelly: { name: 'Qualle',  r: 0.9, hp: 18 },
+  fish:  { name: 'Fisch',   r: 0.6, hp: 10 },   // real values per species in FISH
+  boss:  { name: 'Boss',    r: 3.0, hp: 500 },  // real values per floor in BOSSES
 };
+// hit radius of a creature (fish and bosses carry their own)
+export const creatureR = (type, sub) => type === 'fish' ? Math.max(0.5, FISH[sub].size * 0.9) : type === 'boss' ? BOSSES[sub].r : CREATURES[type].r;
+
+// ======================================================================
+// Tiefsee-Expedition (mode 'exp'): dive deeper, hunt fish, sell them at
+// the boat, buy better gear. All balance values for the mode live here.
+// ======================================================================
+export const EXP_HP = 100;
+export const EXP_BOAT = { x: 0, z: 0 };           // shop boat floats at the surface here
+export const EXP_RESPAWN = 5;                     // seconds until you wake up at the boat
+// Floors ("Etagen") by depth in metres below the surface.
+export const FLOORS = [
+  { name: 'Sonnenriff',   top: 0,   bot: 60,  fish: 16 },
+  { name: 'Zwielicht',    top: 60,  bot: 130, fish: 14 },
+  { name: 'Mitternacht',  top: 130, bot: 210, fish: 13 },
+  { name: 'Abgrund',      top: 210, bot: 290, fish: 11 },
+  { name: 'Tiefseegraben', top: 290, bot: 370, fish: 10 },
+];
+export const floorAt = (depth) => { for (let i = FLOORS.length - 1; i >= 0; i--) if (depth >= FLOORS[i].top) return i; return 0; };
+// Fish species. value = money when sold, dmg > 0 means it bites back.
+// shape: 0 normal, 1 tall/flat, 2 long (eel), 3 angler (lure light)
+export const FISH = [
+  { name: 'Sardine',        floor: 0, value: 4,    hp: 6,   size: 0.35, speed: 7,  col: 0xc9d6e0, glow: 0, shape: 0, w: 55 },
+  { name: 'Clownfisch',     floor: 0, value: 8,    hp: 10,  size: 0.4,  speed: 6,  col: 0xff7b1c, glow: 0, shape: 1, w: 30 },
+  { name: 'Doktorfisch',    floor: 0, value: 15,   hp: 16,  size: 0.55, speed: 7,  col: 0x2f6bff, glow: 0, shape: 1, w: 15 },
+  { name: 'Makrele',        floor: 1, value: 25,   hp: 22,  size: 0.7,  speed: 10, col: 0x5d8fa8, glow: 0, shape: 0, w: 55 },
+  { name: 'Thunfisch',      floor: 1, value: 45,   hp: 45,  size: 1.2,  speed: 11, col: 0x34506e, glow: 0, shape: 0, w: 30 },
+  { name: 'Barrakuda',      floor: 1, value: 65,   hp: 40,  size: 1.1,  speed: 12, col: 0x8fa3ad, glow: 0, shape: 2, w: 15, dmg: 6 },
+  { name: 'Laternenfisch',  floor: 2, value: 90,   hp: 30,  size: 0.5,  speed: 8,  col: 0x1b2a3a, glow: 0x4dfff0, shape: 0, w: 55 },
+  { name: 'Beilfisch',      floor: 2, value: 125,  hp: 50,  size: 0.6,  speed: 8,  col: 0xb8c8d8, glow: 0x9fd8ff, shape: 1, w: 30 },
+  { name: 'Viperfisch',     floor: 2, value: 170,  hp: 65,  size: 0.95, speed: 11, col: 0x23182e, glow: 0xff4df0, shape: 2, w: 15, dmg: 9 },
+  { name: 'Geisterfisch',   floor: 3, value: 250,  hp: 80,  size: 0.8,  speed: 9,  col: 0xdfe8ff, glow: 0xbfd0ff, shape: 1, w: 55 },
+  { name: 'Tiefsee-Aal',    floor: 3, value: 330,  hp: 105, size: 1.6,  speed: 9,  col: 0x2e2a22, glow: 0xffb03a, shape: 2, w: 30 },
+  { name: 'Anglerfisch',    floor: 3, value: 430,  hp: 125, size: 1.0,  speed: 8,  col: 0x2a1d1a, glow: 0xfff07a, shape: 3, w: 15, dmg: 12 },
+  { name: 'Kristallfisch',  floor: 4, value: 650,  hp: 140, size: 0.9,  speed: 9,  col: 0x9ff7ff, glow: 0x6ff0ff, shape: 1, w: 55 },
+  { name: 'Drachenfisch',   floor: 4, value: 850,  hp: 170, size: 1.4,  speed: 12, col: 0x1a0d14, glow: 0xff3355, shape: 2, w: 30, dmg: 15 },
+  { name: 'Leuchtrochen',   floor: 4, value: 1100, hp: 220, size: 1.8,  speed: 8,  col: 0x251a40, glow: 0xb06bff, shape: 1, w: 15 },
+];
+export const GOLD_CHANCE = 0.04, GOLD_MUL = 5;
+// One boss per floor. dmg is per bite.
+export const BOSSES = [
+  { name: 'Riffkönig',      hp: 450,  dmg: 20, reward: 300,   model: 'shark', scale: 2.2, col: 0xffc94d, r: 3.0, speed: 10 },
+  { name: 'Krakenmutter',   hp: 950,  dmg: 20, reward: 800,   model: 'octo',  scale: 3.2, col: 0x9a2fd6, r: 3.6, speed: 9 },
+  { name: 'Laternenschlund', hp: 1700, dmg: 20, reward: 2000, model: 'fish',  scale: 6,   col: 0x2a1d1a, glow: 0xfff07a, shape: 3, r: 4.0, speed: 9 },
+  { name: 'Knochenhai',     hp: 2700, dmg: 20, reward: 5000,  model: 'shark', scale: 3.2, col: 0x3b4450, r: 4.2, speed: 12 },
+  { name: 'Leviathan',      hp: 4200, dmg: 20, reward: 12000, model: 'fish',  scale: 7,   col: 0x10202a, glow: 0x5ef2e0, shape: 2, r: 4.5, speed: 11 },
+];
+export const BOSS_RESPAWN = 120;
+// Air tanks: cap = air units, maxDepth = safe depth (below it the pressure hurts).
+export const TANKS = [
+  { name: 'Mini-Flasche',        cap: 90,  maxDepth: 70,  price: 0 },
+  { name: 'Stahlflasche',        cap: 160, maxDepth: 140, price: 400 },
+  { name: 'Doppelflasche',       cap: 260, maxDepth: 220, price: 1500 },
+  { name: 'Tiefsee-Rebreather',  cap: 400, maxDepth: 300, price: 4500 },
+  { name: 'Abyss-Kreislaufgerät', cap: 600, maxDepth: 400, price: 11000 },
+];
+// Breathing training: multiplies air use.
+export const LUNGS = [
+  { name: 'Untrainiert',     mul: 1.0,  price: 0 },
+  { name: 'Atemtraining I',  mul: 0.85, price: 250 },
+  { name: 'Atemtraining II', mul: 0.72, price: 1000 },
+  { name: 'Atemtraining III', mul: 0.6, price: 3000 },
+  { name: 'Freitaucher-Profi', mul: 0.5, price: 8000 },
+];
+// Air used per second at a given depth (before training).
+export const airUse = (depth) => 1 + Math.max(0, depth) / 60;
+export const SHOP_WEAPONS = [
+  { wid: 'needler', rar: 0, price: 150 },
+  { wid: 'scatter', rar: 0, price: 300 },
+  { wid: 'harpoon', rar: 1, price: 700 },
+  { wid: 'needler', rar: 2, price: 1200 },
+  { wid: 'torpedo', rar: 1, price: 2000 },
+  { wid: 'harpoon', rar: 2, price: 3200 },
+  { wid: 'needler', rar: 3, price: 5000 },
+  { wid: 'torpedo', rar: 3, price: 8500 },
+];
+// Terrace profile of the expedition funnel: [inner radius, height step]
+const EXP_STEPS = [[45, 100], [100, 85], [160, 80], [220, 55]];
+const EXP_BOTTOM = -225;
+// Ledge of each floor: radius range where its boss lives.
+export const EXP_LEDGES = [[240, 275], [180, 210], [120, 150], [62, 92], [0, 30]];
 
 // ---------- math helpers ----------
 export function rng(seed) {
@@ -111,8 +194,10 @@ const hkey = (cx, cz) => (cx + 64) * 256 + (cz + 64);
 
 // ---------- world ----------
 export class World {
-  constructor(seed) {
+  constructor(seed, mode = 'br') {
     this.seed = seed | 0;
+    this.mode = mode;
+    const exp = mode === 'exp';
     const R = rng(this.seed ^ 0x9e3779b9);
     const TAU = Math.PI * 2;
 
@@ -139,16 +224,18 @@ export class World {
       return { x: (R() * 2 - 1) * maxR, z: (R() * 2 - 1) * maxR };
     };
     const sites = [{ x: this.smx, z: this.smz }];
+    // expedition: decorations sit on the ledges of the funnel
+    const ringSite = (r0, r1) => { const a = R() * TAU, d = r0 + R() * (r1 - r0); return { x: Math.cos(a) * d, z: Math.sin(a) * d }; };
 
     // wreck
-    const ws = pickSite(190, sites, 130); sites.push(ws);
+    const ws = exp ? ringSite(186, 204) : pickSite(190, sites, 130); sites.push(ws);
     this.wreck = { x: ws.x, z: ws.z, y: this.heightAt(ws.x, ws.z), yaw: R() * TAU };
     for (const k of [-12, -6, 0, 6, 12]) {
       const x = ws.x + Math.cos(this.wreck.yaw) * k, z = ws.z - Math.sin(this.wreck.yaw) * k;
       this.cols.push({ x, y: this.heightAt(x, z) + 2, z, r: 5 });
     }
     // ruins
-    const rs = pickSite(190, sites, 130); sites.push(rs);
+    const rs = exp ? ringSite(126, 144) : pickSite(190, sites, 130); sites.push(rs);
     this.ruins = { x: rs.x, z: rs.z, y: this.heightAt(rs.x, rs.z) };
     const ring = (count, rad, miss) => {
       const out = [];
@@ -210,7 +297,7 @@ export class World {
 
     // kelp forests
     const kelpSites = [];
-    for (let i = 0; i < 4; i++) { const s = pickSite(220, sites.concat(kelpSites), 70); kelpSites.push(s); }
+    for (let i = 0; i < 4; i++) { const s = exp ? ringSite(245, 268) : pickSite(220, sites.concat(kelpSites), 70); kelpSites.push(s); }
     for (const s of kelpSites) for (let i = 0; i < 170; i++) {
       const p = spot(s.x, s.z, 38, 0, 0.5);
       this.kelp.push({ x: p.x, y: p.y - 0.3, z: p.z, h: 7 + R() * 12, rot: R() * Math.PI });
@@ -218,11 +305,12 @@ export class World {
     this.kelpSites = kelpSites;
     // coral reefs + scattered coral
     const reefs = [];
-    for (let i = 0; i < 4; i++) reefs.push(pickSite(230, reefs, 80));
+    for (let i = 0; i < 4; i++) reefs.push(exp ? ringSite(i < 3 ? 245 : 185, i < 3 ? 268 : 205) : pickSite(230, reefs, 80));
     const pal = [0xff5d8f, 0xff9a3c, 0xc86bff, 0xffd84d, 0x35e0c8, 0xff6b5e];
     for (let i = 0; i < 620; i++) {
       const s = i < 480 ? reefs[i % reefs.length] : { x: 0, z: 0 };
       const p = spot(s.x, s.z, i < 480 ? 34 : 270, 0, 0.3);
+      if (exp && i >= 480 && p.y < 20) continue;     // no stray coral in the dark deep
       this.coral.push({ x: p.x, y: p.y, z: p.z, s: 0.5 + R() * 1.6, type: (R() * 3) | 0, col: pal[(R() * pal.length) | 0], rot: R() * TAU });
     }
 
@@ -247,7 +335,25 @@ export class World {
     this.lairs.push(spot(kelpSites[0].x, kelpSites[0].z, 15, 1.3, 1.5));
     for (let i = 0; i < 5; i++) { const p = spot(0, 0, 220, 0, 3); p.y += 12 + R() * 22; this.swarms.push(p); }
 
-    this.pois = [
+    // glowing crystals on the deep floors (expedition only, decoration)
+    this.crystals = [];
+    if (exp) for (let i = 0; i < 260; i++) {
+      const a = R() * TAU, d = Math.sqrt(R()) * 215, x = Math.cos(a) * d, z = Math.sin(a) * d, y = this.heightAt(x, z);
+      if (y > -30) continue;
+      this.crystals.push({ x, y: y - 0.3, z, s: 0.6 + R() * 1.8, rot: R() * TAU, tilt: (R() - 0.5) * 0.6, col: [0x5ef2e0, 0xb06bff, 0x4db8ff, 0xff4df0][(R() * 4) | 0] });
+    }
+    // boss lairs: one on each floor's ledge, hovering a bit above the ground
+    this.bossLairs = EXP_LEDGES.map(([r0, r1], i) => {
+      let best = null;
+      for (let k = 0; k < 40; k++) {
+        const p = ringSite(r0, r1), y = this.heightAt(p.x, p.z), depth = SURFACE - y;
+        const lair = { x: p.x, z: p.z, y: Math.min(SURFACE - FLOORS[i].top - 6, y + 7) };
+        if (!best) best = lair;
+        if (depth > FLOORS[i].top + 5 && depth < FLOORS[i].bot + 10) { best = lair; break; }
+      }
+      return best;
+    });
+    this.pois = exp ? [{ n: 'Boot', x: EXP_BOAT.x, z: EXP_BOAT.z }] : [
       { n: 'Wrack', x: ws.x, z: ws.z }, { n: 'Ruinen', x: rs.x, z: rs.z },
       { n: 'Seeberg', x: this.smx, z: this.smz }, { n: 'Kelpwald', x: kelpSites[0].x, z: kelpSites[0].z },
     ];
@@ -255,6 +361,15 @@ export class World {
 
   _raw(x, z) {
     const s = this.seed;
+    if (this.mode === 'exp') {
+      // a terraced funnel: every step down is a new floor ("Etage")
+      const r = Math.sqrt(x * x + z * z) + (fbm(x * 0.008, z * 0.008, s + 7, 3) - 0.5) * 36;
+      let h = EXP_BOTTOM;
+      for (const [r0, step] of EXP_STEPS) h += step * sstep(r0, r0 + 12, r);
+      h += (fbm(x * 0.03, z * 0.03, s + 50, 2) - 0.5) * 5;
+      h += 30 * sstep(HALF - 70, HALF, Math.max(Math.abs(x), Math.abs(z)));
+      return h;
+    }
     let h = fbm(x * 0.0055, z * 0.0055, s, 4) * 52;
     h += (fbm(x * 0.035, z * 0.035, s + 50, 2) - 0.5) * 5;
     const tz = (fbm(x * 0.004, 3.7, s + 99, 2) - 0.5) * 300;      // winding trench

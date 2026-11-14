@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
-  CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere,
+  CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR,
+  EXP_HP, EXP_BOAT, EXP_RESPAWN, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
+  TANKS, LUNGS, airUse, SHOP_WEAPONS, PLAY,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -65,16 +67,17 @@ const W_PREF = { pistol: 16, needler: 18, scatter: 8, harpoon: 30, torpedo: 24 }
 const clients = new Map();   // ws -> client
 let nextId = 1;
 const G = {
-  phase: 'lobby', seed: (rnd() * 1e9) | 0, world: null, bots: 11, time: 0,
+  phase: 'lobby', mode: 'br', seed: (rnd() * 1e9) | 0, world: null, bots: 11, time: 0,
   players: new Map(), creatures: [], vehicles: new Map(), pickups: new Map(), crates: [], proj: [],
   zone: null, events: [], endT: 0, noHumanT: 0,
+  bossT: [], fishT: [],                 // expedition: boss respawn timers, fish spawn timers per floor
 };
-G.world = new World(G.seed);
+G.world = new World(G.seed, G.mode);
 
 function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string' ? obj : JSON.stringify(obj)); }
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
-  return { t: 'lobby', seed: G.seed, bots: G.bots, urls: lanUrls(),
+  return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, urls: lanUrls(),
     players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit })) };
 }
 const ev = (...a) => G.events.push(a);
@@ -161,7 +164,7 @@ function startMatch() {
 }
 function startMsg(c) {
   const me = G.players.get(c.id);
-  return { t: 'start', seed: G.seed, you: c.id, spectator: !me, spawn: me ? [r2(me.x), r2(me.y), r2(me.z), r2(me.yaw)] : null,
+  return { t: 'start', seed: G.seed, mode: G.mode, you: c.id, spectator: !me, spawn: me ? [r2(me.x), r2(me.y), r2(me.z), r2(me.yaw)] : null,
     players: [...G.players.values()].map(p => [p.id, p.name, p.suit, p.bot ? 1 : 0]),
     crates: G.crates.map(c => c.open ? 1 : 0),
     pickups: [...G.pickups.values()].map(p => [p.id, p.k, p.wid, p.rar, r2(p.x), r2(p.y), r2(p.z)]) };
@@ -203,7 +206,7 @@ function damage(p, amt, src, how, sx, sz) {
   if (src && src.id && !src.bot && src !== p) src.ye.push(['hm', Math.round(amt), p.hp <= 0 ? 1 : 0]);
   if (p.bot && src && src.id && src !== p && src.alive && (!src.bot || G.time >= p.peaceUntil) && (!p.target || rnd() < 0.5)) {
     if (src.bot) p.fightUntil = G.time + 5 + rnd() * 4; p.target = { k: 'p', ref: src }; p.reactT = Math.min(p.reactT, 0.25); }
-  if (p.hp <= 0) kill(p, src, how);
+  if (p.hp <= 0) { if (G.mode === 'exp') expDown(p, src, how); else kill(p, src, how); }
 }
 function damageVehicle(v, amt, src) {
   if (v.dead) return;
@@ -236,6 +239,7 @@ function damageCreature(c, amt, src) {
   if (c.dead) return;
   c.hp -= amt;
   if (src && !src.bot) src.ye.push(['hm', Math.round(amt), c.hp <= 0 ? 1 : 0]);
+  if (c.type === 'fish' || c.type === 'boss') return expCreatureHurt(c, src);
   if (c.type === 'octo' && c.state === 'hold') c.grip -= amt;
   if (c.type === 'shark' && src && src.alive && c.state !== 'retreat') { c.state = 'hunt'; c.tid = src.id; }
   if (c.hp <= 0) {
@@ -301,7 +305,7 @@ function explode(pr, x, y, z) {
   }
   for (const c of G.creatures) {
     if (c.dead) continue;
-    const d = dist(c, { x, y, z }) - CREATURES[c.type].r;
+    const d = dist(c, { x, y, z }) - creatureR(c.type, c.sub);
     if (d < pr.splash) damageCreature(c, fall(Math.max(0, d)), owner);
   }
 }
@@ -325,7 +329,7 @@ function stepProjectiles(dt) {
     }
     for (const c of G.creatures) {
       if (c.dead) continue;
-      const t = segSphere(pr.x, pr.y, pr.z, sx, sy, sz, c.x, c.y, c.z, CREATURES[c.type].r);
+      const t = segSphere(pr.x, pr.y, pr.z, sx, sy, sz, c.x, c.y, c.z, creatureR(c.type, c.sub));
       if (t >= 0 && t < best) { best = t; hit = c; kind = 3; }
     }
     const owner = G.players.get(pr.o);
@@ -643,8 +647,275 @@ function botStep(b, dt) {
   }
 }
 
+// =====================================================================
+// ---------- Tiefsee-Expedition ----------
+// Dive, hunt fish, sell them at the boat, buy better gear, beat a boss
+// on every floor. Progress is saved per player name in saves/.
+// =====================================================================
+const SAVE_FILE = path.join(DIR, 'saves', 'expedition.json');
+let saves = {};
+try { saves = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8')); } catch { saves = {}; }
+let saveTimer = null;
+const saveKey = (name) => name.toLowerCase();
+function storeProgress(p) {
+  saves[saveKey(p.name)] = { money: p.money, tank: p.tank, lung: p.lung, bag: p.bag,
+    weapons: p.weapons.map(w => w ? { id: w.id, rar: w.rar } : null) };
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    fs.mkdir(path.dirname(SAVE_FILE), { recursive: true }, () =>
+      fs.writeFile(SAVE_FILE, JSON.stringify(saves, null, 1), (e) => { if (e) console.error('[save]', e.message); }));
+  }, 1000);
+}
+const depthOf = (o) => SURFACE - o.y;
+const nearBoat = (p, r = 16, d = 6) => dist2d(p, EXP_BOAT.x, EXP_BOAT.z) < r && depthOf(p) < d;
+const boatSpawn = () => { const a = rnd() * 6.283; return { x: EXP_BOAT.x + Math.cos(a) * 6, y: SURFACE - 2.5, z: EXP_BOAT.z + Math.sin(a) * 6, yaw: a }; };
+
+function expJoin(c) {
+  const p = mkPlayer(c.id, c.name, 'triton', false);
+  const s = saves[saveKey(c.name)];
+  p.money = s?.money || 0; p.tank = clamp(s?.tank || 0, 0, TANKS.length - 1); p.lung = clamp(s?.lung || 0, 0, LUNGS.length - 1);
+  p.bag = Array.isArray(s?.bag) ? s.bag : [];
+  if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? { id: w.id, rar: w.rar, ammo: WEAPONS[w.id].mag } : null);
+  if (!p.weapons.some(Boolean)) p.weapons[0] = { id: 'pistol', rar: 0, ammo: WEAPONS.pistol.mag };
+  p.slot = Math.max(0, p.weapons.findIndex(Boolean));
+  p.hp = p.maxhp = EXP_HP; p.air = TANKS[p.tank].cap; p.envAcc = 0; p.warnT = 0; p.respawnT = 0; p.lowAir = false;
+  const s0 = boatSpawn(); p.x = p.lx = s0.x; p.y = p.ly = s0.y; p.z = p.lz = s0.z; p.yaw = s0.yaw; p.pitch = -0.3;
+  G.players.set(p.id, p); c.playing = true;
+  return p;
+}
+const metaMsg = () => ({ t: 'meta', players: [...G.players.values()].map(p => [p.id, p.name, p.suit, p.bot ? 1 : 0]) });
+
+function startExp() {
+  const W = G.world;
+  G.phase = 'play'; G.time = 0; G.noHumanT = 0;
+  G.players = new Map(); G.proj = []; G.pickups = new Map(); G.events = []; G.crates = []; G.vehicles = new Map();
+  G.creatures = []; G.zone = null;
+  G.bossT = BOSSES.map(() => 0); G.fishT = FLOORS.map(() => 0);
+  for (let i = 0; i < BOSSES.length; i++) spawnBoss(i);
+  for (let f = 0; f < FLOORS.length; f++) for (let k = 0; k < FLOORS[f].fish; k++) spawnFish(f, true);
+  for (const c of clients.values()) expJoin(c);
+  for (const c of clients.values()) send(c.ws, startMsg(c));
+  console.log(`[expedition] started with ${clients.size} diver(s), seed ${G.seed}`);
+}
+function spawnBoss(i) {
+  const B = BOSSES[i], L = G.world.bossLairs[i];
+  G.creatures.push({ id: nextId++, type: 'boss', sub: i, x: L.x, y: L.y, z: L.z, vx: 0, vy: 0, vz: 0, yaw: rnd() * 6.28, pitch: 0,
+    hp: B.hp, maxhp: B.hp, state: 'idle', lair: L, tid: 0, cool: 0, scanT: 0, t: 0, orb: rnd() * 6.28, dmgBy: new Set() });
+}
+function pickSpecies(f) {
+  const list = FISH.map((s, i) => i).filter(i => FISH[i].floor === f);
+  let t = rnd() * list.reduce((a, i) => a + FISH[i].w, 0);
+  for (const i of list) if ((t -= FISH[i].w) < 0) return i;
+  return list[0];
+}
+function waterSpot(f, near) {
+  const F = FLOORS[f], W = G.world;
+  for (let k = 0; k < 14; k++) {
+    let x, z;
+    if (near) { const a = rnd() * 6.283, d = 28 + rnd() * 40; x = near.x + Math.cos(a) * d; z = near.z + Math.sin(a) * d; }
+    else { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * (PLAY - 10); x = Math.cos(a) * d; z = Math.sin(a) * d; }
+    if (Math.abs(x) > PLAY - 6 || Math.abs(z) > PLAY - 6) continue;
+    const ground = W.heightAt(x, z), yTop = SURFACE - F.top - 3, yBot = Math.max(SURFACE - F.bot, ground + 2);
+    if (yBot >= yTop) continue;
+    return { x, y: yBot + rnd() * (yTop - yBot), z };
+  }
+  return null;
+}
+function spawnFish(f, initial) {
+  // most fish appear around divers on that floor, the rest anywhere on the floor
+  const divers = [...G.players.values()].filter(p => p.alive && floorAt(depthOf(p)) === f);
+  const near = !initial && divers.length && rnd() < 0.65 ? pick(divers) : null;
+  const s = waterSpot(f, near) || waterSpot(f, null);
+  if (!s) return;
+  const sub = pickSpecies(f), S = FISH[sub];
+  G.creatures.push({ id: nextId++, type: 'fish', sub, gold: rnd() < GOLD_CHANCE, ...s, vx: 0, vy: 0, vz: 0, yaw: rnd() * 6.28, pitch: 0,
+    hp: S.hp, maxhp: S.hp, state: 'swim', wp: null, tid: 0, cool: 0, age: 0, scanT: rnd() * 0.5, fleeT: 0 });
+}
+function nearestDiver(c, range) {
+  let best = null, bd = range;
+  for (const p of G.players.values()) { if (!p.alive) continue; const d = dist(c, p); if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function fishStep(c, dt) {
+  const S = FISH[c.sub], F = FLOORS[S.floor], W = G.world;
+  c.age += dt; c.cool -= dt; c.scanT -= dt;
+  if (c.scanT <= 0) {
+    c.scanT = 0.3;
+    const p = nearestDiver(c, S.dmg ? 18 : 13);
+    if (p) { c.tid = p.id; c.state = S.dmg ? 'attack' : 'flee'; c.fleeT = 2.5; }
+    else if (c.state === 'attack' || (c.state === 'flee' && (c.fleeT -= 0.3) <= 0)) c.state = 'swim';
+    // fish far away from every diver swim off and appear somewhere new later
+    if (c.age > 45 && !nearestDiver(c, 160)) { c.dead = true; return; }
+  }
+  const p = c.tid && G.players.get(c.tid);
+  const yTop = SURFACE - F.top - 2, yBot = SURFACE - F.bot;
+  if (c.state === 'attack' && p && p.alive) {
+    const d = steer(c, p.x, p.y, p.z, S.speed, dt, S.size * 0.6);
+    if (d < S.size + SUITS[p.suit].r + 0.8 && c.cool <= 0) {
+      c.cool = 1.4; p.lastHitBy = S.name;
+      ev('bite', r2(p.x), r2(p.y), r2(p.z));
+      damage(p, S.dmg, null, 'beast', c.x, c.z);
+    }
+  } else if (c.state === 'flee' && p) {
+    const ax = c.x - p.x, ay = c.y - p.y, az = c.z - p.z, al = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
+    steer(c, c.x + ax / al * 10, clamp(c.y + ay / al * 10, yBot, yTop), c.z + az / al * 10, S.speed * 1.5, dt, S.size * 0.6);
+  } else {
+    if (!c.wp || dist(c, c.wp) < 3) {
+      const a = rnd() * 6.283, d = 8 + rnd() * 22;
+      const x = clamp(c.x + Math.cos(a) * d, -PLAY + 8, PLAY - 8), z = clamp(c.z + Math.sin(a) * d, -PLAY + 8, PLAY - 8);
+      c.wp = { x, y: clamp(c.y + (rnd() - 0.5) * 10, Math.max(yBot, W.heightAt(x, z) + 2), yTop), z };
+    }
+    steer(c, c.wp.x, c.wp.y, c.wp.z, S.speed * 0.45, dt, S.size * 0.6);
+  }
+  if (c.y > yTop) c.y = yTop;
+}
+function bossStep(c, dt) {
+  const B = BOSSES[c.sub], L = c.lair;
+  c.cool -= dt; c.scanT -= dt;
+  const p = c.tid && G.players.get(c.tid);
+  if (c.state === 'idle' || c.state === 'return') {
+    if (c.state === 'idle') { c.orb += dt * 0.25; steer(c, L.x + Math.cos(c.orb) * 8, L.y + Math.sin(c.orb * 2) * 1.5, L.z + Math.sin(c.orb) * 8, B.speed * 0.3, dt, B.r * 0.8); }
+    else if (steer(c, L.x, L.y, L.z, B.speed * 0.8, dt, B.r * 0.8) < 6) c.state = 'idle';
+    c.hp = Math.min(c.maxhp, c.hp + c.maxhp * 0.02 * dt);      // slowly heals when left alone
+    if (c.hp >= c.maxhp) c.dmgBy.clear();
+    if (c.scanT <= 0) {
+      c.scanT = 0.4;
+      const t = nearestDiver(c, 32);
+      if (t && los(c, t)) { c.state = 'chase'; c.tid = t.id; if (!t.bot) t.ye.push(['warn', `${B.name} greift an!`]); }
+    }
+    return;
+  }
+  if (!p || !p.alive || dist(c, L) > 75) { c.state = 'return'; c.tid = 0; return; }
+  if (c.state === 'swing') {
+    steer(c, c.sx, c.sy, c.sz, B.speed, dt, B.r * 0.8);
+    if ((c.t -= dt) <= 0) c.state = 'chase';
+    return;
+  }
+  const d = steer(c, p.x, p.y, p.z, B.speed, dt, B.r * 0.8);
+  if (d < B.r + SUITS[p.suit].r + 1.2 && c.cool <= 0) {
+    c.cool = 1.6; p.lastHitBy = B.name;
+    ev('bite', r2(p.x), r2(p.y), r2(p.z));
+    damage(p, B.dmg, null, 'beast', c.x, c.z);
+    // swim past and turn around for the next bite
+    const ax = c.vx, az = c.vz, al = Math.sqrt(ax * ax + az * az) || 1;
+    c.state = 'swing'; c.t = 1.3; c.sx = c.x + ax / al * 16; c.sy = c.y + 3; c.sz = c.z + az / al * 16;
+  }
+}
+function expCreatureHurt(c, src) {
+  if (c.type === 'boss') {
+    if (src && src.id) { c.dmgBy.add(src.id); if (c.state === 'idle' || c.state === 'return') { c.state = 'chase'; c.tid = src.id; } }
+  } else if (src && src.alive) { c.tid = src.id; c.state = FISH[c.sub].dmg ? 'attack' : 'flee'; c.fleeT = 3; }
+  if (c.hp > 0) return;
+  c.dead = true;
+  ev('cdie', c.id, r2(c.x), r2(c.y), r2(c.z));
+  if (c.type === 'fish') {
+    if (!src || !src.id || !G.players.has(src.id)) return;
+    const S = FISH[c.sub], value = S.value * (c.gold ? GOLD_MUL : 1);
+    src.bag.push(value);
+    src.ye.push(['fish', c.sub, c.gold ? 1 : 0, value]);
+  } else {
+    const B = BOSSES[c.sub];
+    G.bossT[c.sub] = BOSS_RESPAWN;
+    ev('kill', src?.name || '?', B.name, 0, src?.id || 0);
+    ev('msg', `${B.name} wurde besiegt!`);
+    for (const id of c.dmgBy) {
+      const p = G.players.get(id);
+      if (!p) continue;
+      p.money += B.reward; p.ye.push(['boss', c.sub, B.reward]); storeProgress(p);
+    }
+  }
+}
+function expDown(p, src, how) {
+  p.alive = false; p.hp = 0; p.respawnT = EXP_RESPAWN; p.vx = p.vy = p.vz = 0;
+  const lost = Math.ceil(p.bag.length / 2);
+  p.bag.splice(0, lost);
+  const by = how === 'zone' ? (p.lastHitBy || 'Tiefsee') : how === 'beast' ? (p.lastHitBy || 'Raubfisch') : src && src.name ? src.name : 'Tiefsee';
+  ev('kill', by, p.name, p.id, 0);
+  p.ye.push(['dead', 0, by, lost]);
+  storeProgress(p);
+}
+function expBuy(p, m) {
+  if (!p.alive || !nearBoat(p, 22, 10)) { p.ye.push(['shop', 'Du musst am Boot sein!']); return; }
+  let price, label, apply;
+  if (m.k === 'tank' && TANKS[p.tank + 1]) {
+    const T = TANKS[p.tank + 1]; price = T.price; label = T.name; apply = () => { p.tank++; p.air = T.cap; };
+  } else if (m.k === 'lung' && LUNGS[p.lung + 1]) {
+    const L = LUNGS[p.lung + 1]; price = L.price; label = L.name; apply = () => { p.lung++; };
+  } else if (m.k === 'w' && SHOP_WEAPONS[m.i]) {
+    const it = SHOP_WEAPONS[m.i];
+    if (p.weapons.some(w => w && w.id === it.wid && w.rar >= it.rar)) { p.ye.push(['shop', 'Die hast du schon (oder eine bessere)!']); return; }
+    price = it.price; label = `${WEAPONS[it.wid].name} (${RARITY[it.rar].name})`;
+    apply = () => {
+      // same weapon type gets upgraded, otherwise a free slot, otherwise the weakest slot
+      let slot = p.weapons.findIndex(w => w && w.id === it.wid);
+      if (slot < 0) slot = p.weapons.indexOf(null);
+      if (slot < 0) { slot = 0; for (let i = 1; i < 3; i++) if (wScore(p.weapons[i]) < wScore(p.weapons[slot])) slot = i; }
+      p.weapons[slot] = { id: it.wid, rar: it.rar, ammo: WEAPONS[it.wid].mag }; p.slot = slot; p.reload = 0;
+    };
+  } else return;
+  if (p.money < price) { p.ye.push(['shop', `Zu wenig Geld – dir fehlen ${price - p.money} $`]); return; }
+  p.money -= price; apply();
+  p.ye.push(['bought', label, price]);
+  storeProgress(p);
+}
+function tickExp(dt) {
+  G.time += dt;
+  for (const p of G.players.values()) {
+    if (!p.alive) {
+      if ((p.respawnT -= dt) <= 0) {
+        const s = boatSpawn();
+        Object.assign(p, { alive: true, hp: p.maxhp, shield: 0, air: TANKS[p.tank].cap, x: s.x, y: s.y, z: s.z, lx: s.x, ly: s.y, lz: s.z, yaw: s.yaw, envAcc: 0, lowAir: false, reload: 0 });
+        for (const w of p.weapons) if (w) w.ammo = WEAPONS[w.id].mag;
+        p.ye.push(['spawn', r2(s.x), r2(s.y), r2(s.z), r2(s.yaw)]);
+      }
+      continue;
+    }
+    const k = 0.5;
+    p.vx += ((p.x - p.lx) / dt - p.vx) * k; p.vy += ((p.y - p.ly) / dt - p.vy) * k; p.vz += ((p.z - p.lz) / dt - p.vz) * k;
+    p.lx = p.x; p.ly = p.y; p.lz = p.z;
+    if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) { p.reload = 0; const w = p.weapons[p.slot]; if (w) w.ammo = WEAPONS[w.id].mag; } }
+    // air and pressure
+    const depth = depthOf(p), T = TANKS[p.tank];
+    if (depth < 2.6) { p.air = Math.min(T.cap, p.air + T.cap * 0.35 * dt); p.lowAir = false; }
+    else p.air = Math.max(0, p.air - airUse(depth) * LUNGS[p.lung].mul * (p.boost ? 1.4 : 1) * dt);
+    if (!p.lowAir && p.air < T.cap * 0.25) { p.lowAir = true; p.ye.push(['warn', 'Luft wird knapp – auftauchen!']); }
+    let hurt = 0;
+    if (p.air <= 0) { hurt += 8; p.lastHitBy = 'Luftmangel'; }
+    if (depth > T.maxDepth) {
+      hurt += 6; p.lastHitBy = 'Wasserdruck';
+      if ((p.warnT -= dt) <= 0) { p.warnT = 3; p.ye.push(['warn', `Zu tief für die ${T.name}! Max. ${T.maxDepth} m`]); }
+    }
+    if (hurt) { p.envAcc += hurt * dt; if (p.envAcc >= 1) { const a = Math.floor(p.envAcc); p.envAcc -= a; damage(p, a, null, 'zone', p.x, p.z); } }
+    // sell the catch at the boat
+    if (p.alive && p.bag.length && nearBoat(p)) {
+      const value = p.bag.reduce((a, v) => a + v, 0), n = p.bag.length;
+      p.money += value; p.bag = [];
+      p.ye.push(['sold', n, value]);
+      storeProgress(p);
+    }
+  }
+  // creatures + respawning
+  for (const c of G.creatures) {
+    if (c.dead) continue;
+    if (c.type === 'fish') fishStep(c, dt); else if (c.type === 'boss') bossStep(c, dt);
+  }
+  G.creatures = G.creatures.filter(c => !c.dead);
+  for (let i = 0; i < BOSSES.length; i++) if (G.bossT[i] > 0 && (G.bossT[i] -= dt) <= 0) { spawnBoss(i); ev('msg', `${BOSSES[i].name} ist zurück in Etage ${i + 1}!`); }
+  const counts = FLOORS.map(() => 0);
+  for (const c of G.creatures) if (c.type === 'fish') counts[FISH[c.sub].floor]++;
+  for (let f = 0; f < FLOORS.length; f++) if (counts[f] < FLOORS[f].fish && (G.fishT[f] -= dt) <= 0) { G.fishT[f] = 1.2; spawnFish(f, false); }
+  stepProjectiles(dt);
+  if (clients.size === 0) toLobby();
+}
+function quitExp() {
+  for (const p of G.players.values()) storeProgress(p);
+  toLobby();
+}
+
 // ---------- main tick ----------
 function tick(dt) {
+  if (G.mode === 'exp') return tickExp(dt);
   G.time += dt;
   updateZone(dt);
   const z = G.zone, dps = zoneDps();
@@ -680,13 +951,15 @@ function tick(dt) {
   else if (humansAlive === 0) { G.noHumanT += dt; if (G.noHumanT > 6) endMatch(); }
 }
 function snapshot() {
-  const z = G.zone, P = PHASES[z.ph];
+  const z = G.zone, P = z && PHASES[z.ph];
   const common = {
     tm: r2(G.time), n: aliveCount(),
-    z: [r2(z.x), r2(z.z), r2(z.r), r2(z.nx), r2(z.nz), r2(z.nr), z.ph, P ? Math.ceil((z.sh ? P.shrink : P.wait) - z.t) : 0, z.sh ? 1 : 0],
+    z: z ? [r2(z.x), r2(z.z), r2(z.r), r2(z.nx), r2(z.nz), r2(z.nr), z.ph, P ? Math.ceil((z.sh ? P.shrink : P.wait) - z.t) : 0, z.sh ? 1 : 0] : null,
     p: [...G.players.values()].filter(p => p.alive).map(p => [p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.ceil(p.hp), Math.round(p.shield),
       (p.boost ? 2 : 0) | (p.grabbed ? 4 : 0), p.weapons[p.slot] ? WEAPON_IDS.indexOf(p.weapons[p.slot].id) : -1, p.veh]),
-    c: G.creatures.map(c => [c.id, CREATURE_IDS.indexOf(c.type), r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.pitch), c.state === 'hunt' || c.state === 'lunge' ? 1 : c.state === 'hold' ? 2 : 0]),
+    c: G.creatures.map(c => [c.id, CREATURE_IDS.indexOf(c.type), r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.pitch),
+      ['hunt', 'lunge', 'chase', 'swing', 'attack', 'flee'].includes(c.state) ? 1 : c.state === 'hold' ? 2 : 0,
+      c.sub || 0, c.maxhp ? Math.max(0, Math.ceil(c.hp / c.maxhp * 100)) : 100, c.gold ? 1 : 0]),
     v: [...G.vehicles.values()].map(v => [v.id, VEHICLE_IDS.indexOf(v.type), r2(v.x), r2(v.y), r2(v.z), r2(v.yaw), r2(v.pitch), Math.ceil(v.hp), v.driver]),
     e: G.events,
   };
@@ -699,6 +972,8 @@ function snapshot() {
       you = { alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxhp, sh: Math.round(p.shield), slot: p.slot, kills: p.kills, place: p.place,
         w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)) };
+      if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, v) => a + v, 0), air: r2(p.air),
+        tank: p.tank, lung: p.lung, rt: r2(Math.max(0, p.respawnT)) };
       ye = p.ye; p.ye = [];
     }
     send(c.ws, `{"t":"s","c":${cs},"you":${JSON.stringify(you)},"ye":${JSON.stringify(ye)}}`);
@@ -716,8 +991,9 @@ function endMatch() {
   console.log(`[match] ended after ${Math.round(G.time)}s, winner: ${rank[0]?.n}`);
 }
 function toLobby() {
+  if (G.mode === 'exp') for (const p of G.players.values()) storeProgress(p);
   G.phase = 'lobby';
-  G.seed = (rnd() * 1e9) | 0; G.world = new World(G.seed);
+  G.seed = (rnd() * 1e9) | 0; G.world = new World(G.seed, G.mode);
   G.players = new Map(); G.creatures = []; G.proj = []; G.events = [];
   broadcast(lobbyMsg());
 }
@@ -738,7 +1014,11 @@ wss.on('connection', (ws) => {
   clients.set(ws, c);
   send(ws, { t: 'welcome', id: c.id });
   if (G.phase === 'lobby') broadcast(lobbyMsg());
-  else { send(ws, lobbyMsg()); send(ws, startMsg(c)); }
+  else {
+    send(ws, lobbyMsg());
+    // battle royale: watch the running round. expedition: joins as soon as the name arrives ('set')
+    if (G.phase === 'play' && G.mode === 'br') send(ws, startMsg(c));
+  }
   ws.on('message', (raw) => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object') return;
@@ -748,12 +1028,19 @@ wss.on('connection', (ws) => {
         if (m.name !== undefined) c.name = cleanName(m.name);
         if (SUITS[m.suit]) c.suit = m.suit;
         if (Number.isFinite(m.bots)) G.bots = clamp(Math.round(m.bots), 0, 23);
+        if ((m.mode === 'br' || m.mode === 'exp') && m.mode !== G.mode && G.phase === 'lobby') { G.mode = m.mode; G.world = new World(G.seed, G.mode); }
         if (G.phase === 'lobby') broadcast(lobbyMsg());
+        else if (G.phase === 'play' && G.mode === 'exp' && !G.players.has(c.id)) {
+          expJoin(c); broadcast(metaMsg()); send(ws, startMsg(c));
+          ev('msg', `${c.name} taucht mit!`);
+        }
         break;
-      case 'start': if (G.phase === 'lobby') startMatch(); break;
+      case 'start': if (G.phase === 'lobby') { if (G.mode === 'exp') startExp(); else startMatch(); } break;
+      case 'buy': if (p && G.mode === 'exp') expBuy(p, m); break;
+      case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':
         if (p && p.alive && [m.x, m.y, m.z, m.yaw, m.pitch].every(Number.isFinite)) {
-          p.x = clamp(m.x, -300, 300); p.y = clamp(m.y, -60, SURFACE); p.z = clamp(m.z, -300, 300);
+          p.x = clamp(m.x, -300, 300); p.y = clamp(m.y, -260, SURFACE); p.z = clamp(m.z, -300, 300);
           p.yaw = m.yaw; p.pitch = clamp(m.pitch, -1.6, 1.6); p.boost = !!m.b;
         }
         break;
@@ -767,7 +1054,8 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     clients.delete(ws);
     const p = G.players.get(c.id);
-    if (G.phase === 'play' && p && p.alive) kill(p, null, 'left');
+    if (G.phase === 'play' && p && G.mode === 'exp') { storeProgress(p); G.players.delete(c.id); ev('msg', `${p.name} ist aufgetaucht und weg.`); }
+    else if (G.phase === 'play' && p && p.alive) kill(p, null, 'left');
     if (G.phase === 'lobby') broadcast(lobbyMsg());
   });
   ws.on('error', () => {});

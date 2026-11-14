@@ -43,6 +43,26 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
   verteilen Stromschläge. Alle lassen sich erlegen und hinterlassen Beute.
 - **Welt:** bei jeder Runde neu erzeugt – Graben, Seeberg, Wrack, Ruinen, Kelpwälder, Korallenriffe.
 
+## Modus: Tiefsee-Expedition (v0.2)
+
+In der Lobby rechts zwischen **Battle Royale** und **Tiefsee-Expedition** wählen.
+
+- **Die Welt ist ein Trichter mit 5 Etagen:** Sonnenriff (bis 60 m), Zwielicht (bis 130 m), Mitternacht (bis 210 m),
+  Abgrund (bis 290 m), Tiefseegraben (bis ca. 355 m). In der Mitte an der Oberfläche liegt das **Händler-Boot**.
+- **Fische jagen:** 15 Fischarten, 3 pro Etage, tauchen zufällig auf. Je tiefer, desto wertvoller. Selten gibt es
+  **goldene Fische** (5× Wert). Manche beißen zurück (Barrakuda, Viperfisch, Anglerfisch, Drachenfisch).
+- **Verkaufen:** Am Boot auftauchen – der Fang wird automatisch verkauft.
+- **Laden (E am Boot):** bessere Waffen, größere **Flaschen** (mehr Luft, tiefer erlaubt) und **Atemtraining** (weniger Luftverbrauch).
+- **Luft:** sinkt unter Wasser, je tiefer desto schneller. Unter der Maximaltiefe der Flasche macht der Druck Schaden.
+  An der Oberfläche füllt sich die Luft wieder.
+- **Bosse:** einer pro Etage, jeder Biss macht **20 Schaden**, du hast **100 Leben**. Alle, die mitkämpfen, kassieren die Belohnung.
+  Nach 2 Minuten kommt der Boss zurück.
+- **Ohnmächtig?** Nach 5 s wachst du am Boot auf, die Hälfte deines Fangs ist weg, Geld und Ausrüstung bleiben.
+- **Spielstand** wird pro Spielername in `saves/expedition.json` gespeichert.
+
+Alle Werte (Fische, Preise, Flaschen, Bosse) stehen oben in `public/js/shared.js` und lassen sich leicht ändern.
+`node test-exp.mjs` spielt bei laufendem Server einen Testtaucher durch die Expedition.
+
 ## Aufbau
 
 ```

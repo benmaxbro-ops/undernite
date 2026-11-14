@@ -1,8 +1,9 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
-import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere } from './shared.js';
+import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere,
+  creatureR, FISH, BOSSES, EXP_BOAT } from './shared.js';
 import { buildEnvironment } from './world.js';
-import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile } from './models.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeFish, makeBoss } from './models.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 
@@ -13,7 +14,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure
 const scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0x2b8fb0, 0.01);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.25, 900);
 camera.rotation.order = 'YXZ'; scene.add(camera);
-scene.add(new THREE.HemisphereLight(0xb5e8ff, 0x12303c, 1.25));
+const hemi = new THREE.HemisphereLight(0xb5e8ff, 0x12303c, 1.25); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xdff6ff, 1.35); sun.position.set(0.35, 1, 0.2); scene.add(sun);
 const lamp = new THREE.SpotLight(0xe6fbff, 0, 90, 0.42, 0.8, 1.1); lamp.position.set(0, -1.2, 0);
 camera.add(lamp); lamp.target.position.set(0, 0, -1); camera.add(lamp.target);
@@ -23,7 +24,7 @@ addEventListener('resize', resize); resize();
 const hud = new Hud(), sfx = new Sfx();
 const dyn = new THREE.Group(); scene.add(dyn);
 let W = null, env = null;
-let phase = 'connecting', myId = 0, mySuit = 'triton', you = null, zone = null, aliveN = 0, frameNo = 0, time = 0;
+let mode = 'br', phase = 'connecting', myId = 0, mySuit = 'triton', you = null, zone = null, aliveN = 0, frameNo = 0, time = 0;
 const meta = new Map(), players = new Map(), creatures = new Map(), vehicles = new Map(), pickups = new Map(), projs = new Map();
 let crates = [];
 const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, energy: 100, boost: false, exhaust: false };
@@ -42,35 +43,43 @@ ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.t === 's') onSnap(m);
   else if (m.t === 'welcome') { myId = m.id; send({ t: 'set', name: prefs.name, suit: prefs.suit }); }
-  else if (m.t === 'lobby') { ensureWorld(m.seed); if (phase !== 'play') { phase = 'lobby'; clearDyn(); hud.show('lobby'); if (document.pointerLockElement) document.exitPointerLock(); } hud.setLobby(m, myId); const mine = m.players.find(p => p.id === myId); if (mine) mySuit = mine.suit; }
+  else if (m.t === 'meta') { for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] }); }
+  else if (m.t === 'lobby') { ensureWorld(m.seed, m.mode); if (phase !== 'play') { phase = 'lobby'; clearDyn(); hud.show('lobby'); if (document.pointerLockElement) document.exitPointerLock(); } hud.setLobby(m, myId); const mine = m.players.find(p => p.id === myId); if (mine) mySuit = mine.suit; }
   else if (m.t === 'start') onStart(m);
   else if (m.t === 'end') { phase = 'end'; hud.end(m, myId); hud.show('end'); if (document.pointerLockElement) document.exitPointerLock(); }
 };
 const prefs = hud.buildLobby((c) => {
   sfx.init();
   if (c.start) { send({ t: 'start' }); canvas.requestPointerLock?.(); }
+  else if (c.mode) send({ t: 'set', mode: c.mode });
   else send({ t: 'set', ...c });
 });
 
-function ensureWorld(seed) {
-  if (env && env.seed === seed) return;
+function ensureWorld(seed, wmode = 'br') {
+  if (env && env.seed === seed && env.mode === wmode) return;
   if (env) env.dispose();
-  W = new World(seed); env = buildEnvironment(scene, W);
+  W = new World(seed, wmode); env = buildEnvironment(scene, W);
 }
+// ---------- expedition shop ----------
+const nearBoat = () => Math.hypot(me.x - EXP_BOAT.x, me.z - EXP_BOAT.z) < 20 && SURFACE - me.y < 9;
+function openShop() { hud.openShop(you); firing = false; if (document.pointerLockElement) document.exitPointerLock(); }
+function closeShop() { hud.closeShop(); lock(); }
+hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeShop(); send({ t: 'quit' }); });
 function clearDyn() {
   dyn.clear(); players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
   you = null; zone = null; deadInfo = null; specId = 0;
 }
 function onStart(m) {
-  ensureWorld(m.seed); clearDyn();
-  phase = 'play'; meta.clear();
+  mode = m.mode || 'br';
+  ensureWorld(m.seed, mode); clearDyn();
+  phase = 'play'; meta.clear(); hud.setMode(mode);
   for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] });
   if (meta.has(myId)) mySuit = meta.get(myId).suit;
-  crates = W.crates.map((c, i) => { const g = makeCrate(); g.position.set(c.x, c.y, c.z); g.rotation.y = c.yaw; if (m.crates[i]) g.userData.open(); dyn.add(g); return g; });
+  if (mode === 'br') crates = W.crates.map((c, i) => { const g = makeCrate(); g.position.set(c.x, c.y, c.z); g.rotation.y = c.yaw; if (m.crates[i]) g.userData.open(); dyn.add(g); return g; });
   for (const p of m.pickups) addPickup(p);
   if (m.spawn) { me.x = m.spawn[0]; me.y = m.spawn[1]; me.z = m.spawn[2]; me.vx = me.vy = me.vz = 0; camYaw = m.spawn[3]; camPitch = -0.55; me.energy = 100; }
   hud.show('game'); hud.spec(null);
-  hud.banner(m.spectator ? 'Runde läuft – du schaust zu' : 'Abtauchen! Such dir Ausrüstung.', 3.5);
+  hud.banner(mode === 'exp' ? 'Tiefsee-Expedition! Jag Fische und verkauf sie am Boot.' : m.spectator ? 'Runde läuft – du schaust zu' : 'Abtauchen! Such dir Ausrüstung.', 4);
   hud.pause(!document.pointerLockElement);
 }
 function addPickup(p) {
@@ -99,7 +108,12 @@ function onSnap(m) {
   you = m.you;
   for (const a of c.p) { const e = players.get(a[0]) || spawnPlayer(a[0]); e.seen = frameNo; target(e, a, 1); e.hp = a[6]; e.fl = a[8]; e.w = e.weapon = a[9]; e.veh = a[10]; }
   prune(players);
-  for (const a of c.c) { const type = CREATURE_IDS[a[1]]; const e = sync(creatures, a[0], () => ({ type, mesh: type === 'shark' ? makeShark() : type === 'octo' ? makeOcto() : makeJelly(a[0]) })); target(e, a, 2); e.state = a[7]; }
+  for (const a of c.c) {
+    const type = CREATURE_IDS[a[1]];
+    const e = sync(creatures, a[0], () => ({ type, sub: a[8], gold: a[10], r: creatureR(type, a[8]),
+      mesh: type === 'shark' ? makeShark() : type === 'octo' ? makeOcto() : type === 'fish' ? makeFish(FISH[a[8]], a[10]) : type === 'boss' ? makeBoss(BOSSES[a[8]]) : makeJelly(a[0]) }));
+    target(e, a, 2); e.state = a[7]; e.hpPct = a[9];
+  }
   prune(creatures);
   for (const a of c.v) { const type = VEHICLE_IDS[a[1]]; const e = sync(vehicles, a[0], () => ({ type, mesh: type === 'sub' ? makeSub() : makeScooter() })); target(e, a, 2); e.hp = a[7]; e.driver = a[8]; }
   prune(vehicles);
@@ -143,7 +157,13 @@ function onPrivate(e) {
     case 'grab': hud.banner('Ein Oktopus hat dich gepackt – F hämmern!', 3); break;
     case 'shock': shockUntil = time + 0.8; hud.shock(); sfx.shock(); break;
     case 'got': sfx.pickup(); hud.feed(e[1] === 'w' ? `Aufgenommen: <b style="color:${RARITY[e[3]].color}">${WEAPONS[e[2]].name}</b> · ${RARITY[e[3]].name}` : e[1] === 'med' ? 'Reparaturkit: <b>+50 Leben</b>' : 'Schildzelle: <b>+50 Schild</b>', true); break;
-    case 'dead': deadInfo = { place: e[1], by: e[2] }; firing = false; break;
+    case 'dead': deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop(); break;
+    case 'spawn': me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
+    case 'fish': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`${e[2] ? '⭐ <b style="color:#ffd34d">Goldener</b> ' : 'Gefangen: '}<b>${S.name}</b> · +${e[3]} $`, true); break; }
+    case 'sold': hud.banner(`${e[1]} Fische verkauft: +${e[2].toLocaleString('de-DE')} $`, 3); sfx.ping(); break;
+    case 'bought': hud.shopMsg(`Gekauft: ${e[1]}`, true); hud.feed(`Gekauft: <b>${esc(e[1])}</b>`, true); sfx.crate(); break;
+    case 'shop': hud.shopMsg(e[1]); hud.banner(e[1], 2); break;
+    case 'boss': hud.banner(`${BOSSES[e[1]].name} besiegt! +${e[2].toLocaleString('de-DE')} $`, 4); sfx.ping(); break;
   }
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -156,6 +176,7 @@ addEventListener('keydown', (e) => {
   if (e.repeat) return;
   keys[e.code] = true;
   if (phase !== 'play' || !you || !you.alive) return;
+  if (mode === 'exp' && e.code === 'KeyE') { if (hud.shopOpen) closeShop(); else if (nearBoat()) openShop(); return; }
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i]) send({ t: 'slot', i }); }
   else if (e.code === 'KeyR') send({ t: 'r' });
   else if (e.code === 'KeyE') send({ t: 'e' });
@@ -187,7 +208,8 @@ function controlMe(dt) {
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
   if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
   else { me.hyaw = camYaw; me.hpitch = camPitch; }
-  const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), u = (keys.Space ? 1 : 0) - (keys.KeyC || keys.KeyX ? 1 : 0);
+  const shop = hud.shopOpen;   // no swimming while shopping
+  const f = shop ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = shop ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), u = shop ? 0 : (keys.Space ? 1 : 0) - (keys.KeyC || keys.KeyX ? 1 : 0);
   const fw = dirFrom(me.hyaw, me.hpitch), rx = Math.cos(me.hyaw), rz = -Math.sin(me.hyaw);
   let wx = fw[0] * f + rx * s * strafe, wy = fw[1] * f + u, wz = fw[2] * f + rz * s * strafe;
   const wl = Math.hypot(wx, wy, wz); if (wl > 1) { wx /= wl; wy /= wl; wz /= wl; }
@@ -208,7 +230,7 @@ function aimDir() {
   if (t > 0) D *= t;
   const test = (x, y, z, r) => { const tt = segSphere(cp.x, cp.y, cp.z, cd[0] * D, cd[1] * D, cd[2] * D, x, y, z, r); if (tt > 0) D *= tt; };
   for (const e of players.values()) if (e.id !== myId) test(e.x, e.y, e.z, SUITS[e.suit].r);
-  for (const c of creatures.values()) test(c.x, c.y, c.z, CREATURES[c.type].r);
+  for (const c of creatures.values()) test(c.x, c.y, c.z, c.r);
   D = Math.max(D, camDist + 5);
   const ax = cp.x + cd[0] * D - me.x, ay = cp.y + cd[1] * D - me.y, az = cp.z + cd[2] * D - me.z, l = Math.hypot(ax, ay, az) || 1;
   return [ax / l, ay / l, az / l];
@@ -227,6 +249,7 @@ function tryFire(now) {
 function computePrompt() {
   if (!you || !you.alive) return null;
   if (you.grab) return ['F', 'Befreien – mehrfach drücken!'];
+  if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Laden öffnen'] : null;
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
   const S = SUITS[mySuit]; let best = null, bd = 1e9;
@@ -322,9 +345,27 @@ function frame(now) {
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
     promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }
     hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y, suit: mySuit, outside, time, dt });
-    hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois);
-    if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }
+    let marks = [];
+    if (mode === 'exp') {
+      // boss health bar for the closest boss nearby, boss dots + boat on the minimap
+      let bb = null, bd = 70;
+      marks = [{ x: EXP_BOAT.x, z: EXP_BOAT.z, c: '#ffc94d', s: 4 }];
+      for (const c of creatures.values()) if (c.type === 'boss') {
+        marks.push({ x: c.x, z: c.z, c: '#ff4d4d', s: 3.5 });
+        const d = Math.hypot(c.x - fx.x, c.y - fx.y, c.z - fx.z); if (d < bd) { bd = d; bb = c; }
+      }
+      hud.boss(bb ? { name: BOSSES[bb.sub].name, hp: bb.hpPct } : null);
+      hud.renderShop(you);
+      if (hud.shopOpen && !nearBoat()) hud.closeShop();
+      // it gets darker the deeper you dive
+      const df = Math.max(0, Math.min(1, (SURFACE - camera.position.y) / 300));
+      hemi.intensity = 1.25 * (1 - 0.85 * df); sun.intensity = 1.35 * (1 - 0.95 * df);
+    } else { hemi.intensity = 1.25; sun.intensity = 1.35; }
+    hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, marks);
+    if (mode === 'exp' && you && !you.alive && deadInfo) hud.spec(`<b>Ohnmächtig!</b>Erwischt von ${esc(deadInfo.by)}${deadInfo.lost ? ` · ${deadInfo.lost} Fische verloren` : ''} · aufwachen in ${Math.ceil(you.x?.rt || 0)} s`);
+    else if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }
     else if (!you) { const s = players.get(specId); hud.spec(`Zuschauer${s ? ` · ${esc(s.name)}` : ''}`); }
+    else if (you.alive) hud.spec(null);
     lamp.intensity = 150 * Math.min(1, Math.max(0, (SURFACE - camera.position.y - 55) / 55));
   } else lobbyCamera();
   if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);

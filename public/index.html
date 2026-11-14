@@ -97,6 +97,25 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
 .keys kbd{color:var(--ink);background:rgba(255,255,255,.1);border-radius:4px;padding:1px 7px;margin-right:5px;font-family:inherit}
 #end h1{font-size:clamp(40px,7vw,84px)} #end .place{font:600 20px var(--display);color:var(--mute);margin:12px 0 22px;letter-spacing:.2em}
 #rank{width:min(520px,100%);padding:8px 18px;font:15px var(--display)} #rank div{display:grid;grid-template-columns:36px 1fr 70px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)} #rank div.me{color:var(--gold);font-weight:700} #rank small{color:var(--mute)}
+/* ---------- expedition ---------- */
+#airBar{display:none} #airBar.on{display:block} #airFill{background:linear-gradient(90deg,#1f7fb8,#5fc8f0)} #airBar.low #airFill{background:linear-gradient(90deg,#ff6b5e,#ffb0a8)}
+#bossBar{position:absolute;top:66px;left:50%;transform:translateX(-50%);width:min(420px,70vw);padding:7px 14px;text-align:center}
+#bossBar .n{font-size:15px;font-weight:700;color:var(--gold);letter-spacing:.08em} #bossBar .bar{height:10px} #bossFill{background:linear-gradient(90deg,#b0201a,#ff6b5e)}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.mode{pointer-events:auto;cursor:pointer;padding:10px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);color:var(--ink);font:700 15px var(--display);text-align:left}
+.mode small{display:block;font:400 11.5px var(--display);color:var(--mute);margin-top:3px} .mode.on{border-color:var(--glow);background:rgba(94,242,224,.1)}
+#shop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,12,20,.55);padding:20px;overflow:auto}
+.shopBox{width:min(820px,100%);padding:20px 22px;pointer-events:auto}
+.shopBox h2{margin:0;font:800 30px var(--display);letter-spacing:.12em} .shopBox h2 span{color:var(--glow)}
+#shopMoney{font:700 22px var(--display);color:var(--gold);margin:6px 0 4px} #shopMsg{min-height:20px;font-size:14px;color:var(--warn)}
+.shopGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px} @media(max-width:720px){.shopGrid{grid-template-columns:1fr}}
+.shopGrid h3{margin:0 0 8px;font:600 13px var(--display);letter-spacing:.22em;text-transform:uppercase;color:var(--mute)}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-left:3px solid var(--rar,#55626c);margin-bottom:6px}
+.item b{font:600 15px var(--display)} .item small{grid-column:1;color:var(--mute);font-size:12px}
+.item button{grid-row:1/3;grid-column:2;pointer-events:auto;cursor:pointer;border:0;border-radius:7px;padding:8px 12px;background:var(--glow);color:#03222a;font:800 14px var(--display);min-width:92px}
+.item button:disabled{background:rgba(255,255,255,.12);color:var(--mute);cursor:default}
+.shopFoot{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap} .shopFoot button.go{margin-top:0;flex:1}
+button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--mute);border-radius:9px;padding:10px 14px;font:600 13px var(--display)}
 #conn{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:8px 16px;color:var(--warn);font:600 14px var(--display)}
 </style>
 </head>
@@ -109,9 +128,10 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
   <div id="feed"></div>
   <div id="zoneTxt" class="panel num"></div>
   <div id="banner"></div>
+  <div id="bossBar" class="panel hidden"><div class="n" id="bossName"></div><div class="bar"><i id="bossFill"></i></div></div>
   <div id="topRight">
     <canvas id="mini" width="190" height="190"></canvas>
-    <div id="counts"><div class="panel">Überlebende<b class="num" id="alive">0</b></div><div class="panel">Kills<b class="num" id="kills">0</b></div></div>
+    <div id="counts"><div class="panel"><span id="cntA">Überlebende</span><b class="num" id="alive">0</b></div><div class="panel"><span id="cntK">Kills</span><b class="num" id="kills">0</b></div></div>
   </div>
   <div id="cross"></div><div id="hitm"></div><div id="dmgNum" class="num"></div>
   <div id="prompt" class="panel hidden"></div>
@@ -120,6 +140,7 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
     <div class="row"><span>Schild</span><span id="suitName"></span></div>
     <div class="bar"><i id="shFill"></i><b class="num" id="shTxt"></b></div>
     <div class="bar"><i id="hpFill"></i><b class="num" id="hpTxt"></b></div>
+    <div class="bar" id="airBar"><i id="airFill"></i><b class="num" id="airTxt"></b></div>
     <div class="bar" id="enBar"><i id="enFill"></i></div>
     <div class="bar" id="vehBar"><i id="vhFill"></i><b class="num" id="vhTxt"></b></div>
     <div id="depth" class="num"></div>
@@ -140,8 +161,12 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
     </div>
     <div class="card panel">
       <h2>Tauchgang</h2>
+      <div class="modes" id="modes">
+        <button class="mode" data-mode="br">Battle Royale<small>Der Letzte gewinnt. Mit Bots.</small></button>
+        <button class="mode" data-mode="exp">Tiefsee-Expedition<small>Fische jagen, verkaufen, aufrüsten, Bosse besiegen.</small></button>
+      </div>
       <ul id="plist"></ul>
-      <label class="rng">Bots <input type="range" id="bots" min="0" max="23" value="11"><b class="num" id="botsN">11</b></label>
+      <label class="rng" id="botsRow">Bots <input type="range" id="bots" min="0" max="23" value="11"><b class="num" id="botsN">11</b></label>
       <button class="go" id="go">ABTAUCHEN</button>
       <div class="hint" id="lan"></div>
     </div>
@@ -158,6 +183,18 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
   <div class="place" id="endPlace"></div>
   <div id="rank" class="panel"></div>
   <div class="hint">Neue Runde startet gleich in der Lobby …</div>
+</div>
+<div id="shop" class="hidden">
+  <div class="shopBox panel">
+    <h2>HÄNDLER<span>-BOOT</span></h2>
+    <div id="shopMoney" class="num"></div>
+    <div id="shopMsg"></div>
+    <div class="shopGrid">
+      <div><h3>Ausrüstung</h3><div id="shopGear"></div></div>
+      <div><h3>Waffen</h3><div id="shopWeapons"></div></div>
+    </div>
+    <div class="shopFoot"><button class="go" id="shopClose">WEITER TAUCHEN (E)</button><button class="ghost" id="shopQuit">Expedition beenden – alle zur Lobby</button></div>
+  </div>
 </div>
 <div id="conn" class="panel hidden">Verbindung zum Server verloren – Seite neu laden (F5)</div>
 
