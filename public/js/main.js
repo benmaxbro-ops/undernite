@@ -35,7 +35,7 @@ let W = null, env = null;
 let mode = 'br', phase = 'connecting', myId = 0, mySuit = 'triton', you = null, zone = null, aliveN = 0, frameNo = 0, time = 0;
 const meta = new Map(), players = new Map(), creatures = new Map(), vehicles = new Map(), pickups = new Map(), projs = new Map();
 let crates = [];
-const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, energy: 100, boost: false, exhaust: false };
+const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, byaw: 0, bpitch: 0, energy: 100, boost: false, exhaust: false };
 const LAVA_SKY = new THREE.Color(0xff9a50), LAVA_GROUND = new THREE.Color(0xff3a08), PRIM_SKY = new THREE.Color(0x6fa8ff), PRIM_GROUND = new THREE.Color(0x10204a);
 let held = -1;   // expedition: index of the caught fish/boss in your hand (-1 = weapon)
 let camYaw = 0, camPitch = -0.35, camDist = 5, firing = false, nextFire = 0, specId = 0, shockUntil = 0, shake = 0, deadInfo = null, promptT = 0, sendT = 0;
@@ -254,6 +254,16 @@ function controlMe(dt) {
   const fw = dirFrom(me.hyaw, me.hpitch), rx = Math.cos(me.hyaw), rz = -Math.sin(me.hyaw);
   let wx = fw[0] * f + rx * s * strafe, wy = fw[1] * f + u, wz = fw[2] * f + rz * s * strafe;
   const wl = Math.hypot(wx, wy, wz); if (wl > 1) { wx /= wl; wy /= wl; wz /= wl; }
+  // body direction: swimming backwards (S) the diver turns around and faces where he swims;
+  // otherwise (and while shooting) he looks where the camera looks
+  const hl = Math.hypot(wx, wz);
+  if (!vt && f < 0 && !firing && hl > 0.1) {
+    me.byaw = approachAngle(me.byaw ?? me.hyaw, Math.atan2(-wx, -wz), 7 * dt);
+    me.bpitch += (Math.atan2(wy, hl) * 0.8 - me.bpitch) * Math.min(1, dt * 5);
+  } else {
+    me.byaw = approachAngle(me.byaw ?? me.hyaw, me.hyaw, (vt ? 50 : 9) * dt);
+    me.bpitch += (me.hpitch - me.bpitch) * Math.min(1, dt * (vt ? 50 : 8));
+  }
   me.boost = canBoost && (keys.ShiftLeft || keys.ShiftRight) && wl > 0.1 && !me.exhaust;
   if (me.boost) { me.energy = Math.max(0, me.energy - 26 * dt); if (me.energy <= 0) me.exhaust = true; speed *= S.boost; }
   else { me.energy = Math.min(100, me.energy + 13 * dt); if (me.energy > 20) me.exhaust = false; }
@@ -377,7 +387,7 @@ function computePrompt() {
 function updateEntities(dt) {
   const k = 1 - Math.exp(-dt * 14), alive = you && you.alive;
   for (const e of players.values()) {
-    if (e.id === myId && alive) { e.x = me.x; e.y = me.y; e.z = me.z; e.yaw = me.hyaw; e.pitch = me.hpitch; e.speed = Math.hypot(me.vx, me.vy, me.vz); }
+    if (e.id === myId && alive) { e.x = me.x; e.y = me.y; e.z = me.z; e.yaw = me.byaw; e.pitch = me.bpitch; e.speed = Math.hypot(me.vx, me.vy, me.vz); }
     else {
       const ox = e.x, oy = e.y, oz = e.z;
       e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; e.z += (e.tz - e.z) * k; e.yaw = lerpAngle(e.yaw, e.tyaw, k); e.pitch += (e.tpitch - e.pitch) * k;
@@ -463,7 +473,7 @@ function frame(now) {
     const alive = you && you.alive;
     if (alive) {
       controlMe(dt); tryFire(now);
-      sendT += dt; if (sendT >= 1 / 30) { sendT = 0; send({ t: 'm', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), yaw: +me.hyaw.toFixed(3), pitch: +me.hpitch.toFixed(3), b: me.boost ? 1 : 0 }); }
+      sendT += dt; if (sendT >= 1 / 30) { sendT = 0; send({ t: 'm', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), yaw: +me.byaw.toFixed(3), pitch: +me.bpitch.toFixed(3), b: me.boost ? 1 : 0 }); }
     }
     updateEntities(dt); updateCamera(dt);
     const fx = alive ? me : camera.position;
