@@ -60,7 +60,7 @@ ws.on('message', (raw) => {
     const b = boss.find(c => c[8] === 0);
     if (b) { if (stepT % 4 === 0) aimAt(b); if (stepT % 40 === 0) log('boss hp', b[9] + '%', 'my hp', y.hp); }
     if (y.hp < 100 && !ok.bossHit) { ok.bossHit = true; log('boss bit me, hp', y.hp); }
-    if (!ok.bossTrophy && x.bagL.some(f => f[0] === -2)) { ok.bossTrophy = true; log('boss trophy in the bag', JSON.stringify(x.bagL.filter(f => f[0] === -2))); }
+    if (!ok.bossTrophy && x.bagL.some(f => f[0] === -2)) { ok.bossTrophy = true; log('boss trophy in the bag', JSON.stringify(x.bagL.filter(f => f[0] === -2)), 'money', x.money); }
     if (stepT > 260 || ok.bossTrophy) { step = 'trophy'; stepT = 0; }
   } else if (step === 'trophy') {
     // bring the beaten boss to the base and put it into the aquarium

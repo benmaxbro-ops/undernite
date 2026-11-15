@@ -64,7 +64,8 @@ In der Lobby rechts zwischen **Battle Royale** und **Tiefsee-Expedition** wähle
 - **Reichweite:** jede Waffe schießt nur so weit wie ihre Reichweite (Bolzenpistole 22 m, Splitterwerfer 26 m, Nadler 38 m, Harpune 65 m, Torpedowerfer 80 m).
 - **Luft:** sinkt unter Wasser, je tiefer desto schneller. Unter der Maximaltiefe der Flasche macht der Druck Schaden.
   An der Oberfläche füllt sich die Luft wieder.
-- **Bosse:** einer pro Etage, jeder Biss macht **20 Schaden**, du hast **100 Leben**. Alle, die mitkämpfen, kassieren die Belohnung und bekommen den Boss als Trophäe in ihre Fang-Leiste.
+- **Bosse:** einer pro Etage, jeder Biss macht **20 Schaden**, du hast **100 Leben**. Alle, die mitkämpfen, bekommen den Boss in ihre Fang-Leiste. Dann entscheidest du: **am Boot verkaufen** (Belohnung in €) **oder** in der Basis **ins Aquarium** (€ pro Sekunde), nicht beides.
+  Was im Aquarium ist, kann man nur noch freilassen (Platz machen), nicht mehr verkaufen.
   Nach 2 Minuten kommt der Boss zurück.
 - **Leben regenerieren:** 5 s ohne Schaden, dann heilst du 4 Leben pro Sekunde, an der Oberfläche 15.
 - **Startgeld:** neue Taucher beginnen mit 100 €.

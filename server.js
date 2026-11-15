@@ -839,8 +839,8 @@ function expCreatureHurt(c, src) {
     for (const id of c.dmgBy) {
       const p = G.players.get(id);
       if (!p) continue;
-      // the money + the boss itself as a trophy for the aquarium
-      p.money += B.reward; p.bag.push({ b: c.sub }); p.ye.push(['boss', c.sub, B.reward]); storeProgress(p);
+      // no money right away: the boss goes into your catch. Sell it at the boat (reward) OR put it into the aquarium (€/s) – not both.
+      p.bag.push({ b: c.sub }); p.ye.push(['boss', c.sub, B.reward]); storeProgress(p);
     }
   }
 }
@@ -867,7 +867,8 @@ function expFishAction(p, m) {
     const f = p.bag.splice(i, 1)[0]; p.aq.push(f);
     p.ye.push(['aqin', catchToNet(f)]);
   } else if (m.k === 'aqsell' && p.aq[i]) {
-    const value = fishValue(p.aq[i]); p.money += value; p.aq.splice(i, 1); p.ye.push(['sold', 1, value]);
+    // set free: makes room, but no money – it already earned money per second (selling OR aquarium, not both)
+    const f = p.aq.splice(i, 1)[0]; p.ye.push(['aqfree', catchToNet(f)]);
   } else return false;
   storeProgress(p);
   return true;

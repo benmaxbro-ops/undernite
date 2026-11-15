@@ -114,7 +114,7 @@ export class Hud {
       : '<div class="empty">Noch nichts gefangen – ab ins Wasser!</div>';
     fish += `</div></div><div><h3>Aquarium · ${x.aq.length}/${cap} · +${perSec(x.aqRate)}</h3>`;
     if (base) {
-      fish += '<div class="fishList">' + (x.aq.length ? x.aq.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· +${perSec(frate(f))}</small></span><button data-k="aqsell" data-i="${i}">Verkaufen +${money(fval(f))}</button></div>`).join('')
+      fish += '<div class="fishList">' + (x.aq.length ? x.aq.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· +${perSec(frate(f))}</small></span><button data-k="aqsell" data-i="${i}">Freilassen</button></div>`).join('')
         : '<div class="empty">Leer. Nimm einen Fang in die Hand (Tasten 4–9 oder Q) und drück hier E – oder klick oben auf „Ins Aquarium“. Jeder Fisch verdient pro Sekunde Geld, Endbosse am meisten!</div>');
       const nextCap = AQUARIUM.sizes[x.aqLvl + 1];
       fish += '</div>' + (nextCap ? item(`▲ Größeres Aquarium`, `${cap} → ${nextCap} Plätze`, AQUARIUM.prices[x.aqLvl + 1], '', 'aqup', 0, '#3fa9f5') : item('Riesen-Aquarium!', 'Mehr Plätze gibt es nicht', null, 'Max'));

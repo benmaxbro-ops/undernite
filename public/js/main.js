@@ -173,6 +173,7 @@ function onPrivate(e) {
     case 'dead': held = -1; deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop(); break;
     case 'spawn': torch.on = false; torch.bat = LAMPS[torch.lvl].battery; me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
     case 'fish': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`${e[2] ? '⭐ <b style="color:#ffd34d">Goldener</b> ' : 'Gefangen: '}<b>${S.name}</b> · +${e[3]} €`, true); break; }
+    case 'aqfree': hud.feed(`Freigelassen: <b>${catchName(catchFromNet(e[1]))}</b>`, true); break;
     case 'sold': hud.banner(`${e[1]} Fische verkauft: +${e[2].toLocaleString('de-DE')} €`, 3); sfx.ping(); break;
     case 'bought': hud.shopMsg(`Gekauft: ${e[1]}`, true); hud.feed(`Gekauft: <b>${esc(e[1])}</b>`, true); sfx.crate(); break;
     case 'shop': hud.shopMsg(e[1]); hud.banner(e[1], 2); break;
@@ -180,7 +181,7 @@ function onPrivate(e) {
     case 'baseHint': hud.banner(e[1] ? 'Basis: Fang in die Hand (4–9) + E = ins Aquarium!' : 'Basis: Hier wird deine Luft aufgefüllt.', 4); sfx.ping(); break;
     case 'aqin': { const c = catchFromNet(e[1]); sfx.pickup(); hud.feed(`Ins Aquarium: <b>${catchName(c)}</b> · +${catchRate(c).toLocaleString('de-DE', { maximumFractionDigits: 2 })} €/s`, true); break; }
     case 'aqoffline': hud.banner(`Während du weg warst, hat dein Aquarium ${e[1].toLocaleString('de-DE')} € verdient!`, 5); sfx.ping(); break;
-    case 'boss': hud.banner(`${BOSSES[e[1]].name} besiegt! +${e[2].toLocaleString('de-DE')} € – und er ist jetzt in deiner Fang-Leiste (${BOSSES[e[1]].aq} €/s im Aquarium)!`, 5); sfx.ping(); break;
+    case 'boss': hud.banner(`${BOSSES[e[1]].name} besiegt! Verkaufen: ${e[2].toLocaleString('de-DE')} € – oder ins Aquarium: ${BOSSES[e[1]].aq} €/s`, 6); hud.feed(`☠ <b>${BOSSES[e[1]].name}</b> ist in deiner Fang-Leiste – am Boot verkaufen <b>oder</b> in der Basis ins Aquarium setzen`, true); sfx.ping(); break;
   }
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
