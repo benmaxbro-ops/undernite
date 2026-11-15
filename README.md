@@ -29,14 +29,14 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | R | nachladen: Magazin wechseln (das alte kommt in den Rucksack, der Kompressor füllt es wieder auf) |
 | E | Truhe öffnen, Waffe aufheben/tauschen, Fahrzeug ein-/aussteigen |
 | F | aus dem Oktopusgriff befreien (hämmern) |
-| L | Taschenlampe an/aus (Expedition) |
+| L | Helmlampe an/aus (in der Tiefe ist es stockdunkel) |
 | V | Ego-Perspektive an/aus (nicht in Fahrzeugen) |
-| G | Finisher (Battle Royale): Gegner mit höchstens 30 % Leben in der Nähe erledigen |
-| Rechtsklick (halten) | Zielfernrohr der Harpune – je weniger Leben, desto mehr wackelt es |
+| G | Finisher (Battle Royale): Gegner mit höchstens 30 % Leben in der Nähe erledigen (Manta 4 m, Triton 14 m, Bollwerk 10 m, Goliath 9 m) |
+| Rechtsklick (halten) | zielen über Kimme und Korn (alle Waffen), die Harpune mit Zielfernrohr – je weniger Leben, desto mehr wackelt es |
 
 ## Was drin ist (v0.1)
 
-- **Runde:** Absprung von der Oberfläche, Ausrüstung suchen, das *Schwarzwasser* (die Zone) zieht sich in
+- **Runde:** Start in der Tiefsee (rund 400 m tief, ohne Lampe stockdunkel, die Oberfläche ist unerreichbar), Ausrüstung suchen, das *Schwarzwasser* (die Zone) zieht sich in
   sechs Phasen zusammen, der Letzte gewinnt. Dauer ca. 5 Minuten.
 - **Anzüge:** Manta (klein, schnell, 70 LP) · Triton (Allrounder, 100 LP) · Bollwerk (Panzeranzug, 150 LP) ·
   Goliath (Mech, 240 LP, +12 % Schaden, passt in kein Fahrzeug, Oktopusse können ihn nicht halten).

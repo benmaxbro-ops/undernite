@@ -11,15 +11,17 @@ export const CELL = SIZE / GRID_N;
 export const TICK_HZ = 20;
 
 export const SUIT_ORDER = ['manta', 'triton', 'bulwark', 'goliath'];
+// dmg = Schaden mit Waffen (1 = normal). start = Startwaffe [Waffe, Seltenheit 0–3].
+// Je schwächer der Anzug, desto besser die Startwaffe – je stärker, desto schlechter schießt er.
 export const SUITS = {
-  manta:   { name: 'Manta',    hp: 70,  speed: 13.5, boost: 1.7,  r: 0.7, scale: 0.85, cam: 4.2, dmg: 1.0,
-             desc: 'Schlank, klein, extrem wendig. Schwer zu treffen, hält wenig aus.' },
-  triton:  { name: 'Triton',   hp: 100, speed: 11.0, boost: 1.6,  r: 0.9, scale: 1.0,  cam: 4.8, dmg: 1.0,
-             desc: 'Der Allrounder. Ausgewogen in Tempo und Panzerung.' },
-  bulwark: { name: 'Bollwerk', hp: 150, speed: 8.6,  boost: 1.5,  r: 1.2, scale: 1.3,  cam: 5.8, dmg: 1.0,
-             desc: 'Schwerer Panzeranzug. Langsam, aber zäh.' },
-  goliath: { name: 'Goliath',  hp: 240, speed: 6.3,  boost: 1.45, r: 1.9, scale: 1.0,  cam: 8.5, dmg: 1.12, mech: true,
-             desc: 'Tiefsee-Mech. Riesig, träge, schlägt härter zu. Passt in kein Fahrzeug, kein Oktopus hält ihn.' },
+  manta:   { name: 'Manta',    hp: 70,  speed: 13.5, boost: 1.7,  r: 0.7, scale: 0.85, cam: 4.2, dmg: 1.0,  start: ['needler', 1],
+             desc: 'Schlank, klein, extrem wendig. Schwer zu treffen, hält wenig aus. Startet mit einem seltenen Nadler.' },
+  triton:  { name: 'Triton',   hp: 100, speed: 11.0, boost: 1.6,  r: 0.9, scale: 1.0,  cam: 4.8, dmg: 1.0,  start: ['pistol', 1],
+             desc: 'Der Allrounder. Ausgewogen in Tempo und Panzerung. Startet mit einer seltenen Pistole.' },
+  bulwark: { name: 'Bollwerk', hp: 150, speed: 8.6,  boost: 1.5,  r: 1.2, scale: 1.3,  cam: 5.8, dmg: 0.95, start: ['pistol', 0],
+             desc: 'Schwerer Panzeranzug. Langsam, aber zäh. Schießt etwas schwächer.' },
+  goliath: { name: 'Goliath',  hp: 240, speed: 6.3,  boost: 1.45, r: 1.9, scale: 1.0,  cam: 8.5, dmg: 0.85, mech: true, start: ['pistol', 0],
+             desc: 'Tiefsee-Mech. Riesig, träge, enorm stark – aber mit Waffen der schwächste Schütze. Passt in kein Fahrzeug, kein Oktopus hält ihn.' },
 };
 
 export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp', 'plasma', 'sonic'];
@@ -27,28 +29,42 @@ export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo',
 // hitscan: true = trifft sofort (kein Flug), schießt einen Wasserstrahl. beam = Dicke des Strahls in Metern.
 // scope: true = mit der rechten Maustaste durchs Zielfernrohr schauen (je weniger Leben, desto wackliger).
 export const WEAPONS = {
-  pistol:  { name: 'Bolzenpistole',  dmg: 14, rate: 3.5, speed: 95,  mag: 12, reload: 1.3, spread: 0.008, range: 22, pellets: 1, splash: 0, hitscan: true, beam: 0.07 },
-  needler: { name: 'Nadler',         dmg: 10, rate: 9,   speed: 115, mag: 30, reload: 1.8, spread: 0.022, range: 38, pellets: 1, splash: 0, hitscan: true, beam: 0.05 },
-  scatter: { name: 'Splitterwerfer', dmg: 9,  rate: 1.3, speed: 85,  mag: 5,  reload: 2.0, spread: 0.085, range: 26, pellets: 7, splash: 0, hitscan: true, beam: 0.06 },
-  harpoon: { name: 'Harpune',        dmg: 68, rate: 0.9, speed: 150, mag: 3,  reload: 2.2, spread: 0.002, range: 65, pellets: 1, splash: 0, hitscan: true, beam: 0.08, scope: true },
-  torpedo: { name: 'Torpedowerfer',  dmg: 80, rate: 0.7, speed: 44,  mag: 2,  reload: 2.8, spread: 0.004, range: 80, pellets: 1, splash: 9 },
+  pistol:  { name: 'Bolzenpistole',  dmg: 14, rate: 3.5, speed: 95,  mag: 12, reload: 2.4, spread: 0.008, range: 22, pellets: 1, splash: 0, hitscan: true, beam: 0.07 },
+  needler: { name: 'Nadler',         dmg: 10, rate: 9,   speed: 115, mag: 30, reload: 2.8, spread: 0.022, range: 38, pellets: 1, splash: 0, hitscan: true, beam: 0.05 },
+  scatter: { name: 'Splitterwerfer', dmg: 9,  rate: 1.3, speed: 85,  mag: 5,  reload: 3.0, spread: 0.085, range: 26, pellets: 7, splash: 0, hitscan: true, beam: 0.06 },
+  harpoon: { name: 'Harpune',        dmg: 68, rate: 0.9, speed: 150, mag: 3,  reload: 3.0, spread: 0.002, range: 65, pellets: 1, splash: 0, hitscan: true, beam: 0.08, scope: true },
+  torpedo: { name: 'Torpedowerfer',  dmg: 80, rate: 0.7, speed: 44,  mag: 2,  reload: 3.6, spread: 0.004, range: 80, pellets: 1, splash: 9 },
   subtorp: { name: 'Bordtorpedo',    dmg: 60, rate: 1.1, speed: 58,  mag: 99, reload: 0,   spread: 0.004, range: 90, pellets: 1, splash: 8 },
   // expedition shop only (not in the Battle Royale loot)
-  plasma:  { name: 'Plasmalanze',    dmg: 32, rate: 5,   speed: 170, mag: 25, reload: 2.0, spread: 0.006, range: 75, pellets: 1, splash: 0, hitscan: true, beam: 0.11 },
-  sonic:   { name: 'Schallkanone',   dmg: 150, rate: 1.1, speed: 120, mag: 4, reload: 2.6, spread: 0.003, range: 110, pellets: 1, splash: 10 },
+  plasma:  { name: 'Plasmalanze',    dmg: 32, rate: 5,   speed: 170, mag: 25, reload: 3.0, spread: 0.006, range: 75, pellets: 1, splash: 0, hitscan: true, beam: 0.11 },
+  sonic:   { name: 'Schallkanone',   dmg: 150, rate: 1.1, speed: 120, mag: 4, reload: 3.6, spread: 0.003, range: 110, pellets: 1, splash: 10 },
 };
 for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
 // Kompressor im Rucksack: Jede Waffe hat ein Magazin in der Waffe und "spares" Ersatzmagazine im Rucksack.
-// Der Kompressor füllt die Ersatzmagazine nacheinander wieder auf. fill = Sekunden, bis ein leeres Magazin wieder voll ist
-// (große Waffen brauchen länger). Beim Nachladen kommt das alte Magazin zurück in den Rucksack und wird dort wieder gefüllt.
+// Der Kompressor füllt die Ersatzmagazine nacheinander wieder auf. fill = Sekunden, bis ein leeres Magazin wieder voll ist.
+// Beim Nachladen kommt das alte Magazin zurück in den Rucksack und wird dort wieder gefüllt.
+// Abgestimmt: Im Dauerfeuer schießt jede Waffe nur etwa 1/5 so schnell wie mit vollen Magazinen (fill = mag / (rate × 0,22)).
+// Man kann also nicht durchgehend ballern, sondern muss mit der Munition haushalten.
 export const COMPRESSOR = {
   spares: 2,
-  fill: { pistol: 6, needler: 8, scatter: 9, harpoon: 10, torpedo: 14, subtorp: 1, plasma: 10, sonic: 16 },
+  fill: { pistol: 16, needler: 15, scatter: 17, harpoon: 15, torpedo: 13, subtorp: 1, plasma: 23, sonic: 17 },
 };
 
 // Finisher (nur Battle Royale): hat ein Gegner höchstens hp × 100 % Leben und ist nah genug (range in Metern),
 // kann man ihn mit G erledigen. Jede Klasse hat ihre eigene Animation (siehe finisher.js).
-export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 10, goliath: 6 } };
+export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 10, goliath: 9 } };   // Goliath ist riesig und greift weit
+
+// Tiefsee: Battle Royale spielt in brOffset Metern Tiefe (kein Sonnenlicht, keine Oberfläche).
+// brCeil = so viele Meter unter der alten Oberfläche ist die obere Grenze, höher kann man nicht schwimmen.
+export const DEEP = { brOffset: 380, brCeil: 25 };
+
+// Leuchtkorallen auf dem ganzen Meeresboden: leuchten (etwas heller als Quallen) und sind scharf.
+// Wer sie berührt, schneidet sich (dmg) und blutet danach bleed Sekunden lang (bleedDps Schaden pro Sekunde, geht durchs Schild).
+// Höhlen um Truhen im Riff: ring = Abstand der Felsbrocken von der Truhe, stones = Anzahl, stone = Größe, height = Dachhöhe
+export const CAVE = { ring: 3.6, stones: 9, stone: 1.9, height: 3.6 };
+// Korallen-Berge an jedem Riff: count Hügel mit Radius min…max Metern
+export const REEF_MOUNDS = { count: 14, min: 4, max: 9, spread: 26 };
+export const GLOW_CORALS = { count: 520, dmg: 6, bleed: 4, bleedDps: 2.5, cooldown: 1.2 };
 
 export const RARITY = [
   { name: 'Gewöhnlich', color: '#9fb2bd', mul: 1.0 },
@@ -174,7 +190,7 @@ export const LUNGS = [
 ];
 // Flashlights: toggle with L, battery (seconds) recharges at the surface.
 export const LAMPS = [
-  { name: 'Taschenlampe',      range: 40,  power: 120, angle: 0.38, battery: 60,  price: 0 },
+  { name: 'Taschenlampe',      range: 40,  power: 120, angle: 0.38, battery: 150, price: 0 },   // länger, weil es jetzt schnell dunkel wird
   { name: 'Tauchlampe',        range: 60,  power: 200, angle: 0.42, battery: 120, price: 1500 },
   { name: 'Halogen-Strahler',  range: 85,  power: 300, angle: 0.47, battery: 200, price: 6000 },
   { name: 'Tiefsee-Flutlicht', range: 120, power: 450, angle: 0.55, battery: 320, price: 20000 },
@@ -391,7 +407,7 @@ export class World {
     }
     this.kelpSites = kelpSites;
     // coral reefs + scattered coral
-    const reefs = [];
+    const reefs = []; this.reefSites = reefs;
     for (let i = 0; i < 4; i++) reefs.push(exp ? ringSite(i < 3 ? 245 : 185, i < 3 ? 268 : 205) : pickSite(230, reefs, 80));
     const pal = [0xff5d8f, 0xff9a3c, 0xc86bff, 0xffd84d, 0x35e0c8, 0xff6b5e];
     for (let i = 0; i < 620; i++) {
@@ -445,6 +461,53 @@ export class World {
       { n: 'Wrack', x: ws.x, z: ws.z }, { n: 'Ruinen', x: rs.x, z: rs.z },
       { n: 'Seeberg', x: this.smx, z: this.smz }, { n: 'Kelpwald', x: kelpSites[0].x, z: kelpSites[0].z },
     ];
+    // Leuchtkorallen überall auf dem Boden. Eigener Zufall (RG), damit sich der Rest der Welt nicht verschiebt.
+    const RG = rng(this.seed ^ 0x51ed270b);
+    this.glowCorals = [];
+    for (let i = 0; i < GLOW_CORALS.count; i++) {
+      const x = (RG() * 2 - 1) * (PLAY - 8), z = (RG() * 2 - 1) * (PLAY - 8), s = 0.6 + RG() * 0.9, col = (RG() * 3) | 0, rot = RG() * TAU;
+      if (exp && Math.hypot(x - EXP_BOAT.x, z - EXP_BOAT.z) < 40) continue;                      // nicht unter dem Boot
+      if ((this.bases || []).some(b => Math.hypot(b.c.x - x, b.c.z - z) < 14)) continue;          // nicht in den Basen
+      const y = this.heightAt(x, z);
+      if (y > SURFACE - 8) continue;                                                               // nicht oben am Rand
+      this.glowCorals.push({ x, y, z, s, col, rot });
+    }
+    // Höhlen im Riff: um Truhen, die in einem Riff liegen, wird ein Ring aus Felsbrocken mit einem schmalen Eingang
+    // und ein Dach gebaut. So sind die Truhen versteckt und man muss hineinschwimmen. Eigener Zufall (RC).
+    const RC = rng(this.seed ^ 0x2c1b3c6d);
+    this.caves = [];
+    const addCol = (c) => {   // Fels zum Kollisions-Gitter hinzufügen (das Gitter ist schon gebaut)
+      this.cols.push(c);
+      const pad = c.r + 4;
+      for (let cx = Math.floor((c.x - pad) / HC); cx <= Math.floor((c.x + pad) / HC); cx++)
+        for (let cz = Math.floor((c.z - pad) / HC); cz <= Math.floor((c.z + pad) / HC); cz++) {
+          const k = hkey(cx, cz); let l = this.hash.get(k); if (!l) this.hash.set(k, l = []); l.push(c);
+        }
+    };
+    this.reefMounds = [];   // Korallen-Berge und Höhlenwände (Kugeln: Position + Radius), werden in reef.js gezeichnet
+    // Hitbox kleiner als die sichtbare (knubbelige) Form, damit man nie gegen "Luft" stößt
+    const rock = (x, y, z, r) => { const sx = 0.9 + RC() * 0.3, sy = 0.8 + RC() * 0.3, sz = 0.9 + RC() * 0.3; this.reefMounds.push({ x, y, z, r, sx, sy, sz, rot: RC() * TAU }); addCol({ x, y, z, r: r * Math.min(sx, sy, sz) * 0.78 }); };
+    for (const cr of this.crates) {
+      if (!reefs.some(s => Math.hypot(s.x - cr.x, s.z - cr.z) < 36)) continue;   // nur Truhen im Riff
+      const door = RC() * TAU, ring = CAVE.ring;
+      for (let i = 0; i < CAVE.stones; i++) {
+        const a = door + (i + 1) / (CAVE.stones + 1) * TAU;                        // rundherum, nur am Eingang (door) bleibt eine Lücke
+        const x = cr.x + Math.cos(a) * ring, z = cr.z + Math.sin(a) * ring, r = CAVE.stone + RC() * 0.4;
+        rock(x, Math.max(this.heightAt(x, z), cr.y - 0.5) + r * 0.55, z, r);
+      }
+      const top = cr.y + CAVE.height;
+      rock(cr.x, top, cr.z, ring * 0.95);                                            // Dach
+      for (let i = 0; i < 3; i++) { const a = door + Math.PI + (i - 1) * 1.6; rock(cr.x + Math.cos(a) * ring * 0.8, top - 0.6, cr.z + Math.sin(a) * ring * 0.8, CAVE.stone * 0.9); }
+      this.caves.push({ x: cr.x, y: cr.y, z: cr.z, door, ring, top });
+    }
+    // große Korallen-Hügel an jedem Riff (nicht auf die Höhlen und nicht auf andere Truhen)
+    for (const s of reefs) for (let k = 0; k < REEF_MOUNDS.count; k++) {
+      const a = RC() * TAU, d = RC() * REEF_MOUNDS.spread, x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d;
+      const r = REEF_MOUNDS.min + RC() * (REEF_MOUNDS.max - REEF_MOUNDS.min);
+      if (this.caves.some(c => Math.hypot(c.x - x, c.z - z) < c.ring + r + 1.5)) continue;
+      if (this.crates.some(c => Math.hypot(c.x - x, c.z - z) < r + 2)) continue;
+      rock(x, this.heightAt(x, z) + r * 0.3, z, r);
+    }
   }
 
   _raw(x, z) {

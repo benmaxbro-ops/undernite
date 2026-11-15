@@ -90,6 +90,10 @@ export function buildRealDiver(suit, accent) {
 
   // ----- head: hood, mask, regulator -----
   const head = new THREE.Group(); head.position.set(0, 0.04, -0.68); g.add(head);
+  // Kopflampe auf der Haube: leuchtet immer ein bisschen, damit man andere Taucher im Dunkeln erkennt
+  const lampM = mat(0xf2f7ff, { emissive: 0xf2f7ff, emissiveIntensity: 2.4 });   // kaltweiße LED
+  put(head, CYL, rubber, 0, 0.1, -0.05, 0.03, 0.05, 0.03).rotation.x = Math.PI / 2 - 0.4;
+  put(head, SPH, lampM, 0, 0.11, -0.077, 0.022, 0.022, 0.012);
   put(g, CYL, suitBlack, 0, 0.03, -0.58, 0.07, 0.12, 0.07).rotation.x = Math.PI / 2 - 0.3;   // neck
   put(head, SPH, suitBlack, 0, 0, 0, 0.11, 0.115, 0.13);                                         // hooded head
   put(head, SPH, mat(0x0d0f12, { roughness: 0.6 }), 0, -0.02, 0.08, 0.1, 0.1, 0.1);              // back of hood

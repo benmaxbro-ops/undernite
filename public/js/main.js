@@ -1,9 +1,9 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
-import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER,
+import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
   creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow } from './shared.js';
 import { buildEnvironment } from './world.js';
-import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, RELOAD_STEPS, makeFish, makeBoss, makeTrophy } from './models.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy } from './models.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
@@ -17,12 +17,15 @@ const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.25, 9
 camera.rotation.order = 'YXZ'; scene.add(camera);
 const hemi = new THREE.HemisphereLight(0xb5e8ff, 0x12303c, 1.25); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xdff6ff, 1.35); sun.position.set(0.35, 1, 0.2); scene.add(sun);
-const lamp = new THREE.SpotLight(0xe6fbff, 0, 90, 0.42, 0.8, 1.1); lamp.position.set(0, -1.2, 0);
-camera.add(lamp); lamp.target.position.set(0, 0, -1); camera.add(lamp.target);
+// Helmlampe: kaltweißes LED-Licht, sitzt am Helm des Tauchers (nicht an der Kamera) und leuchtet nur einen engen Kegel
+// in Blickrichtung aus. penumbra 0.35 = ziemlich scharfer Rand, decay 1.6 = wird mit der Entfernung schnell schwächer.
+const LAMP_COLOR = 0xf2f7ff;
+const lamp = new THREE.SpotLight(LAMP_COLOR, 0, 90, 0.42, 0.35, 1.6);
+scene.add(lamp); scene.add(lamp.target);
 // visible light cone of the expedition flashlight (apex at the diver, opening towards -z)
 const torchBeam = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).translate(0, -0.5, 0).rotateX(Math.PI / 2),
   new THREE.ShaderMaterial({   // bright at the lamp, fading out towards the end of the cone
-    uniforms: { c: { value: new THREE.Color(0xfff3c4) }, o: { value: 0.11 } },
+    uniforms: { c: { value: new THREE.Color(LAMP_COLOR) }, o: { value: 0.08 } },
     vertexShader: 'varying float vz; void main() { vz = -position.z; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: 'uniform vec3 c; uniform float o; varying float vz; void main() { gl_FragColor = vec4(c, o * pow(1.0 - vz, 1.8)); }',
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
@@ -43,7 +46,15 @@ let held = -1;   // expedition: index of the caught fish/boss in your hand (-1 =
 const beams = [], BEAM_TIME = 0.18;
 // Waffe in der Ego-Perspektive: hängt an der Kamera, rechts unten im Bild.
 // gills = wie weit die Kiemen offen sind (0…1), charge = wie voll das Druckfenster ist (0…1), kick = Rückstoß nach einem Schuss
-const view = { g: new THREE.Group(), gun: null, arms: null, rHand: null, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, tilt: 0, rsnd: 0 };
+const flashLight = new THREE.PointLight(0x9fe4ff, 0, 5, 1.6); flashLight.position.set(0.15, -0.08, -0.6); camera.add(flashLight);
+// Mündungsblitz: zwei gekreuzte leuchtende Scheiben und ein heller Kern (blau-weiß, wie ein Druckstoß aus Wasser)
+function makeFlash() {
+  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  for (const r of [0, Math.PI / 2]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.14), m); p.position.z = -0.06; p.rotation.set(Math.PI / 2, 0, r); g.add(p); }
+  const c = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), m); c.position.z = -0.015; g.add(c);
+  return g;
+}
+const view = { g: new THREE.Group(), gun: null, arms: null, rHand: null, rl: 0, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, tilt: 0, rsnd: 0 };
 view.g.position.set(0.15, -0.13, 0);   // rechts, unten (die Tiefe kommt von der Waffe selbst, siehe updateViewModel)
 camera.add(view.g);
 // firstPerson = Taste V gedrückt (Ego-Perspektive), fpOn = sie ist gerade wirklich aktiv (nicht in Fahrzeugen)
@@ -94,6 +105,8 @@ function openShop(kind) { hud.openShop(you, kind); firing = false; if (document.
 function closeShop() { hud.closeShop(); lock(); }
 hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeShop(); send({ t: 'quit' }); });
 function clearDyn() {
+  for (const p of projs.values()) if (p.whine) p.whine.stop();
+  sfx.engine(0);
   dyn.clear(); players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
   you = null; zone = null; deadInfo = null; specId = 0;
 }
@@ -101,7 +114,7 @@ function onStart(m) {
   mode = m.mode || 'br';
   ensureWorld(m.seed, mode); clearDyn();
   phase = 'play'; meta.clear(); hud.setMode(mode);
-  torch.on = false; torchBeam.visible = false;
+  torch.on = false; torchBeam.visible = false; torch.bat = LAMPS[torch.lvl].battery;   // Akku zurücksetzen (im Battle Royale war er unendlich)
   for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] });
   if (meta.has(myId)) mySuit = meta.get(myId).suit;
   if (mode === 'br') crates = W.crates.map((c, i) => { const g = makeCrate(); g.position.set(c.x, c.y, c.z); g.rotation.y = c.yaw; if (m.crates[i]) g.userData.open(); dyn.add(g); return g; });
@@ -186,7 +199,8 @@ function onEvent(e) {
       const mz = muzzleOf(e[3]); if (mz) { e[4] = mz.x; e[5] = mz.y; e[6] = mz.z; }
       const widx = e[2], def = WEAPONS[WEAPON_IDS[widx]], mesh = makeProjectile(widx);
       mesh.position.set(e[4], e[5], e[6]); mesh.lookAt(e[4] + e[7], e[5] + e[8], e[6] + e[9]); dyn.add(mesh);
-      projs.set(e[1], { mesh, x: e[4], y: e[5], z: e[6], dx: e[7], dy: e[8], dz: e[9], sp: def.speed, life: def.life, trail: widx >= 4 ? 0.03 : 0.09, tt: 0, mine: e[3] === myId });
+      projs.set(e[1], { mesh, x: e[4], y: e[5], z: e[6], dx: e[7], dy: e[8], dz: e[9], sp: def.speed, life: def.life, trail: widx >= 4 ? 0.03 : 0.09, tt: 0, mine: e[3] === myId,
+        whine: widx === 4 || widx === 5 ? sfx.torpedoWhine() : null });   // Torpedos: hohes, sirrendes Heulen
       if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]));
       projs.lastShot = time;
       if (e[3] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
@@ -207,7 +221,15 @@ function onEvent(e) {
       break;
     }
     case 'hit': removeProj(e[1]); env.bubble(e[2], e[3], e[4], 7, 0.4, 2); if (e[5] === 1 || e[5] === 3) env.blood(e[2], e[3], e[4]); sfx.hit(volAt(e[2], e[3], e[4])); break;
-    case 'boom': { removeProj(e[1]); env.explosion(e[2], e[3], e[4], e[5]); const v = volAt(e[2], e[3], e[4]); sfx.boom(v); shake = Math.max(shake, v * 0.9); break; }
+    case 'boom': {
+      removeProj(e[1]); env.explosion(e[2], e[3], e[4], e[5]);
+      // Wasser trägt tiefe Töne sehr weit: das Grollen hört man bis 600 m, das metallische Klicken nur in der Nähe
+      const d = Math.hypot(e[2] - camera.position.x, e[3] - camera.position.y, e[4] - camera.position.z);
+      const far = Math.max(0, 1 - d / 600) ** 1.4, near = volAt(e[2], e[3], e[4]);
+      sfx.boom(far, near);
+      shake = Math.max(shake, near * 1.4 + far * 0.25);   // Druckstoß: man spürt ihn als Schlag
+      break;
+    }
     case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); break; }
     case 'pk+': addPickup(e.slice(1)); break;
     case 'pk-': { const p = pickups.get(e[1]); if (p) { dyn.remove(p.mesh); pickups.delete(e[1]); } break; }
@@ -229,7 +251,7 @@ function onEvent(e) {
 // ---------- Finisher ----------
 const fins = [];      // alle Finisher, die gerade laufen
 let myFin = null;     // mein eigener (dann steuert die Animation meinen Taucher und die Kamera)
-let lastGrunt = 0;
+let lastGrunt = 0, sonarT = 2, bleedT = 0, bleedPuff = 0;   // bleedT = so lange blutest du noch   // sonarT = Sekunden bis zum nächsten Sonar-Ping im U-Boot
 const finCtx = {
   dyn, sfx, get env() { return env; },
   posOf: (id) => id === myId ? me : players.get(id),
@@ -265,6 +287,7 @@ function onPrivate(e) {
     }
     // Treffer: e = ['hm', Schaden, Kill, Leben übrig 0…1, Schild zerbrochen]
     case 'hm': hud.hitmark(e[1], e[2], e[3]); sfx.hitmark(e[2]); if (e[4]) sfx.shieldBreak(1); break;
+    case 'bleed': bleedT = e[1]; hud.banner('Autsch! An einer scharfen Koralle geschnitten – du blutest!', 2.2); break;
     case 'shb': sfx.shieldBreak(0.8); hud.banner('Schild zerstört!', 1.2); shake = Math.max(shake, 0.35); break;   // dein eigenes Schild
     case 'warn': hud.banner(e[1], 2.5); break;
     case 'grab': hud.banner('Ein Oktopus hat dich gepackt – F hämmern!', 3); break;
@@ -285,7 +308,7 @@ function onPrivate(e) {
   }
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-function removeProj(id) { const p = projs.get(id); if (p) { dyn.remove(p.mesh); projs.delete(id); } }
+function removeProj(id) { const p = projs.get(id); if (p) { dyn.remove(p.mesh); if (p.whine) p.whine.stop(); projs.delete(id); } }
 
 // ---------- input ----------
 addEventListener('keydown', (e) => {
@@ -296,8 +319,8 @@ addEventListener('keydown', (e) => {
   if (phase !== 'play' || !you || !you.alive) return;
   if (e.code === 'KeyV') { firstPerson = !firstPerson; return; }   // Ego-Perspektive an/aus
   if (e.code === 'KeyG') { const t = finTarget(); if (t) send({ t: 'fin', id: t.id }); return; }   // Finisher
-  if (mode === 'exp' && e.code === 'KeyL') {
-    if (torch.bat <= 0) hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 2);
+  if (e.code === 'KeyL') {
+    if (mode === 'exp' && torch.bat <= 0) hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 2);
     else { torch.on = !torch.on; sfx.hitmark(false); }
     return;
   }
@@ -370,7 +393,8 @@ function controlMe(dt) {
   me.vx += (wx * speed - me.vx) * k; me.vy += (wy * speed - me.vy) * k; me.vz += (wz * speed - me.vz) * k;
   me.x += me.vx * dt; me.y += me.vy * dt; me.z += me.vz * dt;
   // divers may swim right up until head and shoulders are out of the water (vehicles stay below)
-  W.collide(me, r, vt ? undefined : SURFACE - 0.15);
+  // Expedition: bis an die Oberfläche (Kopf schaut raus). Battle Royale: Tiefsee, die obere Grenze liegt tief unter der Oberfläche
+  W.collide(me, r, mode === 'exp' ? (vt ? undefined : SURFACE - 0.15) : SURFACE - DEEP.brCeil);
   // splash when breaking through the surface
   const atTop = SURFACE - me.y < 0.6;
   if (atTop && !me.surfaced && me.vy > 0.5) { env.bubble(me.x, SURFACE - 0.4, me.z, 28, 1.4, 1.5); sfx.noise(0.45, 1100, 0.7, 0.35, 'lowpass', 250); }
@@ -423,23 +447,68 @@ function placeHeld() {
   if (held < 0 || !you.x.bagL[held]) return;
   send({ t: 'buy', k: 'aq', i: held }); held = -1;
 }
+// ---------- Leuchtende Quallen und Korallen als schwache Lichtquellen ----------
+// Jedes Licht kostet Rechenzeit, darum gibt es nur GLOW.lights Stück. Sie springen viermal pro Sekunde zu den
+// Quallen und leuchtenden Korallen, die dir am nächsten sind. So sieht man um sie herum dezent den Boden.
+const GLOW = { lights: 8, range: 10, jelly: 16, coral: 5, near: 70 };   // Helligkeit: Quallen 16, Korallen 5
+const glowLights = [];
+for (let i = 0; i < GLOW.lights; i++) { const l = new THREE.PointLight(0xffffff, 0, GLOW.range, 2); scene.add(l); glowLights.push(l); }
+let glowT = 0, glowPick = [];
+function updateGlow(dt) {
+  if (!env) return;
+  const cp = camera.position, d2 = (o) => (o.x - cp.x) ** 2 + (o.y - cp.y) ** 2 + (o.z - cp.z) ** 2, max = GLOW.near * GLOW.near;
+  glowT -= dt;
+  if (glowT <= 0) {   // die nächsten Leuchtquellen suchen
+    glowT = 0.25;
+    const cand = [];
+    for (const c of creatures.values()) if (c.type === 'jelly') { const d = d2(c); if (d < max) cand.push({ c, d }); }
+    for (const g of env.glow || []) { const d = d2(g); if (d < max) cand.push({ g, d }); }
+    cand.sort((a, b) => a.d - b.d); glowPick = cand.slice(0, GLOW.lights);
+  }
+  glowLights.forEach((l, i) => {
+    const p = glowPick[i];
+    if (!p) { l.intensity = 0; return; }
+    if (p.c) {   // Qualle: wandert mit und pulsiert mit ihrem Schwimmtakt
+      l.position.set(p.c.x, p.c.y + 0.2, p.c.z); l.color.setHex(p.c.mesh.userData.glowColor || 0x7ae6ff);
+      l.intensity = GLOW.jelly * (0.75 + 0.25 * Math.sin(time * 2.4 + i));
+    } else { l.position.set(p.g.x, p.g.y, p.g.z); l.color.setHex(p.g.col); l.intensity = p.g.I || GLOW.coral; }
+  });
+}
+// ---------- Licht ----------
+// Je tiefer, desto dunkler. darkDepth = ab hier ist es fast schwarz (nur noch ambientMin übrig), sunDepth = hier endet das Sonnenlicht.
+// Battle Royale wird schneller dunkel, in der Expedition etwas langsamer (dort hat die Lampe einen Akku).
+// Im Battle Royale ist man immer in der Tiefsee (DEEP.brOffset Meter), dort kommt gar kein Sonnenlicht mehr an.
+const LIGHT = { br: { darkDepth: 70, sunDepth: 40, ambientMin: 0.03 }, exp: { darkDepth: 60, sunDepth: 30, ambientMin: 0.025 } };
+const depthOffset = () => mode === 'exp' ? 0 : DEEP.brOffset;   // so viele Meter kommen zur echten Tiefe dazu
+const BR_LAMP = { range: 70, power: 300, angle: 0.34, battery: Infinity };   // Helmlampe im Battle Royale (enger Kegel)
 function updateTorch(dt, depth) {
-  const lvl = you.x.lamp || 0, L = LAMPS[lvl];
-  if (lvl !== torch.lvl) { torch.lvl = lvl; torch.bat = L.battery; }   // new lamp bought: comes fully charged
-  if (depth < 2.6) torch.bat = Math.min(L.battery, torch.bat + L.battery * 0.25 * dt);
+  const exp = mode === 'exp', lvl = exp ? you.x.lamp || 0 : 0, L = exp ? LAMPS[lvl] : BR_LAMP;
+  if (exp && lvl !== torch.lvl) { torch.lvl = lvl; torch.bat = L.battery; }   // new lamp bought: comes fully charged
+  if (!exp) torch.bat = Infinity;
+  else if (depth < 2.6) torch.bat = Math.min(L.battery, torch.bat + L.battery * 0.25 * dt);
   else if (torch.on && you.alive) {
     torch.bat = Math.max(0, torch.bat - dt);
     if (torch.bat <= 0) { torch.on = false; hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 3); }
   }
-  if (!torch.hinted && !torch.on && depth > 70 && torch.bat > 0) { torch.hinted = true; hud.banner('Zu dunkel? Drück L für die Taschenlampe!', 3.5); }
+  if (!torch.hinted && !torch.on && depth > (exp ? 70 : 30) && torch.bat > 0) { torch.hinted = true; hud.banner('Zu dunkel? Drück L für die Taschenlampe!', 3.5); }
   lamp.intensity = torch.on && you.alive ? L.power : 0; lamp.distance = L.range; lamp.angle = L.angle;
+  // die Lampe sitzt vorne am Helm und zeigt dorthin, wo du hinschaust
+  const dir = dirFrom(camYaw, camPitch), up = SUITS[mySuit].mech ? 1.4 : 0.15, fwd = SUITS[mySuit].mech ? 0.5 : 0.65;
+  lamp.position.set(me.x + dir[0] * fwd, me.y + up + dir[1] * fwd, me.z + dir[2] * fwd);
+  lamp.target.position.set(lamp.position.x + dir[0] * 10, lamp.position.y + dir[1] * 10, lamp.position.z + dir[2] * 10);
   torchBeam.visible = lamp.intensity > 0;
   if (torchBeam.visible) {
     const len = L.range * 0.6, r = len * Math.tan(L.angle) * 0.75;
     torchBeam.scale.set(r, r, len);
-    torchBeam.position.set(me.x, me.y + 0.3, me.z);
+    torchBeam.position.copy(lamp.position);
     torchBeam.rotation.set(camPitch, camYaw, 0);
   }
+}
+// Umgebungslicht (hemi) und Sonne werden mit der Tiefe schwächer – nicht gleichmäßig, sondern zuerst schnell, dann langsam
+function darkness(dep, D) {
+  const a = Math.max(0, Math.min(1, 1 - dep / D.darkDepth)), s = Math.max(0, Math.min(1, 1 - dep / D.sunDepth));
+  hemi.intensity = 1.25 * Math.max(D.ambientMin, a * a);
+  sun.intensity = 1.35 * s * s;
 }
 function aimDir() {
   const cd = dirFrom(camYaw, camPitch), cp = camera.position;
@@ -509,23 +578,31 @@ function updateEntities(dt) {
     const near = e.mesh.position.distanceToSquared(camera.position);
     if (e.mesh.userData.tag) e.mesh.userData.tag.visible = near < 55 * 55;
     // breathing: every few seconds the diver exhales a cloud of bubbles from the regulator
-    e.breath = (e.breath ?? Math.random() * 4) - dt * (e.fl & 2 ? 1.7 : 1);
+    // Atemtempo: beim Sprinten steigt es schnell auf BREATH_SPRINT (fast 3-mal so schnell), danach beruhigt es sich langsam wieder
+    const sprint = e.id === myId ? me.boost : !!(e.fl & 2);
+    e.brate = (e.brate ?? 1) + ((sprint ? BREATH_SPRINT : 1) - (e.brate ?? 1)) * Math.min(1, dt * (sprint ? 1.2 : 0.18));
+    e.breath = (e.breath ?? Math.random() * 4) - dt * e.brate;
     const myBreath = e.id === myId && you && you.alive && SURFACE - e.y > 1.2 && !myFin;
-    if (myBreath && !e.inhaled && e.breath < 1.9) { e.inhaled = true; sfx.inhale(BREATH_VOL); }
-    if (e.breath <= 0) { e.breath = 3.4 + Math.random() * 1.4; e.exhale = 0.9; e.inhaled = false; if (myBreath) sfx.exhale(BREATH_VOL); }
+    const pant = (e.brate - 1) / (BREATH_SPRINT - 1);   // 0 = ruhig, 1 = außer Atem: kürzer und lauter
+    if (myBreath && !e.inhaled && e.breath < 1.9) { e.inhaled = true; sfx.inhale(BREATH_VOL * (1 + pant * 0.6), e.brate); }
+    if (e.breath <= 0) { e.breath = 3.4 + Math.random() * 1.4; e.exhale = 0.9; e.inhaled = false; if (myBreath) sfx.exhale(BREATH_VOL * (1 + pant * 0.5), e.brate); }
     if (e.exhale > 0 && near < 90 * 90 && SURFACE - e.y > 1.2) {
       e.exhale -= dt;
       const f = dirFrom(e.yaw, e.pitch), big = e.exhale > 0.45, n = Math.random() < (big ? 0.9 : 0.5) ? (big ? 2 : 1) : 0;
       for (let i = 0; i < n; i++) env.bubble(e.x + f[0] * 0.8, e.y + f[1] * 0.8 - 0.05, e.z + f[2] * 0.8, 1, 0.1, 0, big ? 0.04 + Math.random() ** 1.5 * 0.17 : 0.02 + Math.random() * 0.06);
     }
   }
+  let engine = 0;
   for (const v of vehicles.values()) {
+    if (v.type === 'sub' && v.driver) { const d = Math.hypot(v.x - camera.position.x, v.y - camera.position.y, v.z - camera.position.z); engine = Math.max(engine, Math.min(1, (v.speed || 0) / 12 + 0.25) * Math.max(0, 1 - d / 150)); }
     if (v.driver === myId && alive) { v.x = me.x; v.y = me.y; v.z = me.z; v.yaw = me.hyaw; v.pitch = me.hpitch; v.speed = Math.hypot(me.vx, me.vy, me.vz); }
     else { const ox = v.x, oz = v.z, oy = v.y; v.x += (v.tx - v.x) * k; v.y += (v.ty - v.y) * k; v.z += (v.tz - v.z) * k; v.yaw = lerpAngle(v.yaw, v.tyaw, k); v.pitch += (v.tpitch - v.pitch) * k; v.speed += (Math.hypot(v.x - ox, v.y - oy, v.z - oz) / dt - v.speed) * 0.2; }
     v.mesh.position.set(v.x, v.y, v.z); v.driven = !!v.driver;
     v.mesh.userData.update(dt, v);
+    if (v.driver === myId && v.type === 'sub' && alive) { sonarT -= dt; if (sonarT <= 0) { sonarT = 6; sfx.sonar(); } }
     if (v.driver && v.speed > 3 && Math.random() < dt * 25) { const f = dirFrom(v.yaw, v.pitch), o = v.type === 'sub' ? 4.2 : 0.6; env.bubble(v.x - f[0] * o, v.y - f[1] * o, v.z - f[2] * o, 1, 0.8, 1); }
   }
+  sfx.engine(engine);
   for (const c of creatures.values()) {
     c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k; c.z += (c.tz - c.z) * k; c.yaw = lerpAngle(c.yaw, c.tyaw, k); c.pitch += (c.tpitch - c.pitch) * k;
     c.mesh.position.set(c.x, c.y, c.z); c.mesh.userData.update(dt, c);
@@ -537,6 +614,7 @@ function updateEntities(dt) {
     // fremdes Geschoss fliegt knapp an mir vorbei → "Schusch" (nur einmal pro Geschoss)
     if (!p.mine && !p.wh && you && you.alive) { const d = Math.hypot(p.x - me.x, p.y - me.y, p.z - me.z); if (d < NEAR_MISS + 0.5) { p.wh = true; whooshAt(p.x, p.y, p.z, d); } }
     p.tt -= dt; if (p.tt <= 0) { p.tt = p.trail; env.bubble(p.x, p.y, p.z, 1, 0.1, 0, 0.025 + Math.random() * 0.03); }
+    if (p.whine) { const d = Math.hypot(p.x - camera.position.x, p.y - camera.position.y, p.z - camera.position.z); p.whine.set(Math.max(0, 1 - d / 140) ** 1.5); }
     if (p.life <= -0.15 || p.y < W.heightAt(p.x, p.z) - 0.5) removeProj(id);
   }
   // Wasserstrahlen verblassen in BEAM_TIME Sekunden und verschwinden dann
@@ -549,19 +627,26 @@ function updateEntities(dt) {
 // ---------- Zielfernrohr (Harpune) ----------
 // Rechte Maustaste halten: Zoom (Sichtfeld von FOV auf SCOPE_FOV Grad), Fernrohr-Bild, und das Zielen wackelt.
 // Je weniger Leben man hat, desto mehr wackelt es (SWAY_MIN bei vollem Leben, SWAY_MAX kurz vor dem Tod).
-const FOV = 72, SCOPE_FOV = 16, SWAY_MIN = 0.0015, SWAY_MAX = 0.018;
-let scoping = false, scoped = 0, swayT = 0, swayX = 0, swayY = 0;
-const BREATH_VOL = 0.8;   // Lautstärke der Atemgeräusche
+// Rechte Maustaste halten = zielen. Waffen mit Zielfernrohr (scope: true) zoomen stark auf SCOPE_FOV,
+// alle anderen holt man vors Auge und schaut über Kimme und Korn (ADS_FOV = leichter Zoom).
+const FOV = 72, SCOPE_FOV = 16, ADS_FOV = 50, SWAY_MIN = 0.0015, SWAY_MAX = 0.018;
+let scoping = false, aim = 0, scoped = 0, swayT = 0, swayX = 0, swayY = 0;
+const BREATH_VOL = 0.8;     // Lautstärke der Atemgeräusche
+const BREATH_SPRINT = 2.8; // so viel schneller atmet man beim Sprinten
 function updateScope(dt) {
   const w = you && you.alive && !you.veh && held < 0 ? you.w[you.slot] : null;
-  const can = scoping && w && WEAPONS[w[0]].scope && !myFin;
-  scoped += ((can ? 1 : 0) - scoped) * Math.min(1, dt * 12);
-  const fov = FOV + (SCOPE_FOV - FOV) * scoped;
+  const def = w ? WEAPONS[w[0]] : null, isScope = !!(def && def.scope);
+  const can = scoping && def && !myFin && !(you.rl > 0);          // beim Nachladen kann man nicht zielen
+  aim += ((can ? 1 : 0) - aim) * Math.min(1, dt * 12);
+  scoped = isScope ? aim : 0;
+  const fov = FOV + ((isScope ? SCOPE_FOV : ADS_FOV) - FOV) * aim;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
-  hud.scope(scoped > 0.5);
+  hud.scope(scoped > 0.5, aim > 0.5);
+  view.scopeKick = Math.max(0, (view.scopeKick || 0) - dt * 3.5);
+  hud.scopeKick(view.scopeKick);
   // Wackeln: zwei langsame Wellen übereinander, das sieht aus wie zitternde Hände. Es verschiebt das echte Zielen!
   const lifeLeft = you && you.mhp ? Math.max(0, Math.min(1, you.hp / you.mhp)) : 1;
-  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * scoped;
+  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * aim * (isScope ? 1 : 0.45);   // über Kimme und Korn wackelt es weniger
   swayT += dt;
   const nx = (Math.sin(swayT * 0.9) + Math.sin(swayT * 2.3 + 1) * 0.45) * amp, ny = (Math.cos(swayT * 1.1) + Math.sin(swayT * 2.9) * 0.4) * amp;
   camYaw += nx - swayX; camPitch += ny - swayY; swayX = nx; swayY = ny;
@@ -577,21 +662,32 @@ function recoil(def) {
   recoilBack += k * RECOIL_BACK;
   shake = Math.max(shake, k * 2.5);
   view.kick = 1;
+  view.kickPow = 0.7 + Math.min(1.5, def.dmg * def.pellets / 45);   // große Waffen schlagen stärker zurück
+  view.kickRoll = (Math.random() - 0.5) * 0.12;
+  // durchs Zielfernrohr: stärker hoch, das Fernrohr-Bild springt mit, und es federt langsamer zurück
+  if (scoped > 0.5) { camPitch = Math.min(1.45, camPitch + k * 0.6); recoilBack += k * 0.6 * RECOIL_BACK; view.scopeKick = 1; }
 }
 // ---------- Nachladen: Magazin wechseln (die Bewegungen stehen in models.js bei poseReload) ----------
 // Nachlade-Geräusche: [Zeitpunkt 0…1, Name des Sounds in audio.js]
-const RELOAD_SOUNDS = [[0.13, 'magOut'], [0.36, 'stow'], [0.5, 'magGrab'], [0.75, 'magIn'], [0.86, 'ready']];
+const RELOAD_SOUNDS = [[0.11, 'magOut'], [0.3, 'stow'], [0.4, 'magGrab'], [0.6, 'magIn'], [0.73, 'cockBack'], [0.8, 'cockRelease'], [0.85, 'ready']];
+// Rucksack und Ellbogen der zweiten Hand – in Kamera-Koordinaten (unten links, außerhalb des Bildes)
+const PACK_CAM = new THREE.Vector3(-0.32, -0.55, 0.02), ELBOW_CAM = new THREE.Vector3(-0.35, -0.6, -0.12);
+const IM = new THREE.Matrix4(), PL = new THREE.Vector3(), EL = new THREE.Vector3();
 // Kiemen, Druckanzeige, Nachladen und die Waffe vor der Kamera (Ego-Perspektive)
 function updateViewModel(dt) {
   // Rückstoß zurückfedern lassen
-  const back = Math.min(recoilBack, dt * 0.6); camPitch -= back; recoilBack -= back;
+  const back = Math.min(recoilBack, dt * (scoped > 0.5 ? 0.22 : 0.6)); camPitch -= back; recoilBack -= back;   // im Fernrohr langsamer zurück
   updateScope(dt);
   const w = you && you.alive ? you.w[you.slot] : null;
-  const reloading = !!w && you.rl > 0;
-  const done = reloading ? 1 - you.rl / you.rlT : 0;
+  // Der Server schickt den Nachlade-Stand nur 20-mal pro Sekunde. Damit die Animation flüssig ist, zählt der Browser
+  // selbst in jedem Bild weiter und gleicht sich nur an, wenn er mehr als 0,15 s danebenliegt.
+  if (w && you.rl > 0) view.rl = view.rl > 0 && Math.abs(view.rl - you.rl) < 0.15 ? Math.max(0.001, view.rl - dt) : you.rl;
+  else view.rl = 0;
+  const reloading = !!w && view.rl > 0;
+  const done = reloading ? Math.min(1, 1 - view.rl / you.rlT) : 0;
   // Nachlade-Geräusche: jedes einmal, wenn sein Zeitpunkt erreicht ist
   if (!reloading) view.rsnd = 0;
-  else while (view.rsnd < RELOAD_SOUNDS.length && done >= RELOAD_SOUNDS[view.rsnd][0]) sfx[RELOAD_SOUNDS[view.rsnd++][1]]();
+  else while (view.rsnd < RELOAD_SOUNDS.length && done >= RELOAD_SOUNDS[view.rsnd][0]) sfx[RELOAD_SOUNDS[view.rsnd++][1]](WEAPON_IDS.indexOf(w[0]));
   // Kiemen: beim Schuss puffen sie kurz auf (der Druck entweicht)
   view.gills = Math.max(view.gills - dt * 4, view.kick * 0.7);
   // Druckanzeige = wie voll das Magazin in der Waffe ist
@@ -613,19 +709,37 @@ function updateViewModel(dt) {
   // Nachladen: zweite Hand und Magazin bewegen, die normale linke Hand ausblenden
   const rl = reloading && !!U.mag;
   if (view.arms.userData.left) view.arms.userData.left.visible = !rl;
-  if (rl) poseReload(done, U, view.rHand);
-  else { view.rHand.visible = false; if (U.mag) { U.mag.g.position.copy(U.mag.seat); U.mag.g.visible = true; U.mag.fill.emissiveIntensity = 0.4 + 1.4 * view.charge; } }
-  // beim Nachladen die Waffe zur Seite kippen, damit man den Magazinschacht sieht
-  view.tilt += ((rl ? 1 : 0) - view.tilt) * Math.min(1, dt * 7);
-  // Schwanken beim Schwimmen, Rückstoß beim Schießen
+  // Kippen: beim Magazinwechsel Boden nach links, beim Durchladen fast gerade
+  const roll = rl ? reloadRoll(done) : 0;
+  view.tilt += (roll - view.tilt) * Math.min(1, dt * 14);
+  // Zielen über Kimme und Korn: die Waffe wandert in die Bildmitte, so dass die Visierlinie genau im Fadenkreuz liegt
+  const ads = aim * (scoped > 0 ? 0 : 1);
+  // Schwanken beim Schwimmen (beim Zielen viel weniger), Rückstoß beim Schießen
   const speed = Math.hypot(me.vx, me.vy, me.vz);
   view.bob += dt * (2 + speed * 0.6);
-  view.kick = Math.max(0, view.kick - dt * 10);
-  const sway = Math.min(1, speed / 10) * 0.012;
-  // die Waffe so weit nach vorne schieben, dass ihr hinteres Ende 0,3 m vor der Kamera ist
-  const sh = U.fpShift, z = -(U.rear + 0.3) + sh[2];
-  view.gun.position.set(sh[0] + Math.cos(view.bob) * sway - view.tilt * 0.07, sh[1] + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.09 + view.kick * 0.015, z + view.kick * 0.09);
-  view.gun.rotation.set(view.kick * 0.22 + view.tilt * 0.1, view.tilt * 0.35, view.tilt * 0.6);
+  view.kick = Math.max(0, view.kick - dt * 9);
+  const sway = Math.min(1, speed / 10) * 0.012 * (1 - ads * 0.8);
+  const K = view.kick * (view.kickPow || 1);
+  const sh = U.fpShift, z = -(U.rear + 0.3) + sh[2], sx = sh[0] * (1 - ads), sy = sh[1] * (1 - ads);
+  view.g.position.set(0.15 * (1 - ads), -0.13 * (1 - ads), 0);
+  view.gun.position.set(
+    sx - U.sightAt[0] * ads + Math.cos(view.bob) * sway - view.tilt * 0.08,
+    sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.02,
+    z - ads * 0.04 + K * 0.075);                                                    // Rückstoß: die Waffe fährt nach hinten
+  view.gun.rotation.set(K * 0.2 + view.tilt * 0.15, view.tilt * 0.3, -view.tilt * 1.15 + K * (view.kickRoll || 0));   // −z-Drehung = Boden nach links
+  // der Schlitten / Spannhebel fährt bei jedem Schuss kurz zurück
+  if (U.cock && !rl) U.cock.g.position.z = U.cock.travel * Math.min(1, view.kick * 1.4);
+  if (rl) {
+    // Rucksack und Ellbogen von Kamera- in Waffen-Koordinaten umrechnen
+    view.gun.updateMatrix(); IM.copy(view.gun.matrix).invert();
+    PL.copy(PACK_CAM).sub(view.g.position).applyMatrix4(IM); EL.copy(ELBOW_CAM).sub(view.g.position).applyMatrix4(IM);
+    poseReload(done, U, view.rHand, PL, EL);
+  } else { view.rHand.visible = false; if (U.mag) { U.mag.g.position.copy(U.mag.seat); U.mag.g.visible = true; U.mag.fill.emissiveIntensity = 0.4 + 1.4 * view.charge; } }
+  // Mündungsblitz: ganz kurz hell an der Mündung, und er beleuchtet die Hände
+  const fl = Math.max(0, (view.kick - 0.55) / 0.45);
+  if (!U.flash) { U.flash = makeFlash(); U.muzzle.add(U.flash); }
+  U.flash.visible = fl > 0; U.flash.scale.setScalar(0.6 + fl * (view.kickPow || 1) * 0.5); U.flash.rotation.z = Math.random() * 6;
+  flashLight.intensity = fl * 6;
 }
 const V = new THREE.Vector3();
 function updateCamera(dt) {
@@ -650,7 +764,7 @@ function updateCamera(dt) {
     // swimming at the surface: head out of the water, the camera looks across the sea
     if (SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
     // Ego-Perspektive: Kamera fährt in den Kopf (Abstand 0), nicht zur Seite, nicht nach oben
-    if ((firstPerson || scoped > 0.5) && !v) { fpOn = true; want = 0; side = 0; up = 0; }
+    if ((firstPerson || aim > 0.5) && !v) { fpOn = true; want = 0; side = 0; up = 0; }
     else ty += headUp * 2.2;
   } else {
     let e = players.get(specId);
@@ -670,8 +784,8 @@ function updateCamera(dt) {
   camera.rotation.set(camPitch, camYaw, 0);
 }
 function lobbyCamera() {
-  view.g.visible = false;   // keine Waffe vor der Kamera in der Lobby
-  if (camera.fov !== FOV) { camera.fov = FOV; camera.updateProjectionMatrix(); } scoped = 0; hud.scope(false);   // Zoom aus
+  view.g.visible = false; lamp.intensity = 0; torchBeam.visible = false; for (const l of glowLights) l.intensity = 0;   // keine Waffe und keine Lampe in der Lobby
+  if (camera.fov !== FOV) { camera.fov = FOV; camera.updateProjectionMatrix(); } aim = scoped = 0; hud.scope(false, false);   // Zoom aus
   if (!W) return;
   const a = time * 0.05, w = W.wreck;
   camera.position.set(w.x + Math.cos(a) * 46, w.y + 20, w.z + Math.sin(a) * 46);
@@ -688,12 +802,13 @@ function frame(now) {
       if (!myFin) { controlMe(dt); tryFire(now); }
       sendT += dt; if (sendT >= 1 / 30) { sendT = 0; send({ t: 'm', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), yaw: +me.byaw.toFixed(3), pitch: +me.bpitch.toFixed(3), b: me.boost ? 1 : 0 }); }
     }
-    updateFinishers(dt); updateViewModel(dt); updateEntities(dt); updateCamera(dt);
+    updateFinishers(dt); updateViewModel(dt); updateEntities(dt); updateCamera(dt); updateGlow(dt);
+    if (bleedT > 0 && you && you.alive) { bleedT -= dt; bleedPuff -= dt; if (bleedPuff <= 0) { bleedPuff = 0.35; env.blood(me.x + (Math.random() - 0.5) * 0.6, me.y, me.z + (Math.random() - 0.5) * 0.6); } }
     const fx = alive ? me : camera.position;
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
     promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }
     if (mode === 'exp' && you && you.x) { if (held >= you.x.bagL.length || !you.alive) held = -1; updateTorch(dt, SURFACE - fx.y); updateAquarium(dt); }
-    hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y, suit: mySuit, outside, time, dt,
+    hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y + depthOffset(), suit: mySuit, outside, time, dt,
       lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null, held });
     let marks = [];
     if (mode === 'exp') {
@@ -711,19 +826,19 @@ function frame(now) {
       const df = Math.max(0, Math.min(1, (SURFACE - camera.position.y) / 300));
       // below ~150 m it is almost pitch black without a lamp
       const dep = SURFACE - camera.position.y;
-      hemi.intensity = 1.25 * Math.min(1, Math.max(0.04, 1 - dep / 160)); sun.intensity = 1.35 * Math.min(1, Math.max(0, 1 - dep / 120));
+      darkness(dep, LIGHT.exp);
       // floor 6 (Vulkanschlund) glows red from the lava below, floor 7 (Urzeittiefe) has a faint blue shimmer
       const lava = deepGlow(dep).lava, prim = deepGlow(dep).prim;
       hemi.color.setHex(0xb5e8ff).lerp(LAVA_SKY, lava).lerp(PRIM_SKY, prim);
       hemi.groundColor.setHex(0x12303c).lerp(LAVA_GROUND, lava).lerp(PRIM_GROUND, prim);
       hemi.intensity = Math.max(hemi.intensity, 0.9 * lava + 0.45 * prim);
-    } else { hemi.intensity = 1.25; sun.intensity = 1.35; hemi.color.setHex(0xb5e8ff); hemi.groundColor.setHex(0x12303c); }
+    } else { darkness(SURFACE - camera.position.y + DEEP.brOffset, LIGHT.br); hemi.color.setHex(0xb5e8ff); hemi.groundColor.setHex(0x12303c); }
     hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), mode === 'exp' ? expPois() : W.pois, marks);
     if (mode === 'exp' && you && !you.alive && deadInfo) hud.spec(`<b>Ohnmächtig!</b>Erwischt von ${esc(deadInfo.by)}${deadInfo.lost ? ` · ${deadInfo.lost} Fische verloren` : ''} · aufwachen in ${Math.ceil(you.x?.rt || 0)} s`);
     else if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }
     else if (!you) { const s = players.get(specId); hud.spec(`Zuschauer${s ? ` · ${esc(s.name)}` : ''}`); }
     else if (you.alive) hud.spec(null);
-    if (mode !== 'exp') { lamp.intensity = 150 * Math.min(1, Math.max(0, (SURFACE - camera.position.y - 55) / 55)); lamp.distance = 90; lamp.angle = 0.42; }
+    if (mode !== 'exp' && you) updateTorch(dt, SURFACE - fx.y + DEEP.brOffset);
   } else lobbyCamera();
   if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);
   renderer.render(scene, camera);

@@ -249,7 +249,10 @@ export class Hud {
   prompt(p) { const el = $('prompt'), key = p ? p.join() : ''; if (this.pKey === key) return; this.pKey = key; el.classList.toggle('hidden', !p); if (p) el.innerHTML = `<kbd>${p[0]}</kbd>${esc(p[1])}`; }
   // left = wie viel Leben das Ziel noch hat (1 = voll, 0 = tot). Die Zahl geht von grün (voll) über gelb nach rot (fast tot).
   // Fernrohr-Bild beim Zielen ein- und ausblenden (das normale Fadenkreuz verschwindet dann)
-  scope(on) { if (this.scopeOn === on) return; this.scopeOn = on; $('scope').classList.toggle('on', on); $('cross').style.display = on ? 'none' : ''; }
+  // Rückstoß im Fernrohr: das schwarze Fernrohr-Bild springt kurz nach unten und wird größer (das Auge stößt fast ans Okular)
+  scopeKick(k) { const v = Math.round(k * 100) / 100; if (this.sk === v) return; this.sk = v; $('scope').style.transform = v ? `translateY(${v * 4}vh) scale(${1 + v * 0.08})` : ''; }
+  // on = durchs Zielfernrohr, ads = über Kimme und Korn zielen: dann verschwindet das normale Fadenkreuz
+  scope(on, ads = on) { const k = on + '|' + ads; if (this.scopeKey === k) return; this.scopeKey = k; $('scope').classList.toggle('on', on); $('cross').style.display = on || ads ? 'none' : ''; }
   hitmark(dmg, kill, left) {
     const h = $('hitm'); h.classList.remove('on'); h.classList.toggle('kill', !!kill); void h.offsetWidth; h.classList.add('on');
     const d = $('dmgNum'); d.textContent = dmg; d.classList.remove('on'); void d.offsetWidth; d.classList.add('on');

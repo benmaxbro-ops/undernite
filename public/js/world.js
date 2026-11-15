@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { buildReef } from './reef.js';
 import { sand, rock } from './textures.js';
-import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT, deepGlow } from './shared.js';
+import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT, deepGlow, DEEP } from './shared.js';
 const LAVA_FOG = new THREE.Color(0x4a1206), PRIM_FOG = new THREE.Color(0x061a3a);
 import { makeBoat, makeTag } from './models.js';
 
@@ -102,7 +102,8 @@ function buildBase(root, W, B) {
 export function buildEnvironment(scene, W) {
   const root = new THREE.Group(); scene.add(root);
   const exp = W.mode === 'exp';
-  causticFade = exp ? 'smoothstep(-60.0, 70.0, vWp.y)' : '1.0';
+  // Sonnenlicht-Muster am Boden: in der Expedition nur oben, im Battle Royale (Tiefsee) gar nicht
+  causticFade = exp ? 'smoothstep(60.0, 115.0, vWp.y)' : '0.0';
   const uTime = { value: 0 };
   const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S = new THREE.Vector3(), E = new THREE.Euler(), C = new THREE.Color();
   const put = (im, i, x, y, z, rx, ry, rz, sx, sy, sz) => { Q.setFromEuler(E.set(rx, ry, rz)); im.setMatrixAt(i, M4.compose(V.set(x, y, z), Q, S.set(sx, sy, sz))); };
@@ -212,6 +213,7 @@ export function buildEnvironment(scene, W) {
   // seen from below: bright, shimmering ceiling
   const surface = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 2.4, SIZE * 2.4).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ map: surfTex, color: 0xd8fbff }));
   surface.position.y = SURFACE; root.add(surface);
+  surface.visible = exp;   // in der Tiefsee sieht man keine Oberfläche
   // seen from above: deep blue sea, slightly see-through
   const seaTop = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 2.4, SIZE * 2.4).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: surfTex, color: 0x2a7aa6, transparent: true, opacity: 0.94, depthWrite: false }));
   seaTop.position.y = SURFACE + 0.02; root.add(seaTop);
@@ -307,7 +309,7 @@ export function buildEnvironment(scene, W) {
 
   const shallow = new THREE.Color(0x2b8fb0), deepC = new THREE.Color(0x05202e), toxic = new THREE.Color(0x1d0a33), abyss = new THREE.Color(0x010307);
   return {
-    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat, base, bases,
+    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat, base, bases, glow: reef.glow,
     update(dt, t, cam, zone, outside) {
       uTime.value = t;
       reef.update(t);
@@ -342,10 +344,12 @@ export function buildEnvironment(scene, W) {
         if (k >= 1) { root.remove(f.m); f.m.material.dispose(); fx.splice(i, 1); }
       }
       // depth dependent fog / background
-      const d = Math.max(0, Math.min(1, (SURFACE - cy) / 135));
+      // Expedition: nach 60 m ist das Wasser dunkel. Battle Royale (Tiefsee): immer fast schwarz und man sieht nicht weit
+      const d = exp ? Math.max(0, Math.min(1, (SURFACE - cy) / 60)) : 1;
       const fog = scene.fog; fog.color.copy(shallow).lerp(deepC, Math.pow(d, 0.8));
+      if (!exp) fog.color.lerp(abyss, 0.7);
       if (outside) fog.color.lerp(toxic, 0.75);
-      fog.density = 0.0085 + 0.006 * d + (outside ? 0.012 : 0);
+      fog.density = 0.0085 + 0.006 * d + (exp ? 0 : 0.007) + (outside ? 0.012 : 0);
       if (exp) {   // the deeper, the darker
         const dd = Math.max(0, Math.min(1, (SURFACE - cy - 120) / 220));
         fog.color.lerp(abyss, dd); fog.density += 0.008 * dd;
@@ -358,7 +362,7 @@ export function buildEnvironment(scene, W) {
       // camera above the water: sky, clear air, no plankton or light shafts
       const above = cy > SURFACE;
       if (above) { fog.color.setHex(0xa9d9ef); fog.density = 0.0016; }
-      plankton.visible = rays.visible = !above;
+      plankton.visible = !above; rays.visible = !above && exp;   // Lichtstrahlen von oben gibt es in der Tiefsee nicht
       scene.background = fog.color;
       if (zone) { zoneWall.visible = zone[2] > 0.5 && zone[2] < 400; zoneWall.position.set(zone[0], 60, zone[1]); zoneWall.scale.set(zone[2], 1, zone[2]); }
       else zoneWall.visible = false;

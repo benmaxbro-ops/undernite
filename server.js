@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
-  CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR,
+  CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
   TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH,
 } from './public/js/shared.js';
@@ -20,7 +20,7 @@ const PORT = +process.env.PORT || 8080;
 const SPEED = +process.env.UN_SPEED || 1;     // sim steps per timer tick (testing only)
 const DT = 1 / TICK_HZ;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.json': 'application/json' };
+  '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.json': 'application/json', '.wav': 'audio/wav', '.txt': 'text/plain; charset=utf-8' };
 
 const server = http.createServer((req, res) => {
   let u;
@@ -86,7 +86,7 @@ const ev = (...a) => G.events.push(a);
 function mkPlayer(id, name, suit, bot) {
   const S = SUITS[suit];
   return { id, name, suit, bot, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, lx: 0, ly: 0, lz: 0, yaw: 0, pitch: 0,
-    hp: S.hp, maxhp: S.hp, shield: 0, alive: true, weapons: [newWeapon('pistol', 0), null, null],
+    hp: S.hp, maxhp: S.hp, shield: 0, alive: true, weapons: [newWeapon(...(S.start || ['pistol', 0])), null, null],   // Startwaffe je Anzug
     slot: 0, reload: 0, reloadT: 1, nextFire: 0, veh: 0, kills: 0, grabbed: 0, ink: 0, shockT: 0, boost: false, place: 0,
     zoneAcc: 0, ye: [],
     thinkT: rnd() * 0.4, goal: null, crate: -1, target: null, mode: 'loot', skill: 0.12 + rnd() * 0.08, reactT: 0,   // skill = aim error (higher = worse)
@@ -147,7 +147,7 @@ function startMatch() {
   }
   for (const p of G.players.values()) {
     const a = rnd() * 6.283, d = 60 + rnd() * 190;
-    p.x = p.lx = Math.cos(a) * d; p.z = p.lz = Math.sin(a) * d; p.y = p.ly = SURFACE - 6;
+    p.x = p.lx = Math.cos(a) * d; p.z = p.lz = Math.sin(a) * d; p.y = p.ly = SURFACE - DEEP.brCeil - 4;   // Start unter der Tiefsee-Grenze
     p.yaw = Math.atan2(p.x, p.z); p.pitch = -0.6;
   }
   // floor loot
@@ -202,11 +202,11 @@ function damage(p, amt, src, how, sx, sz) {
   let a = amt;
   p.hurtT = G.time;   // expedition: pauses health regeneration
   const hadShield = p.shield > 0;
-  if (how !== 'zone') { const s = Math.min(p.shield, a); p.shield -= s; a -= s; }
+  if (how !== 'zone' && how !== 'bleed') { const s = Math.min(p.shield, a); p.shield -= s; a -= s; }
   const shieldBroke = hadShield && p.shield <= 0;
   if (shieldBroke && !p.bot) p.ye.push(['shb']);   // dein eigenes Schild ist kaputt
   p.hp -= a;
-  if (!p.bot) p.ye.push(['hurt', Math.round(amt), r2(sx ?? p.x), r2(sz ?? p.z), how === 'zone' ? 1 : 0]);
+  if (!p.bot) p.ye.push(['hurt', Math.round(amt), r2(sx ?? p.x), r2(sz ?? p.z), how === 'zone' || how === 'bleed' ? 1 : 0]);
   if (src && src.id && !src.bot && src !== p) src.ye.push(['hm', Math.round(amt), p.hp <= 0 ? 1 : 0, +(Math.max(0, p.hp) / p.maxhp).toFixed(2), shieldBroke ? 1 : 0]);
   if (p.bot && src && src.id && src !== p && src.alive && (!src.bot || G.time >= p.peaceUntil) && (!p.target || rnd() < 0.5)) {
     if (src.bot) p.fightUntil = G.time + 5 + rnd() * 4; p.target = { k: 'p', ref: src }; p.reactT = Math.min(p.reactT, 0.25); }
@@ -244,7 +244,7 @@ function kill(p, src, how) {
   for (const w of p.weapons) if (w && !(w.id === 'pistol' && w.rar === 0))
     addPickup('w', p.x + (rnd() - 0.5) * 2, p.y + rnd(), p.z + (rnd() - 0.5) * 2, w.id, w.rar, w.ammo, w.spare);
   if (rnd() < 0.6) addPickup(rnd() < 0.5 ? 'med' : 'sh', p.x, p.y + 0.5, p.z);
-  const label = { zone: 'Schwarzwasser', shark: 'Hai', octo: 'Oktopus', jelly: 'Qualle', left: 'Verbindung', wreck: 'Explosion' }[how];
+  const label = { zone: 'Schwarzwasser', shark: 'Hai', octo: 'Oktopus', jelly: 'Qualle', left: 'Verbindung', wreck: 'Explosion', coral: 'Koralle', bleed: 'Verblutet' }[how];
   let by = label || '?';
   if (src && src.id && src !== p) { src.kills++; by = src.name; } else if (src && src.id && src === p) by = 'Eigentor';
   ev('kill', by, p.name, p.id, src && src.id && src !== p ? src.id : 0);
@@ -296,6 +296,28 @@ function finishReload(p) {
   const take = Math.floor(w.spare[b] * d.mag + 1e-6);
   w.spare[b] = w.ammo / d.mag;
   w.ammo = take;
+}
+// Scharfe Leuchtkorallen: wer eine berührt, schneidet sich und blutet danach eine Weile (Bots passen auf und bleiben verschont)
+function coralCut(p, dt) {
+  if (!p.alive || p.bot || p.veh) return;
+  if (p.bleed > 0) {   // Bluten: jede Sekunde ein bisschen Schaden
+    p.bleed -= dt; p.bleedAcc = (p.bleedAcc || 0) + GLOW_CORALS.bleedDps * dt;
+    if (p.bleedAcc >= 1) { const a = Math.floor(p.bleedAcc); p.bleedAcc -= a; damage(p, a, null, 'bleed'); if (!p.alive) return; }
+  }
+  if (G.time < (p.cutT || 0)) return;
+  const r = SUITS[p.suit].r;
+  for (const c of G.world.glowCorals) {
+    const dx = p.x - c.x, dz = p.z - c.z;
+    if (dx > 3 || dx < -3 || dz > 3 || dz < -3) continue;
+    const dy = p.y - (c.y + 0.45 * c.s);
+    if (dx * dx + dy * dy + dz * dz < (r * 0.8 + 0.35 * c.s) ** 2) {   // nur bei echter Berührung
+      p.cutT = G.time + GLOW_CORALS.cooldown;
+      p.bleed = GLOW_CORALS.bleed;
+      p.ye.push(['bleed', GLOW_CORALS.bleed]);
+      damage(p, GLOW_CORALS.dmg, null, 'coral', c.x, c.z);
+      return;
+    }
+  }
 }
 // Der Kompressor füllt pro Waffe immer das Ersatzmagazin, das schon am vollsten (aber noch nicht voll) ist
 function compress(p, dt) {
@@ -519,7 +541,7 @@ function sharkStep(c, dt) {
       damage(p, 18, null, 'shark', c.x, c.z);
       c.state = 'retreat'; c.t = 2.4;
       const ax = c.x - p.x, az = c.z - p.z, al = Math.sqrt(ax * ax + az * az) || 1;
-      c.rp = { x: c.x + ax / al * 30 + (rnd() - 0.5) * 20, y: Math.min(SURFACE - 8, c.y + 8), z: c.z + az / al * 30 + (rnd() - 0.5) * 20 };
+      c.rp = { x: c.x + ax / al * 30 + (rnd() - 0.5) * 20, y: Math.min(SURFACE - (G.mode === 'exp' ? 8 : DEEP.brCeil + 3), c.y + 8), z: c.z + az / al * 30 + (rnd() - 0.5) * 20 };
     }
   } else {
     c.t -= dt;
@@ -682,11 +704,11 @@ function botStep(b, dt) {
   b.vx += (dx * sp - b.vx) * k; b.vy += (dy * sp - b.vy) * k; b.vz += (dz * sp - b.vz) * k;
   const ox = b.x, oy = b.y, oz = b.z;
   b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
-  W.collide(b, S.r);
+  W.collide(b, S.r, G.mode === 'exp' ? undefined : SURFACE - DEEP.brCeil);   // im Battle Royale bleiben auch Bots unter der Tiefsee-Grenze
   const moved = Math.sqrt((b.x - ox) ** 2 + (b.y - oy) ** 2 + (b.z - oz) ** 2);
   if (d > 3 && moved < sp * dt * 0.25) {
     b.stuckT += dt;
-    if (b.stuckT > 1) { b.stuckT = 0; if (b.goal) b.goal.y = Math.min(SURFACE - 6, b.goal.y + 12); b.vy += 6; }
+    if (b.stuckT > 1) { b.stuckT = 0; if (b.goal) b.goal.y = Math.min(SURFACE - DEEP.brCeil - 3, b.goal.y + 12); b.vy += 6; }
   } else b.stuckT = Math.max(0, b.stuckT - dt);
   // facing + fire
   if (tgt) {
@@ -764,7 +786,7 @@ function expJoin(c) {
   p.actT = G.time; p.act = null; p.afk = false;
   p.baseIdx = pickBase(p, s?.base);
   if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? newWeapon(w.id, w.rar) : null);
-  if (!p.weapons.some(Boolean)) p.weapons[0] = newWeapon('pistol', 0);
+  if (!p.weapons.some(Boolean)) p.weapons[0] = newWeapon(...(SUITS[p.suit].start || ['pistol', 0]));
   p.slot = Math.max(0, p.weapons.findIndex(Boolean));
   p.hp = p.maxhp = EXP_HP; p.air = TANKS[p.tank].cap; p.envAcc = 0; p.warnT = 0; p.respawnT = 0; p.lowAir = false;
   const s0 = boatSpawn(); p.x = p.lx = s0.x; p.y = p.ly = s0.y; p.z = p.lz = s0.z; p.yaw = s0.yaw; p.pitch = -0.3;
@@ -918,7 +940,7 @@ function expDown(p, src, how) {
   p.alive = false; p.hp = 0; p.respawnT = EXP_RESPAWN; p.vx = p.vy = p.vz = 0;
   const lost = Math.ceil(p.bag.length / 2);
   p.bag.splice(0, lost);
-  const by = how === 'zone' ? (p.lastHitBy || 'Tiefsee') : how === 'beast' ? (p.lastHitBy || 'Raubfisch') : src && src.name ? src.name : 'Tiefsee';
+  const by = how === 'coral' || how === 'bleed' ? 'Scharfe Koralle' : how === 'zone' ? (p.lastHitBy || 'Tiefsee') : how === 'beast' ? (p.lastHitBy || 'Raubfisch') : src && src.name ? src.name : 'Tiefsee';
   ev('kill', by, p.name, p.id, 0);
   p.ye.push(['dead', 0, by, lost]);
   storeProgress(p);
@@ -990,6 +1012,7 @@ function tickExp(dt) {
     p.lx = p.x; p.ly = p.y; p.lz = p.z;
     if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) finishReload(p); }
     compress(p, dt);
+    coralCut(p, dt);
     // air and pressure
     const depth = depthOf(p), T = TANKS[p.tank];
     if (depth < 2.6 || nearBase(p, 14)) { p.air = Math.min(T.cap, p.air + T.cap * 0.35 * dt); p.lowAir = false; }   // surface or air station in the base
@@ -1059,6 +1082,7 @@ function tick(dt) {
     }
     if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) finishReload(p); }
     compress(p, dt);
+    coralCut(p, dt);
     if (p.ink > 0) p.ink -= dt;
     if (dist2d(p, z.x, z.z) > z.r) { p.zoneAcc += dps * dt; if (p.zoneAcc >= 1) { const a = Math.floor(p.zoneAcc); p.zoneAcc -= a; damage(p, a, null, 'zone', z.x, z.z); } }
     if (p.alive) autoCollect(p);
@@ -1174,7 +1198,7 @@ wss.on('connection', (ws) => {
       case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':
         if (p && p.alive && [m.x, m.y, m.z, m.yaw, m.pitch].every(Number.isFinite)) {
-          p.x = clamp(m.x, -300, 300); p.y = clamp(m.y, SURFACE - EXP_MAX_DEPTH, SURFACE); p.z = clamp(m.z, -300, 300);
+          p.x = clamp(m.x, -300, 300); p.y = clamp(m.y, SURFACE - EXP_MAX_DEPTH, G.mode === 'exp' ? SURFACE : SURFACE - DEEP.brCeil); p.z = clamp(m.z, -300, 300);
           // activity check for the aquarium: really moved or looked around (just bobbing in the water does not count)
           if (!p.act || dist(p, p.act) > 1.5 || Math.abs(m.yaw - p.act.yaw) > 0.15 || Math.abs(m.pitch - p.act.pitch) > 0.15) { p.act = { x: p.x, y: p.y, z: p.z, yaw: m.yaw, pitch: m.pitch }; p.actT = G.time; }
           p.yaw = m.yaw; p.pitch = clamp(m.pitch, -1.6, 1.6); p.boost = !!m.b;
