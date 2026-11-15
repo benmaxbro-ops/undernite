@@ -687,12 +687,8 @@ function expJoin(c) {
   const fishList = (l) => Array.isArray(l) ? l.map(e => typeof e === 'number' ? { v: e } : e).filter(e => e && (e.v != null || (e.b != null ? BOSSES[e.b] : FISH[e.s]))) : [];
   p.bag = fishList(s?.bag);
   p.aq = fishList(s?.aq).filter(e => e.v == null); p.aqLvl = clamp(s?.aqLvl || 0, 0, AQUARIUM.sizes.length - 1); p.aqAcc = 0;
-  // the aquarium kept earning while you were away (up to 2 hours)
-  if (s?.last && p.aq.length) {
-    const away = Math.min(AQUARIUM.offlineMax, Math.max(0, (Date.now() - s.last) / 1000));
-    const earned = Math.floor(aqIncome(p.aq) * away);
-    if (earned > 0) { p.money += earned; p.ye.push(['aqoffline', earned, Math.round(away / 60)]); }
-  }
+  // the aquarium only earns while you really play (no offline money, no AFK money)
+  p.actT = G.time; p.act = null; p.afk = false;
   if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? { id: w.id, rar: w.rar, ammo: WEAPONS[w.id].mag } : null);
   if (!p.weapons.some(Boolean)) p.weapons[0] = { id: 'pistol', rar: 0, ammo: WEAPONS.pistol.mag };
   p.slot = Math.max(0, p.weapons.findIndex(Boolean));
@@ -941,9 +937,12 @@ function tickExp(dt) {
     if (atBase && !p.atBase) p.ye.push(['baseHint', p.bag.length]);
     p.atBase = atBase;
   }
-  // aquarium income (also while dead or swimming far away)
+  // aquarium income – only while you actually play: after AFK_TIME seconds without
+  // swimming, looking around or shooting it pauses (no money for standing around AFK)
   for (const p of G.players.values()) {
-    if (!p.aq || !p.aq.length) continue;
+    const afk = G.time - p.actT > AQUARIUM.afkTime;
+    if (afk !== p.afk) { p.afk = afk; if (p.aq && p.aq.length) p.ye.push(['warn', afk ? 'AFK – dein Aquarium verdient gerade nichts!' : 'Weiter geht’s – das Aquarium verdient wieder.']); }
+    if (afk || !p.aq || !p.aq.length) continue;
     p.aqAcc += aqIncome(p.aq) * dt;
     if (p.aqAcc >= 1) { const a = Math.floor(p.aqAcc); p.aqAcc -= a; p.money += a; if ((p.aqSaveT = (p.aqSaveT || 0) + a) > 50) { p.aqSaveT = 0; storeProgress(p); } }
   }
@@ -1026,7 +1025,7 @@ function snapshot() {
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)) };
       if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, e) => a + fishValue(e), 0), air: r2(p.air),
         tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)),
-        bagL: p.bag.map(catchToNet), aq: p.aq.map(catchToNet), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 100) / 100 };
+        bagL: p.bag.map(catchToNet), aq: p.aq.map(catchToNet), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 100) / 100, afk: p.afk ? 1 : 0 };
       ye = p.ye; p.ye = [];
     }
     send(c.ws, `{"t":"s","c":${cs},"you":${JSON.stringify(you)},"ye":${JSON.stringify(ye)}}`);
@@ -1094,10 +1093,12 @@ wss.on('connection', (ws) => {
       case 'm':
         if (p && p.alive && [m.x, m.y, m.z, m.yaw, m.pitch].every(Number.isFinite)) {
           p.x = clamp(m.x, -300, 300); p.y = clamp(m.y, -260, SURFACE); p.z = clamp(m.z, -300, 300);
+          // activity check for the aquarium: really moved or looked around (just bobbing in the water does not count)
+          if (!p.act || dist(p, p.act) > 1.5 || Math.abs(m.yaw - p.act.yaw) > 0.15 || Math.abs(m.pitch - p.act.pitch) > 0.15) { p.act = { x: p.x, y: p.y, z: p.z, yaw: m.yaw, pitch: m.pitch }; p.actT = G.time; }
           p.yaw = m.yaw; p.pitch = clamp(m.pitch, -1.6, 1.6); p.boost = !!m.b;
         }
         break;
-      case 'f': if (p) fire(p, m.d); break;
+      case 'f': if (p) { p.actT = G.time; fire(p, m.d); } break;
       case 'r': if (p && p.alive) startReload(p); break;
       case 'slot': if (p && p.alive && [0, 1, 2].includes(m.i) && p.weapons[m.i]) { p.slot = m.i; p.reload = 0; } break;
       case 'e': if (p) interact(p); break;

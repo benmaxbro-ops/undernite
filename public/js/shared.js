@@ -106,7 +106,7 @@ export const AQUARIUM = {
   rate: 0.08 / 60,                              // a fish earns 8 % of its value per minute
   sizes: [3, 6, 10, 15, 20],                    // places per upgrade level
   prices: [0, 500, 2000, 6000, 15000],          // price of each upgrade level
-  offlineMax: 2 * 3600,                         // earns at most 2 hours while you are away
+  afkTime: 60,                                  // no money after 60 s without moving/looking around (and none while offline)
 };
 // € per second of one caught thing in the aquarium (bosses have their own, much higher number)
 export const catchRate = (e) => e.v != null ? 0 : e.b != null ? BOSSES[e.b].aq : fishValue(e) * AQUARIUM.rate;

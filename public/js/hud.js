@@ -189,7 +189,7 @@ export class Hud {
       this.catchBar(y.x.bagL, s.held ?? -1);
       $('slots').classList.toggle('off', (s.held ?? -1) >= 0);   // weapon put away while holding a catch
       const x = y.x, T = TANKS[x.tank], f = floorAt(s.depth), deep = s.depth > T.maxDepth;
-      this.set('alive', 'text', money(x.money) + (x.aqRate > 0 ? ` (+${perSec(x.aqRate)})` : ''));
+      this.set('alive', 'text', money(x.money) + (x.aqRate > 0 ? (x.afk ? ' (AFK – pausiert)' : ` (+${perSec(x.aqRate)})`) : ''));
       this.set('kills', 'text', x.bag ? `${x.bag} · ${money(x.bagV)}` : '0');
       this.set('airFill', 'width', Math.max(0, x.air / T.cap * 100) + '%');
       const secs = s.depth < 2.6 ? '' : ` · ~${Math.floor(x.air / (airUse(s.depth) * LUNGS[x.lung].mul))} s`;
