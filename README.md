@@ -30,6 +30,8 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | E | Truhe öffnen, Waffe aufheben/tauschen, Fahrzeug ein-/aussteigen |
 | F | aus dem Oktopusgriff befreien (hämmern) |
 | L | Taschenlampe an/aus (Expedition) |
+| V | Ego-Perspektive an/aus (nicht in Fahrzeugen) |
+| G | Finisher (Battle Royale): Gegner mit höchstens 30 % Leben in der Nähe erledigen |
 
 ## Was drin ist (v0.1)
 

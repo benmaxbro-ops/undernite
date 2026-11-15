@@ -176,8 +176,13 @@ export class Hud {
         if (w) {
           const def = WEAPONS[w[0]];
           sl.n.textContent = def.name; sl.d.style.setProperty('--rar', RARITY[w[1]].color);
-          sl.a.innerHTML = y.slot === i && y.rl > 0 ? 'lädt nach …' : `<b class="num">${w[2]}</b> / ${def.mag} · ${def.range} m`;
-          sl.rl.style.width = y.slot === i && y.rl > 0 ? (1 - y.rl / y.rlT) * 100 + '%' : '0';
+          // Nachladen hat zwei Hälften: erst Wasser ansaugen (blau), dann zusammenpressen (gelb)
+          const reloading = y.slot === i && y.rl > 0;
+          const done = reloading ? 1 - y.rl / y.rlT : 0;   // 0 = gerade angefangen, 1 = fertig
+          const sucking = done < 0.5;
+          sl.a.innerHTML = reloading ? (sucking ? '💧 saugt Wasser an …' : '🔧 komprimiert …') : `<b class="num">${w[2]}</b> / ${def.mag} · ${def.range} m`;
+          sl.rl.style.width = done * 100 + '%';
+          sl.rl.style.background = sucking ? '#3fa9f5' : '';
         } else { sl.n.textContent = '–'; sl.a.textContent = 'leer'; sl.d.style.setProperty('--rar', '#35424b'); sl.rl.style.width = '0'; }
       }
       this.set('ink', 'opacity', y.ink > 0 ? Math.min(1, y.ink / 0.8) : 0);
@@ -240,9 +245,12 @@ export class Hud {
   }
   banner(text, dur = 2.6) { const b = $('banner'); b.textContent = text; b.classList.add('on'); this.bannerT = dur; }
   prompt(p) { const el = $('prompt'), key = p ? p.join() : ''; if (this.pKey === key) return; this.pKey = key; el.classList.toggle('hidden', !p); if (p) el.innerHTML = `<kbd>${p[0]}</kbd>${esc(p[1])}`; }
-  hitmark(dmg, kill) {
+  // left = wie viel Leben das Ziel noch hat (1 = voll, 0 = tot). Die Zahl geht von grün (voll) über gelb nach rot (fast tot).
+  hitmark(dmg, kill, left) {
     const h = $('hitm'); h.classList.remove('on'); h.classList.toggle('kill', !!kill); void h.offsetWidth; h.classList.add('on');
     const d = $('dmgNum'); d.textContent = dmg; d.classList.remove('on'); void d.offsetWidth; d.classList.add('on');
+    // Farbton: 120 = grün, 60 = gelb, 0 = rot
+    d.style.color = left == null ? '' : `hsl(${Math.round(Math.max(0, Math.min(1, left)) * 120)}, 95%, 55%)`;
   }
   hurt(rel) {
     this.vign = 0.9;

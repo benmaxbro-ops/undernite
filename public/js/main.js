@@ -1,11 +1,12 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
-import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere,
+import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER,
   creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow } from './shared.js';
 import { buildEnvironment } from './world.js';
-import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeFish, makeBoss, makeTrophy } from './models.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeFish, makeBoss, makeTrophy } from './models.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
+import { startFinisher } from './finisher.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -38,6 +39,15 @@ let crates = [];
 const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, byaw: 0, bpitch: 0, energy: 100, boost: false, exhaust: false };
 const LAVA_SKY = new THREE.Color(0xff9a50), LAVA_GROUND = new THREE.Color(0xff3a08), PRIM_SKY = new THREE.Color(0x6fa8ff), PRIM_GROUND = new THREE.Color(0x10204a);
 let held = -1;   // expedition: index of the caught fish/boss in your hand (-1 = weapon)
+// Wasserstrahlen der Hitscan-Waffen, die gerade sichtbar sind. BEAM_TIME = wie lange einer zu sehen ist (Sekunden).
+const beams = [], BEAM_TIME = 0.18;
+// Waffe in der Ego-Perspektive: hängt an der Kamera, rechts unten im Bild.
+// gills = wie weit die Kiemen offen sind (0…1), charge = wie voll das Druckfenster ist (0…1), kick = Rückstoß nach einem Schuss
+const view = { g: new THREE.Group(), gun: null, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, stage: 0 };
+view.g.position.set(0.15, -0.13, 0);   // rechts, unten (die Tiefe kommt von der Waffe selbst, siehe updateViewModel)
+camera.add(view.g);
+// firstPerson = Taste V gedrückt (Ego-Perspektive), fpOn = sie ist gerade wirklich aktiv (nicht in Fahrzeugen)
+let firstPerson = false, fpOn = false;
 let camYaw = 0, camPitch = -0.35, camDist = 5, firing = false, nextFire = 0, specId = 0, shockUntil = 0, shake = 0, deadInfo = null, promptT = 0, sendT = 0;
 let vehSince = 0, headUp = 0;
 // expedition flashlight: on/off with L, battery in seconds, recharges at the surface
@@ -141,15 +151,43 @@ function onSnap(m) {
   if (wasAlive && you && !you.alive && document.pointerLockElement) { /* keep lock for spectating */ }
 }
 
+// Wo ist die Mündung der Waffe von Spieler id gerade? (in der Ego-Perspektive: die Waffe vor der Kamera)
+const MZ = new THREE.Vector3();
+function muzzleOf(id) {
+  let m = null;
+  if (id === myId && view.g.visible && view.gun) m = view.gun.userData.muzzle;
+  else { const e = players.get(id); if (e && e.mesh.visible && e.mesh.userData.muzzle) m = e.mesh.userData.muzzle(); }
+  return m ? m.getWorldPosition(MZ) : null;
+}
+function addBeam(x0, y0, z0, x1, y1, z1, r) {
+  const mesh = makeBeam(x0, y0, z0, x1, y1, z1, r);
+  dyn.add(mesh);
+  beams.push({ mesh, t: BEAM_TIME });
+}
 function onEvent(e) {
   switch (e[0]) {
     case 'pj': {
+      // sichtbarer Start an der Mündung der Waffe (der Server rechnet weiter mit seinem eigenen Startpunkt)
+      const mz = muzzleOf(e[3]); if (mz) { e[4] = mz.x; e[5] = mz.y; e[6] = mz.z; }
       const widx = e[2], def = WEAPONS[WEAPON_IDS[widx]], mesh = makeProjectile(widx);
       mesh.position.set(e[4], e[5], e[6]); mesh.lookAt(e[4] + e[7], e[5] + e[8], e[6] + e[9]); dyn.add(mesh);
       projs.set(e[1], { mesh, x: e[4], y: e[5], z: e[6], dx: e[7], dy: e[8], dz: e[9], sp: def.speed, life: def.life, trail: widx >= 4 ? 0.03 : 0.09, tt: 0 });
       if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]));
       projs.lastShot = time;
-      if (e[3] === myId) shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08);
+      if (e[3] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
+      break;
+    }
+    case 'beam': {
+      // Hitscan-Wasserstrahl: e = ['beam', Waffe, Schütze, Start x y z, Ende x y z]
+      const widx = e[1], def = WEAPONS[WEAPON_IDS[widx]];
+      const mz = muzzleOf(e[2]); if (mz) { e[3] = mz.x; e[4] = mz.y; e[5] = mz.z; }   // der Strahl beginnt an der Mündung
+      addBeam(e[3], e[4], e[5], e[6], e[7], e[8], def.beam || 0.06);
+      // ein paar Blasen entlang des Strahls
+      for (let i = 0; i < 4; i++) { const k = Math.random(); env.bubble(e[3] + (e[6] - e[3]) * k, e[4] + (e[7] - e[4]) * k, e[5] + (e[8] - e[5]) * k, 1, 0.15, 0.5); }
+      // Splitterwerfer schießt 7 Strahlen gleichzeitig – das Geräusch nur einmal abspielen
+      if (beams.lastShot !== time) sfx.jet(widx, e[2] === myId ? 1 : volAt(e[3], e[4], e[5]));
+      beams.lastShot = time;
+      if (e[2] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
       break;
     }
     case 'hit': removeProj(e[1]); env.bubble(e[2], e[3], e[4], 7, 0.4, 2); if (e[5] === 1 || e[5] === 3) env.blood(e[2], e[3], e[4]); sfx.hit(volAt(e[2], e[3], e[4])); break;
@@ -162,16 +200,56 @@ function onEvent(e) {
     case 'cdie': env.blood(e[2], e[3], e[4]); env.bubble(e[2], e[3], e[4], 22, 1.5, 2); break;
     case 'bite': env.blood(e[1], e[2], e[3]); sfx.bite(volAt(e[1], e[2], e[3])); break;
     case 'ink': env.ink(e[1], e[2], e[3]); break;
+    case 'fin': {
+      // der Gegner verschwindet sofort, an seiner Stelle spielt eine Kopie die Finisher-Animation
+      const ve = players.get(e[2]); if (ve) { dyn.remove(ve.mesh); players.delete(e[2]); }
+      const f = startFinisher(finCtx, e);
+      fins.push(f);
+      if (e[1] === myId) { myFin = f; firing = false; }
+      break;
+    }
   }
+}
+// ---------- Finisher ----------
+const fins = [];      // alle Finisher, die gerade laufen
+let myFin = null;     // mein eigener (dann steuert die Animation meinen Taucher und die Kamera)
+let lastGrunt = 0;
+const finCtx = {
+  dyn, sfx, get env() { return env; },
+  posOf: (id) => id === myId ? me : players.get(id),
+  muzzleOf, beam: addBeam, shake: (v) => { shake = Math.max(shake, v); },
+};
+// welcher Gegner kann gerade gefinisht werden? (nah genug und wenig Leben)
+function finTarget() {
+  if (mode === 'exp' || !you || !you.alive || you.veh || myFin) return null;
+  const range = FINISHER.range[mySuit]; let best = null, bd = 1e9;
+  for (const e of players.values()) {
+    if (e.id === myId || !e.mesh.visible || e.hp > SUITS[e.suit].hp * FINISHER.hp) continue;
+    const d = Math.hypot(e.x - me.x, e.y - me.y, e.z - me.z);
+    if (d < range && d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+function updateFinishers(dt) {
+  for (let i = fins.length - 1; i >= 0; i--) if (!fins[i].update(dt)) { if (fins[i] === myFin) myFin = null; fins.splice(i, 1); }
+  // während meines Finishers bewegt die Animation meinen Taucher
+  if (myFin && myFin.pose) { const P = myFin.pose; me.x = P.x; me.y = P.y; me.z = P.z; me.vx = me.vy = me.vz = 0; me.byaw = P.yaw; me.bpitch = 0; }
 }
 function onPrivate(e) {
   switch (e[0]) {
     case 'hurt': {
       if (e[4]) { hud.hurt(null); break; }
       const rel = Math.atan2(e[2] - me.x, -(e[3] - me.z)) + camYaw;
-      hud.hurt(rel); sfx.hurt(); shake = Math.max(shake, 0.2); break;
+      hud.hurt(rel); sfx.hurt(); shake = Math.max(shake, 0.35);
+      // Treffer-Wackler: die Kamera wird kurz zur Seite und nach oben gerissen (stärker bei mehr Schaden)
+      const jolt = Math.min(0.08, 0.01 + e[1] * 0.0015);
+      camYaw += (Math.random() - 0.5) * jolt * 1.5; camPitch += (Math.random() * 0.6 - 0.2) * jolt; view.kick = Math.max(view.kick, 0.6);
+      if (time - lastGrunt > 0.7) { lastGrunt = time; sfx.grunt(mySuit === 'goliath' ? 1.5 : mySuit === 'bulwark' ? 1.15 : 1); }
+      break;
     }
-    case 'hm': hud.hitmark(e[1], e[2]); sfx.hitmark(e[2]); break;
+    // Treffer: e = ['hm', Schaden, Kill, Leben übrig 0…1, Schild zerbrochen]
+    case 'hm': hud.hitmark(e[1], e[2], e[3]); sfx.hitmark(e[2]); if (e[4]) sfx.shieldBreak(1); break;
+    case 'shb': sfx.shieldBreak(0.8); hud.banner('Schild zerstört!', 1.2); shake = Math.max(shake, 0.35); break;   // dein eigenes Schild
     case 'warn': hud.banner(e[1], 2.5); break;
     case 'grab': hud.banner('Ein Oktopus hat dich gepackt – F hämmern!', 3); break;
     case 'shock': shockUntil = time + 0.8; hud.shock(); sfx.shock(); break;
@@ -200,6 +278,8 @@ addEventListener('keydown', (e) => {
   if (e.repeat) return;
   keys[e.code] = true;
   if (phase !== 'play' || !you || !you.alive) return;
+  if (e.code === 'KeyV') { firstPerson = !firstPerson; return; }   // Ego-Perspektive an/aus
+  if (e.code === 'KeyG') { const t = finTarget(); if (t) send({ t: 'fin', id: t.id }); return; }   // Finisher
   if (mode === 'exp' && e.code === 'KeyL') {
     if (torch.bat <= 0) hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 2);
     else { torch.on = !torch.on; sfx.hitmark(false); }
@@ -349,13 +429,16 @@ function aimDir() {
   let D = 150;
   const t = W.segmentHit(cp.x, cp.y, cp.z, cp.x + cd[0] * D, cp.y + cd[1] * D, cp.z + cd[2] * D);
   if (t > 0) D *= t;
-  const test = (x, y, z, r) => { const tt = segSphere(cp.x, cp.y, cp.z, cd[0] * D, cd[1] * D, cd[2] * D, x, y, z, r); if (tt > 0) D *= tt; };
-  for (const e of players.values()) if (e.id !== myId) test(e.x, e.y, e.z, SUITS[e.suit].r);
-  for (const c of creatures.values()) test(c.x, c.y, c.z, c.r);
+  // aimAt merkt sich, wen das Fadenkreuz trifft: [1, id] = Spieler, [3, id] = Kreatur (für den Lag-Ausgleich am Server)
+  aimAt = null;
+  const test = (x, y, z, r, who) => { const tt = segSphere(cp.x, cp.y, cp.z, cd[0] * D, cd[1] * D, cd[2] * D, x, y, z, r); if (tt > 0) { D *= tt; aimAt = who; } };
+  for (const e of players.values()) if (e.id !== myId) test(e.x, e.y, e.z, SUITS[e.suit].r, [1, e.id]);
+  for (const [id, c] of creatures) test(c.x, c.y, c.z, c.r, [3, id]);
   D = Math.max(D, camDist + 5);
   const ax = cp.x + cd[0] * D - me.x, ay = cp.y + cd[1] * D - me.y, az = cp.z + cd[2] * D - me.z, l = Math.hypot(ax, ay, az) || 1;
   return [ax / l, ay / l, az / l];
 }
+let aimAt = null;
 function tryFire(now) {
   if (!firing || held >= 0) return;
   const v = you.veh ? vehicles.get(you.veh) : null;
@@ -365,7 +448,9 @@ function tryFire(now) {
   if (now < nextFire) return;
   nextFire = now + 1000 / rate;
   if (w) w[2]--;
-  send({ t: 'f', d: aimDir().map(x => +x.toFixed(4)) });
+  const d = aimDir().map(x => +x.toFixed(4));
+  send(aimAt ? { t: 'f', d, a: aimAt } : { t: 'f', d });
+  recoil(v ? WEAPONS.subtorp : WEAPONS[w[0]]);
 }
 function computePrompt() {
   if (!you || !you.alive) return null;
@@ -373,6 +458,7 @@ function computePrompt() {
   if (mode === 'exp' && held >= 0 && !hud.shopOpen && nearBase()) { const c = catchFromNet(you.x.bagL[held]); return ['E', `${catchName(c)} ins Aquarium setzen (+${catchRate(c).toLocaleString('de-DE', { maximumFractionDigits: 2 })} €/s)`]; }
   if (mode === 'exp' && !hud.shopOpen && !nearBoat() && !nearBase() && otherBaseOwner()) return ['–', `Basis von ${otherBaseOwner()} · nur Luft tanken`];
   if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
+  const ft = finTarget(); if (ft) return ['G', `Finisher: ${ft.name}`];
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
   const S = SUITS[mySuit]; let best = null, bd = 1e9;
@@ -395,8 +481,12 @@ function updateEntities(dt) {
     }
     e.surf = SURFACE - e.y < 1.3;   // at the surface the diver floats upright
     e.held = e.id === myId && held >= 0 && you && you.x ? catchFromNet(you.x.bagL[held]) : null;
+    // nur vom eigenen Taucher weiß das Spiel, wann er nachlädt – also gehen nur bei dir die Kiemen auf
+    e.gills = e.id === myId ? view.gills : 0; e.charge = e.id === myId ? view.charge : 0;
+    e.fin = fins.find(f => f.attacker === e.id) || null;
     const veh = e.veh ? vehicles.get(e.veh) : null;
-    e.mesh.visible = !(veh && veh.type === 'sub');
+    // im U-Boot sieht man den Taucher nicht, und in der Ego-Perspektive nicht den eigenen Körper
+    e.mesh.visible = !(veh && veh.type === 'sub') && !(e.id === myId && fpOn);
     e.mesh.position.set(e.x, e.y, e.z);
     e.mesh.userData.update(dt, e);
     const near = e.mesh.position.distanceToSquared(camera.position);
@@ -428,11 +518,79 @@ function updateEntities(dt) {
     p.tt -= dt; if (p.tt <= 0) { p.tt = p.trail; env.bubble(p.x, p.y, p.z, 1, 0.1, 0, 0.025 + Math.random() * 0.03); }
     if (p.life <= -0.15 || p.y < W.heightAt(p.x, p.z) - 0.5) removeProj(id);
   }
+  // Wasserstrahlen verblassen in BEAM_TIME Sekunden und verschwinden dann
+  for (let i = beams.length - 1; i >= 0; i--) {
+    const b = beams[i]; b.t -= dt;
+    if (b.t <= 0) { dyn.remove(b.mesh); b.mesh.userData.dispose(); beams.splice(i, 1); }
+    else b.mesh.userData.fade(b.t / BEAM_TIME);
+  }
+}
+// Rückstoß: die Kamera springt beim Schuss nach oben (und etwas zur Seite) und federt dann zum Großteil zurück.
+// Mehr Schaden pro Schuss = mehr Rückstoß. RECOIL_BACK = wie viel davon zurückfedert (0.75 = 75 %).
+let recoilBack = 0;
+const RECOIL = 0.0006, RECOIL_BACK = 0.75;
+function recoil(def) {
+  const k = Math.min(0.09, 0.006 + def.dmg * def.pellets * RECOIL);
+  camPitch = Math.min(1.45, camPitch + k);
+  camYaw += (Math.random() - 0.5) * k * 0.6;
+  recoilBack += k * RECOIL_BACK;
+  shake = Math.max(shake, k * 2.5);
+  view.kick = 1;
+}
+// Kiemen, Druckfenster, Nachlade-Geräusche und die Waffe vor der Kamera (Ego-Perspektive)
+function updateViewModel(dt) {
+  // Rückstoß zurückfedern lassen
+  const back = Math.min(recoilBack, dt * 0.6); camPitch -= back; recoilBack -= back;
+  const w = you && you.alive ? you.w[you.slot] : null;
+  // Nachladen: erste Hälfte = Wasser ansaugen (Kiemen auf), zweite Hälfte = komprimieren (Kiemen zu, Druckfenster füllt sich)
+  const reloading = !!w && you.rl > 0;
+  const done = reloading ? 1 - you.rl / you.rlT : 0;
+  const sucking = reloading && done < 0.5;
+  // Geräusche genau dann starten, wenn eine neue Hälfte beginnt (0 = nichts, 1 = ansaugen, 2 = komprimieren)
+  const stage = !reloading ? 0 : sucking ? 1 : 2;
+  if (stage !== view.stage) {
+    if (stage === 1) sfx.suck(you.rlT * 0.5);
+    if (stage === 2) sfx.compress(you.rl);
+    view.stage = stage;
+  }
+  view.gills += ((sucking ? 1 : 0) - view.gills) * Math.min(1, dt * 8);
+  view.charge = reloading && !sucking ? (done - 0.5) * 2 : Math.max(0, view.charge - dt * 4);
+  // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
+  view.g.visible = fpOn && !!w && held < 0;
+  if (!view.g.visible) return;
+  const widx = WEAPON_IDS.indexOf(w[0]);
+  if (widx !== view.widx) {   // Waffe gewechselt: neues Modell bauen
+    view.widx = widx; view.g.clear();
+    view.gun = makeWaterGun(widx, true); view.g.add(view.gun);
+    view.gun.add(makeViewArms(mySuit, view.gun.userData));   // Arm und Hände halten die Waffe
+  }
+  view.gun.userData.setGills(view.gills);
+  view.gun.userData.setCharge(view.charge);
+  // Schwanken beim Schwimmen, Rückstoß beim Schießen, beim Ansaugen zur Seite drehen (damit man die Kiemen sieht)
+  const speed = Math.hypot(me.vx, me.vy, me.vz);
+  view.bob += dt * (2 + speed * 0.6);
+  view.kick = Math.max(0, view.kick - dt * 10);
+  const sway = Math.min(1, speed / 10) * 0.012;
+  // die Waffe so weit nach vorne schieben, dass ihr hinteres Ende 0,3 m vor der Kamera ist
+  const sh = view.gun.userData.fpShift, z = -(view.gun.userData.rear + 0.3) + sh[2];
+  view.gun.position.set(sh[0] + Math.cos(view.bob) * sway, sh[1] + Math.abs(Math.sin(view.bob)) * sway - view.gills * 0.03 + view.kick * 0.015, z + view.kick * 0.09);
+  view.gun.rotation.set(view.kick * 0.22 + view.gills * 0.12, view.gills * 0.45, view.gills * 0.55);
 }
 const V = new THREE.Vector3();
 function updateCamera(dt) {
   let tx, ty, tz, want, side = 0.9, up = 0.5;
   const alive = you && you.alive;
+  fpOn = false;
+  if (myFin) {
+    const G = myFin.ghost.position, mx = (me.x + G.x) / 2, my = (me.y + G.y) / 2 + 0.6, mz = (me.z + G.z) / 2;
+    const a = camYaw + 1.9 + myFin.p * 0.9, d = 5.5;
+    let px = mx + Math.sin(a) * d, py = my + 1.6, pz = mz + Math.cos(a) * d;
+    py = Math.min(SURFACE - 0.6, Math.max(py, W.heightAt(px, pz) + 0.8));
+    shake = Math.max(0, shake - dt * 2.2);
+    camera.position.set(px + (Math.random() - 0.5) * shake, py + (Math.random() - 0.5) * shake, pz);
+    camera.lookAt(mx, my, mz);
+    return;
+  }
   if (alive) {
     const v = you.veh ? vehicles.get(you.veh) : null;
     want = v ? VEHICLES[v.type].cam : SUITS[mySuit].cam;
@@ -440,7 +598,9 @@ function updateCamera(dt) {
     tx = me.x; ty = me.y + (SUITS[mySuit].mech ? 1.4 : 0.5); tz = me.z;
     // swimming at the surface: head out of the water, the camera looks across the sea
     if (SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
-    ty += headUp * 2.2;
+    // Ego-Perspektive: Kamera fährt in den Kopf (Abstand 0), nicht zur Seite, nicht nach oben
+    if (firstPerson && !v) { fpOn = true; want = 0; side = 0; up = 0; }
+    else ty += headUp * 2.2;
   } else {
     let e = players.get(specId);
     if (!e) { for (const p of players.values()) { if (!e || (!meta.get(p.id)?.bot && meta.get(e.id)?.bot)) e = p; } specId = e ? e.id : 0; }
@@ -459,6 +619,7 @@ function updateCamera(dt) {
   camera.rotation.set(camPitch, camYaw, 0);
 }
 function lobbyCamera() {
+  view.g.visible = false;   // keine Waffe vor der Kamera in der Lobby
   if (!W) return;
   const a = time * 0.05, w = W.wreck;
   camera.position.set(w.x + Math.cos(a) * 46, w.y + 20, w.z + Math.sin(a) * 46);
@@ -472,10 +633,10 @@ function frame(now) {
   if (phase === 'play' && W) {
     const alive = you && you.alive;
     if (alive) {
-      controlMe(dt); tryFire(now);
+      if (!myFin) { controlMe(dt); tryFire(now); }
       sendT += dt; if (sendT >= 1 / 30) { sendT = 0; send({ t: 'm', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), yaw: +me.byaw.toFixed(3), pitch: +me.bpitch.toFixed(3), b: me.boost ? 1 : 0 }); }
     }
-    updateEntities(dt); updateCamera(dt);
+    updateFinishers(dt); updateViewModel(dt); updateEntities(dt); updateCamera(dt);
     const fx = alive ? me : camera.position;
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
     promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }

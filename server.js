@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
-  CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR,
+  CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
   TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH,
 } from './public/js/shared.js';
@@ -201,10 +201,13 @@ function damage(p, amt, src, how, sx, sz) {
   if (v && v.type === 'sub' && how !== 'zone') { damageVehicle(v, amt, src); return; }
   let a = amt;
   p.hurtT = G.time;   // expedition: pauses health regeneration
+  const hadShield = p.shield > 0;
   if (how !== 'zone') { const s = Math.min(p.shield, a); p.shield -= s; a -= s; }
+  const shieldBroke = hadShield && p.shield <= 0;
+  if (shieldBroke && !p.bot) p.ye.push(['shb']);   // dein eigenes Schild ist kaputt
   p.hp -= a;
   if (!p.bot) p.ye.push(['hurt', Math.round(amt), r2(sx ?? p.x), r2(sz ?? p.z), how === 'zone' ? 1 : 0]);
-  if (src && src.id && !src.bot && src !== p) src.ye.push(['hm', Math.round(amt), p.hp <= 0 ? 1 : 0]);
+  if (src && src.id && !src.bot && src !== p) src.ye.push(['hm', Math.round(amt), p.hp <= 0 ? 1 : 0, +(Math.max(0, p.hp) / p.maxhp).toFixed(2), shieldBroke ? 1 : 0]);
   if (p.bot && src && src.id && src !== p && src.alive && (!src.bot || G.time >= p.peaceUntil) && (!p.target || rnd() < 0.5)) {
     if (src.bot) p.fightUntil = G.time + 5 + rnd() * 4; p.target = { k: 'p', ref: src }; p.reactT = Math.min(p.reactT, 0.25); }
   if (p.hp <= 0) { if (G.mode === 'exp') expDown(p, src, how); else kill(p, src, how); }
@@ -214,13 +217,24 @@ function damageVehicle(v, amt, src) {
   v.hp -= amt;
   const d = v.driver && G.players.get(v.driver);
   if (d && !d.bot) d.ye.push(['hurt', Math.round(amt), r2(v.x), r2(v.z), 0]);
-  if (src && src.id && !src.bot && d && src !== d) src.ye.push(['hm', Math.round(amt), 0]);
+  if (src && src.id && !src.bot && d && src !== d) src.ye.push(['hm', Math.round(amt), 0, +(Math.max(0, v.hp) / VEHICLES[v.type].hp).toFixed(2), 0]);
   if (v.hp <= 0) {
     v.dead = true; G.vehicles.delete(v.id);
     ev('boom', 0, r2(v.x), r2(v.y), r2(v.z), 7);
     ev('vdie', v.id);
     if (d) { d.veh = 0; damage(d, 35, src, 'wreck', v.x, v.z); }
   }
+}
+// Finisher: p erledigt den Gegner mit der id, wenn er nah genug ist und wenig Leben hat (Regeln: FINISHER in shared.js).
+// Alle Browser bekommen 'fin' und spielen die Animation ab: [Angreifer, Opfer, Klasse Angreifer, Klasse Opfer, x, y, z, Blickrichtung Opfer]
+function finisher(p, id) {
+  if (G.mode === 'exp' || p.veh || p.grabbed || G.time < (p.finCool || 0)) return;
+  const t = G.players.get(id);
+  if (!t || !t.alive || t === p || t.veh) return;
+  if (dist(p, t) > FINISHER.range[p.suit] + 1.5 || t.hp > t.maxhp * FINISHER.hp + 1) return;
+  p.finCool = G.time + 2;
+  ev('fin', p.id, t.id, SUIT_ORDER.indexOf(p.suit), SUIT_ORDER.indexOf(t.suit), r2(t.x), r2(t.y), r2(t.z), r2(t.yaw));
+  kill(t, p, 'fin');
 }
 function kill(p, src, how) {
   p.alive = false; p.hp = 0;
@@ -239,7 +253,7 @@ function kill(p, src, how) {
 function damageCreature(c, amt, src) {
   if (c.dead) return;
   c.hp -= amt;
-  if (src && !src.bot) src.ye.push(['hm', Math.round(amt), c.hp <= 0 ? 1 : 0]);
+  if (src && !src.bot) src.ye.push(['hm', Math.round(amt), c.hp <= 0 ? 1 : 0, +(Math.max(0, c.hp) / (c.maxhp || CREATURES[c.type].hp)).toFixed(2), 0]);
   if (c.type === 'fish' || c.type === 'boss') return expCreatureHurt(c, src);
   if (c.type === 'octo' && c.state === 'hold') c.grip -= amt;
   if (c.type === 'shark' && src && src.alive && c.state !== 'retreat') { c.state = 'hunt'; c.tid = src.id; }
@@ -261,16 +275,29 @@ function startReload(p) {
   if (w.ammo >= d.mag) return;
   p.reload = p.reloadT = d.reload;
 }
-function spawnProj(p, wid, ox, oy, oz, d, mul, vehId) {
+// Lag-Ausgleich: Im Browser sieht man alles ca. 0,1 s zu spät. Hat der Spieler genau auf ein Ziel gezielt
+// (aim = [Art, id], 1 = Spieler, 3 = Kreatur), zählt ein Hitscan-Treffer bei diesem Ziel noch AIM_HELP Meter daneben.
+const AIM_HELP = 1.5;
+function spawnProj(p, wid, ox, oy, oz, d, mul, vehId, aim) {
   const def = WEAPONS[wid];
   let dx = d[0] + (rnd() * 2 - 1) * def.spread, dy = d[1] + (rnd() * 2 - 1) * def.spread, dz = d[2] + (rnd() * 2 - 1) * def.spread;
   const l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1; dx /= l; dy /= l; dz /= l;
   const pr = { id: nextId++, o: p.id, wid, x: ox, y: oy, z: oz, dx, dy, dz, sp: def.speed, life: def.life, dmg: def.dmg * mul, splash: def.splash, veh: vehId || 0 };
+  if (def.hitscan) {
+    pr.aim = aim;
+    // Hitscan: die ganze Strecke (range) in einem einzigen Schritt prüfen, der Schuss trifft sofort
+    pr.sp = def.range;
+    const end = moveProj(pr, 1);
+    pr.dead = true;
+    ev('beam', WEAPON_IDS.indexOf(wid), p.id, r2(ox), r2(oy), r2(oz), r2(end[0]), r2(end[1]), r2(end[2]));
+    return;
+  }
   G.proj.push(pr);
   ev('pj', pr.id, WEAPON_IDS.indexOf(wid), p.id, r2(ox), r2(oy), r2(oz), +dx.toFixed(3), +dy.toFixed(3), +dz.toFixed(3));
 }
-function fire(p, d) {
+function fire(p, d, aim) {
   if (!p.alive || !Array.isArray(d) || d.length !== 3 || d.some(v => typeof v !== 'number' || !isFinite(v))) return;
+  if (!Array.isArray(aim) || aim.length !== 2 || !aim.every(Number.isInteger)) aim = null;
   const l = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
   if (l < 0.5) return;
   d = [d[0] / l, d[1] / l, d[2] / l];
@@ -287,7 +314,7 @@ function fire(p, d) {
   const def = WEAPONS[w.id], S = SUITS[p.suit];
   w.ammo--; p.nextFire = G.time + 1 / def.rate;
   const o = S.r + 0.5;
-  for (let i = 0; i < def.pellets; i++) spawnProj(p, w.id, p.x + d[0] * o, p.y + d[1] * o, p.z + d[2] * o, d, RARITY[w.rar].mul * S.dmg, 0);
+  for (let i = 0; i < def.pellets; i++) spawnProj(p, w.id, p.x + d[0] * o, p.y + d[1] * o, p.z + d[2] * o, d, RARITY[w.rar].mul * S.dmg, 0, aim);
   if (w.ammo === 0) startReload(p);
 }
 function explode(pr, x, y, z) {
@@ -311,45 +338,50 @@ function explode(pr, x, y, z) {
   }
 }
 function stepProjectiles(dt) {
-  const W = G.world;
-  for (const pr of G.proj) {
-    const sx = pr.dx * pr.sp * dt, sy = pr.dy * pr.sp * dt, sz = pr.dz * pr.sp * dt;
-    let best = W.segmentHit(pr.x, pr.y, pr.z, pr.x + sx, pr.y + sy, pr.z + sz), hit = null, kind = 0;
-    if (best < 0) best = 2;
-    for (const q of G.players.values()) {
-      if (!q.alive || q.id === pr.o) continue;
-      const inSub = q.veh && G.vehicles.get(q.veh)?.type === 'sub';
-      if (inSub) continue;
-      const t = segSphere(pr.x, pr.y, pr.z, sx, sy, sz, q.x, q.y, q.z, SUITS[q.suit].r * 1.05);
-      if (t >= 0 && t < best) { best = t; hit = q; kind = 1; }
-    }
-    for (const v of G.vehicles.values()) {
-      if (v.type !== 'sub' || v.id === pr.veh) continue;
-      const t = segSphere(pr.x, pr.y, pr.z, sx, sy, sz, v.x, v.y, v.z, 3);
-      if (t >= 0 && t < best) { best = t; hit = v; kind = 2; }
-    }
-    for (const c of G.creatures) {
-      if (c.dead) continue;
-      const t = segSphere(pr.x, pr.y, pr.z, sx, sy, sz, c.x, c.y, c.z, creatureR(c.type, c.sub));
-      if (t >= 0 && t < best) { best = t; hit = c; kind = 3; }
-    }
-    const owner = G.players.get(pr.o);
-    if (best <= 1) {
-      const hx = pr.x + sx * best, hy = pr.y + sy * best, hz = pr.z + sz * best;
-      pr.dead = true;
-      if (pr.splash) explode(pr, hx, hy, hz);
-      else {
-        ev('hit', pr.id, r2(hx), r2(hy), r2(hz), kind);
-        if (kind === 1) damage(hit, pr.dmg, owner, 'p', pr.x, pr.z);
-        else if (kind === 2) { const d = hit.driver && G.players.get(hit.driver); if (d) damage(d, pr.dmg, owner, 'p', pr.x, pr.z); else damageVehicle(hit, pr.dmg, owner); }
-        else if (kind === 3) damageCreature(hit, pr.dmg, owner);
-      }
-      continue;
-    }
-    pr.x += sx; pr.y += sy; pr.z += sz; pr.life -= dt;
-    if (pr.life <= 0) { pr.dead = true; if (pr.splash) explode(pr, pr.x, pr.y, pr.z); }
-  }
+  for (const pr of G.proj) moveProj(pr, dt);
   G.proj = G.proj.filter(p => !p.dead);
+}
+// moves one projectile for dt seconds and returns where it is now (or the point where it hit something)
+function moveProj(pr, dt) {
+  const W = G.world;
+  const sx = pr.dx * pr.sp * dt, sy = pr.dy * pr.sp * dt, sz = pr.dz * pr.sp * dt;
+  let best = W.segmentHit(pr.x, pr.y, pr.z, pr.x + sx, pr.y + sy, pr.z + sz), hit = null, kind = 0;
+  if (best < 0) best = 2;
+  for (const q of G.players.values()) {
+    if (!q.alive || q.id === pr.o) continue;
+    const inSub = q.veh && G.vehicles.get(q.veh)?.type === 'sub';
+    if (inSub) continue;
+    const help = pr.aim && pr.aim[0] === 1 && pr.aim[1] === q.id ? AIM_HELP : 0;
+    const t = segSphere(pr.x, pr.y, pr.z, sx, sy, sz, q.x, q.y, q.z, SUITS[q.suit].r * 1.05 + help);
+    if (t >= 0 && t < best) { best = t; hit = q; kind = 1; }
+  }
+  for (const v of G.vehicles.values()) {
+    if (v.type !== 'sub' || v.id === pr.veh) continue;
+    const t = segSphere(pr.x, pr.y, pr.z, sx, sy, sz, v.x, v.y, v.z, 3);
+    if (t >= 0 && t < best) { best = t; hit = v; kind = 2; }
+  }
+  for (const c of G.creatures) {
+    if (c.dead) continue;
+    const help = pr.aim && pr.aim[0] === 3 && pr.aim[1] === c.id ? AIM_HELP : 0;
+    const t = segSphere(pr.x, pr.y, pr.z, sx, sy, sz, c.x, c.y, c.z, creatureR(c.type, c.sub) + help);
+    if (t >= 0 && t < best) { best = t; hit = c; kind = 3; }
+  }
+  const owner = G.players.get(pr.o);
+  if (best <= 1) {
+    const hx = pr.x + sx * best, hy = pr.y + sy * best, hz = pr.z + sz * best;
+    pr.dead = true;
+    if (pr.splash) explode(pr, hx, hy, hz);
+    else {
+      ev('hit', pr.id, r2(hx), r2(hy), r2(hz), kind);
+      if (kind === 1) damage(hit, pr.dmg, owner, 'p', pr.x, pr.z);
+      else if (kind === 2) { const d = hit.driver && G.players.get(hit.driver); if (d) damage(d, pr.dmg, owner, 'p', pr.x, pr.z); else damageVehicle(hit, pr.dmg, owner); }
+      else if (kind === 3) damageCreature(hit, pr.dmg, owner);
+    }
+    return [hx, hy, hz];
+  }
+  pr.x += sx; pr.y += sy; pr.z += sz; pr.life -= dt;
+  if (pr.life <= 0) { pr.dead = true; if (pr.splash) explode(pr, pr.x, pr.y, pr.z); }
+  return [pr.x, pr.y, pr.z];
 }
 
 // ---------- loot / interaction ----------
@@ -633,8 +665,9 @@ function botStep(b, dt) {
     const w = b.weapons[b.slot];
     if (w && b.reactT <= 0 && ad < Math.min(42, WEAPONS[w.id].range * 0.9) && G.time >= b.nextFire && G.time >= b.holdT && b.reload <= 0) {
       const def = WEAPONS[w.id], tt = ad / def.speed, e = b.skill;
-      // bots only half-predict where you are going, so moving targets are harder for them to hit
-      const lead = tt * (0.3 + rnd() * 0.4);
+      // bots only half-predict where you are going, so moving targets are harder for them to hit.
+      // Hitscan trifft sofort: dann zielen Bots dorthin, wo du gerade eben warst (Reaktionszeit), sonst wären sie zu gut.
+      const lead = def.hitscan ? -(0.08 + rnd() * 0.15) : tt * (0.3 + rnd() * 0.4);
       const px = tgt.x + (tgt.vx || 0) * lead - b.x, py = tgt.y + (tgt.vy || 0) * lead - b.y, pz = tgt.z + (tgt.vz || 0) * lead - b.z;
       const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
       fire(b, [px / pl + (rnd() + rnd() - 1) * e, py / pl + (rnd() + rnd() - 1) * e, pz / pl + (rnd() + rnd() - 1) * e]);
@@ -1114,8 +1147,9 @@ wss.on('connection', (ws) => {
           p.yaw = m.yaw; p.pitch = clamp(m.pitch, -1.6, 1.6); p.boost = !!m.b;
         }
         break;
-      case 'f': if (p) { p.actT = G.time; fire(p, m.d); } break;
+      case 'f': if (p) { p.actT = G.time; fire(p, m.d, m.a); } break;
       case 'r': if (p && p.alive) startReload(p); break;
+      case 'fin': if (p && p.alive) finisher(p, m.id); break;
       case 'slot': if (p && p.alive && [0, 1, 2].includes(m.i) && p.weapons[m.i]) { p.slot = m.i; p.reload = 0; } break;
       case 'e': if (p) interact(p); break;
       case 'x': if (p && p.alive) struggle(p); break;

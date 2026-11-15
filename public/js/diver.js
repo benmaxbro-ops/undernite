@@ -105,12 +105,8 @@ export function buildRealDiver(suit, accent) {
   };
   const rightHand = arm(1, [-0.32, 0.28, 0], [0.18, -0.05, 0]);
   arm(-1, [0.55, Math.PI + 0.35, 0], [0, 1.6, 0]);
-  // weapon in the right hand
-  const gun = new THREE.Group(); gun.position.set(0, -0.02, -0.33); rightHand.add(gun);
-  const gunGlow = mat(0xffe066, { emissive: 0xffe066, emissiveIntensity: 1.2 });
-  put(gun, BOX, mat(0x3a4650, { metalness: 0.5, roughness: 0.4 }), 0, 0, -0.06, 0.06, 0.09, 0.38);
-  put(gun, CYL, gunGlow, 0, 0.02, -0.28, 0.02, 0.08, 0.02).rotation.x = Math.PI / 2;
-  put(gun, BOX, mat(0x22282e), 0, -0.08, 0.08, 0.05, 0.12, 0.06);
+  // weapon in the right hand: the white-blue water gun is put in here by makePlayerModel (models.js)
+  const gun = new THREE.Group(); gun.position.set(0, 0.08, -0.3); rightHand.add(gun);
 
   // ----- legs with long fins -----
   const finM = mat(0x0f1114, { roughness: 0.55, side: THREE.DoubleSide });
@@ -137,7 +133,7 @@ export function buildRealDiver(suit, accent) {
   g.scale.setScalar({ manta: 0.92, triton: 1, bulwark: 1.12 }[suit] ?? 1);
 
   return {
-    g, gunGlow, gun, hand: rightHand, mech: false, legs: [],
+    g, gun, hand: rightHand, mech: false, legs: [],
     // flutter kick: legs move up and down from the hip, knees and fins follow with a delay
     animate(dt, s, phase, amp) {
       for (let i = 0; i < 2; i++) {
