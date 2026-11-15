@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow } from './shared.js';
 import { buildEnvironment } from './world.js';
 import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeFish, makeBoss, makeTrophy } from './models.js';
 import { Hud } from './hud.js';
@@ -36,6 +36,7 @@ let mode = 'br', phase = 'connecting', myId = 0, mySuit = 'triton', you = null, 
 const meta = new Map(), players = new Map(), creatures = new Map(), vehicles = new Map(), pickups = new Map(), projs = new Map();
 let crates = [];
 const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, energy: 100, boost: false, exhaust: false };
+const LAVA_SKY = new THREE.Color(0xff9a50), LAVA_GROUND = new THREE.Color(0xff3a08), PRIM_SKY = new THREE.Color(0x6fa8ff), PRIM_GROUND = new THREE.Color(0x10204a);
 let held = -1;   // expedition: index of the caught fish/boss in your hand (-1 = weapon)
 let camYaw = 0, camPitch = -0.35, camDist = 5, firing = false, nextFire = 0, specId = 0, shockUntil = 0, shake = 0, deadInfo = null, promptT = 0, sendT = 0;
 let vehSince = 0, headUp = 0;
@@ -471,7 +472,12 @@ function frame(now) {
       // below ~150 m it is almost pitch black without a lamp
       const dep = SURFACE - camera.position.y;
       hemi.intensity = 1.25 * Math.min(1, Math.max(0.04, 1 - dep / 160)); sun.intensity = 1.35 * Math.min(1, Math.max(0, 1 - dep / 120));
-    } else { hemi.intensity = 1.25; sun.intensity = 1.35; }
+      // floor 6 (Vulkanschlund) glows red from the lava below, floor 7 (Urzeittiefe) has a faint blue shimmer
+      const lava = deepGlow(dep).lava, prim = deepGlow(dep).prim;
+      hemi.color.setHex(0xb5e8ff).lerp(LAVA_SKY, lava).lerp(PRIM_SKY, prim);
+      hemi.groundColor.setHex(0x12303c).lerp(LAVA_GROUND, lava).lerp(PRIM_GROUND, prim);
+      hemi.intensity = Math.max(hemi.intensity, 0.9 * lava + 0.45 * prim);
+    } else { hemi.intensity = 1.25; sun.intensity = 1.35; hemi.color.setHex(0xb5e8ff); hemi.groundColor.setHex(0x12303c); }
     hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, marks);
     if (mode === 'exp' && you && !you.alive && deadInfo) hud.spec(`<b>Ohnmächtig!</b>Erwischt von ${esc(deadInfo.by)}${deadInfo.lost ? ` · ${deadInfo.lost} Fische verloren` : ''} · aufwachen in ${Math.ceil(you.x?.rt || 0)} s`);
     else if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }

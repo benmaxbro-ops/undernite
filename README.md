@@ -48,23 +48,25 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 
 In der Lobby rechts zwischen **Battle Royale** und **Tiefsee-Expedition** wählen.
 
-- **Die Welt ist ein Trichter mit 5 Etagen:** Sonnenriff (bis 60 m), Zwielicht (bis 130 m), Mitternacht (bis 210 m),
-  Abgrund (bis 290 m), Tiefseegraben (bis ca. 355 m). In der Mitte an der Oberfläche liegt das **Händler-Boot**.
-- **Fische jagen:** 15 Fischarten, 3 pro Etage, tauchen zufällig auf. Je tiefer, desto wertvoller. Selten gibt es
-  **goldene Fische** (5× Wert). Manche beißen zurück (Barrakuda, Viperfisch, Anglerfisch, Drachenfisch).
+- **Die Welt ist ein Trichter mit 7 Etagen:** Sonnenriff (bis 60 m), Zwielicht (bis 130 m), Mitternacht (bis 210 m),
+  Abgrund (bis 290 m), Tiefseegraben (bis 370 m), **Vulkanschlund** (bis 450 m, glüht rot) und **Urzeittiefe** (bis ca. 540 m, ganz unten in der Mitte). In der Mitte an der Oberfläche liegt das **Händler-Boot**.
+- **Fische jagen:** 21 Fischarten, 3 pro Etage, tauchen zufällig auf. Je tiefer, desto wertvoller. Selten gibt es
+  **goldene Fische** (5× Wert). Manche beißen zurück (Barrakuda, Viperfisch, Anglerfisch, Drachenfisch, Magma-Aal, Säbelzahnfisch).
 - **Verkaufen:** Am Boot E drücken – Fische einzeln oder alle verkaufen, Ausrüstung kaufen.
 - **Unterwasser-Basis:** Etage 1, 50 m tief, links (Westen, auf der Minikarte „Basis“), frei auf Stelzen vor der Felswand. Die Basis ist auch eine Luftstation.
 - **Fang-Leiste:** Alles, was du fängst (Fische *und* besiegte Endbosse), liegt in Slots über den Waffen. Mit **4–9** oder **Q** nimmst du es in die Hand (1–3 = zurück zur Waffe).
   In der Basis setzt du es mit **E** (oder Klick) ins Aquarium. Jeder Slot zeigt, wie viel € pro Sekunde er im Aquarium macht.
 - **Aquarium:** Fische darin verdienen jede Minute 8 % ihres Werts (Tiefseefische viel mehr, goldene 5×) – aber **nur während du wirklich spielst**: offline gibt es nichts, und nach 60 s ohne Bewegen/Umschauen (AFK) pausiert das Aquarium.
-  **Endbosse** verdienen am meisten, je schwerer, desto mehr: Riffkönig 5 €/s, Krakenmutter 12, Laternenschlund 30, Knochenhai 70, Leviathan 150 €/s.
-  Es steht als rundes Glasbecken in der Basis. Start mit 3 Plätzen, dort vergrößerbar bis 20. Einkommen wird pro Sekunde angezeigt.
+  **Endbosse** verdienen am meisten, je schwerer, desto mehr: Riffkönig 5 €/s, Krakenmutter 12, Laternenschlund 30, Knochenhai 70, Leviathan 150, Glutkrake 320, Megalodon 700 €/s.
+  Es steht als rundes Glasbecken in der Basis. Start mit 3 Plätzen, dort vergrößerbar bis 30. Einkommen wird pro Sekunde angezeigt.
 - **Laden (E am Boot):** bessere Waffen, größere **Flaschen** (mehr Luft, tiefer erlaubt), **Atemtraining** (weniger Luftverbrauch) und hellere **Lampen**.
+  Alles ist teuer – die besten Sachen kosten mehrere 100.000 €. Nur im Tauch-Modus gibt es **Plasmalanze** und **Schallkanone**;
+  Explosionen verletzen dort keine Taucher (Koop).
 - **Taschenlampe (L):** hast du von Anfang an. Unten ist es stockdunkel! Der Akku lädt sich an der Oberfläche wieder auf.
 - **Reichweite:** jede Waffe schießt nur so weit wie ihre Reichweite (Bolzenpistole 22 m, Splitterwerfer 26 m, Nadler 38 m, Harpune 65 m, Torpedowerfer 80 m).
 - **Luft:** sinkt unter Wasser, je tiefer desto schneller. Unter der Maximaltiefe der Flasche macht der Druck Schaden.
   An der Oberfläche füllt sich die Luft wieder.
-- **Bosse:** einer pro Etage, jeder Biss macht **20 Schaden**, du hast **100 Leben**. Alle, die mitkämpfen, bekommen den Boss in ihre Fang-Leiste. Dann entscheidest du: **am Boot verkaufen** (Belohnung in €) **oder** in der Basis **ins Aquarium** (€ pro Sekunde), nicht beides.
+- **Bosse:** einer pro Etage, jeder Biss macht **20 Schaden** (Glutkrake 25, Megalodon 30), du hast **100 Leben**. Alle, die mitkämpfen, bekommen den Boss in ihre Fang-Leiste. Dann entscheidest du: **am Boot verkaufen** (Belohnung in €) **oder** in der Basis **ins Aquarium** (€ pro Sekunde), nicht beides.
   Was im Aquarium ist, kann man nur noch freilassen (Platz machen), nicht mehr verkaufen.
   Nach 2 Minuten kommt der Boss zurück.
 - **Leben regenerieren:** 5 s ohne Schaden, dann heilst du 4 Leben pro Sekunde, an der Oberfläche 15.

@@ -1,7 +1,8 @@
 // Undernite - environment rendering: seafloor, flora, wreck, ruins, water
 // surface, light shafts, plankton, bubbles, effects and the zone wall.
 import * as THREE from 'three';
-import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT } from './shared.js';
+import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT, deepGlow } from './shared.js';
+const LAVA_FOG = new THREE.Color(0x4a1206), PRIM_FOG = new THREE.Color(0x061a3a);
 import { makeBoat, makeTag } from './models.js';
 
 const TAU = Math.PI * 2;
@@ -350,6 +351,8 @@ export function buildEnvironment(scene, W) {
       if (exp) {   // the deeper, the darker
         const dd = Math.max(0, Math.min(1, (SURFACE - cy - 120) / 220));
         fog.color.lerp(abyss, dd); fog.density += 0.008 * dd;
+        const g = deepGlow(SURFACE - cy);   // red lava glow on floor 6, blue shimmer on floor 7
+        fog.color.lerp(LAVA_FOG, g.lava * 0.9).lerp(PRIM_FOG, g.prim * 0.8);
         boat.userData.update(dt); base.update(dt);
         // the guiding light beam only shows once you are deeper down
         boat.userData.beam.material.opacity = 0.07 * Math.max(0, Math.min(1, (SURFACE - cy - 10) / 30));

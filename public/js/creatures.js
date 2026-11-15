@@ -143,6 +143,18 @@ const LOOK = {
   'Riemenfisch': { body: 'eel', stretch: 2.6, tail: 'none', longFin: true, crest: true, back: 0xaab6c0, belly: 0xe6edf2, fin: 0xd02828, metal: 0.75, rough: 0.25, eyeR: 0.06,
     pattern: (t, u, v, c) => { if (v > -0.3 && Math.sin(t * 70 + v * 5) > 0.75) dark(c, 0.55); if (hash(t * 120 | 0, (v * 5 + 5) | 0) > 0.93) dark(c, 0.5); }, wave: [0.38, 5.5, 4] },
 };
+// floors 6 + 7 (Vulkanschlund, Urzeittiefe): new colours on existing body shapes
+Object.assign(LOOK, {
+  'Glutbarsch': { ...LOOK['Makrele'], back: 0x2a0a06, belly: 0x7a2208, fin: 0xff4010, metal: 0.2, rough: 0.5, ei: 0.3,
+    pattern: (t, u, v, c) => { if (hash(t * 34 | 0, (v * 7 + 7) | 0) > 0.72) c.setHex(0xff8a2a); } },   // glowing lava cracks
+  'Magma-Aal': { ...LOOK['Tiefsee-Aal'], back: 0x1a0804, belly: 0x4a1406, fin: 0xff5010, ei: 0.3,
+    pattern: (t, u, v, c) => { if (Math.sin(t * 50 + v * 4) > 0.7) c.setHex(0xff6a18); } },
+  'Feuerrochen': { ray: true, back: 0x3a0a04, belly: 0xffb080 },
+  'Quastenflosser': { ...LOOK['Thunfisch'], tail: 'round', back: 0x1c2a4a, belly: 0x34486a, fin: 0x22345a, metal: 0.2, rough: 0.6,
+    pattern: (t, u, v, c) => { if (hash(t * 26 | 0, (v * 6 + 6) | 0) > 0.8) c.setHex(0xe8eef6); } },   // white spots like the real living fossil
+  'Säbelzahnfisch': { ...LOOK['Viperfisch'], fangs: 0.48, back: 0x0a0a10, belly: 0x1c1626, fin: 0x2a0a14 },
+  'Sternenrochen': { ray: true, back: 0x0a0a20, belly: 0xd0d0f0 },
+});
 // the deep-sea fish glow colour comes from FISH[].glow in shared.js
 
 const TMP = new THREE.Color(), BACK = new THREE.Color(), BELLY = new THREE.Color();
@@ -393,6 +405,8 @@ export const BOSS_LOOK = {
   'Laternenschlund': { kind: 'fish', look: 'Anglerfisch', size: 1, glow: 0xfff07a, scale: 5.5 },
   'Knochenhai':      { kind: 'shark', look: { back: 0x4f5a62, belly: 0xf0f0ec, pattern: 'scars' }, scale: 3.0 },
   'Leviathan':       { kind: 'fish', look: 'Riemenfisch', size: 1, scale: 4.2 },
+  'Glutkrake':       { kind: 'octo', color: 0xd2401a, scale: 4.0 },
+  'Megalodon':       { kind: 'shark', look: { back: 0x2a3036, belly: 0xd8d4cc, pattern: 'scars' }, scale: 4.6 },
 };
 export function makeRealBoss(B) {
   const L = BOSS_LOOK[B.name] || { kind: 'shark', look: {}, scale: B.scale };

@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -294,7 +294,7 @@ function explode(pr, x, y, z) {
   const owner = G.players.get(pr.o);
   ev('boom', pr.id, r2(x), r2(y), r2(z), pr.splash);
   const fall = (d) => pr.dmg * (1 - 0.7 * d / pr.splash);
-  for (const q of G.players.values()) {
+  if (G.mode !== 'exp') for (const q of G.players.values()) {   // expedition is co-op: explosions never hurt divers
     if (!q.alive) continue;
     const d = Math.sqrt((q.x - x) ** 2 + (q.y - y) ** 2 + (q.z - z) ** 2) - SUITS[q.suit].r;
     if (d < pr.splash) damage(q, fall(Math.max(0, d)) * (q === owner ? 0.5 : 1), owner, 'p', x, z);
@@ -727,7 +727,7 @@ function waterSpot(f, near) {
   for (let k = 0; k < 14; k++) {
     let x, z;
     if (near) { const a = rnd() * 6.283, d = 28 + rnd() * 40; x = near.x + Math.cos(a) * d; z = near.z + Math.sin(a) * d; }
-    else { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * (PLAY - 10); x = Math.cos(a) * d; z = Math.sin(a) * d; }
+    else { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * Math.min(PLAY - 10, EXP_LEDGES[f][1] + 20); x = Math.cos(a) * d; z = Math.sin(a) * d; }
     if (Math.abs(x) > PLAY - 6 || Math.abs(z) > PLAY - 6) continue;
     const ground = W.heightAt(x, z), yTop = SURFACE - F.top - 3, yBot = Math.max(SURFACE - F.bot, ground + 2);
     if (yBot >= yTop) continue;
@@ -1092,7 +1092,7 @@ wss.on('connection', (ws) => {
       case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':
         if (p && p.alive && [m.x, m.y, m.z, m.yaw, m.pitch].every(Number.isFinite)) {
-          p.x = clamp(m.x, -300, 300); p.y = clamp(m.y, -260, SURFACE); p.z = clamp(m.z, -300, 300);
+          p.x = clamp(m.x, -300, 300); p.y = clamp(m.y, SURFACE - EXP_MAX_DEPTH, SURFACE); p.z = clamp(m.z, -300, 300);
           // activity check for the aquarium: really moved or looked around (just bobbing in the water does not count)
           if (!p.act || dist(p, p.act) > 1.5 || Math.abs(m.yaw - p.act.yaw) > 0.15 || Math.abs(m.pitch - p.act.pitch) > 0.15) { p.act = { x: p.x, y: p.y, z: p.z, yaw: m.yaw, pitch: m.pitch }; p.actT = G.time; }
           p.yaw = m.yaw; p.pitch = clamp(m.pitch, -1.6, 1.6); p.boost = !!m.b;

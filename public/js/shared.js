@@ -22,7 +22,7 @@ export const SUITS = {
              desc: 'Tiefsee-Mech. Riesig, träge, schlägt härter zu. Passt in kein Fahrzeug, kein Oktopus hält ihn.' },
 };
 
-export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp'];
+export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp', 'plasma', 'sonic'];
 // range = how far (metres) a shot flies before it is gone. The starter pistol has the shortest.
 export const WEAPONS = {
   pistol:  { name: 'Bolzenpistole',  dmg: 14, rate: 3.5, speed: 95,  mag: 12, reload: 1.3, spread: 0.008, range: 22, pellets: 1, splash: 0 },
@@ -31,6 +31,9 @@ export const WEAPONS = {
   harpoon: { name: 'Harpune',        dmg: 68, rate: 0.9, speed: 150, mag: 3,  reload: 2.2, spread: 0.002, range: 65, pellets: 1, splash: 0 },
   torpedo: { name: 'Torpedowerfer',  dmg: 80, rate: 0.7, speed: 44,  mag: 2,  reload: 2.8, spread: 0.004, range: 80, pellets: 1, splash: 9 },
   subtorp: { name: 'Bordtorpedo',    dmg: 60, rate: 1.1, speed: 58,  mag: 99, reload: 0,   spread: 0.004, range: 90, pellets: 1, splash: 8 },
+  // expedition shop only (not in the Battle Royale loot)
+  plasma:  { name: 'Plasmalanze',    dmg: 32, rate: 5,   speed: 170, mag: 25, reload: 2.0, spread: 0.006, range: 75, pellets: 1, splash: 0 },
+  sonic:   { name: 'Schallkanone',   dmg: 150, rate: 1.1, speed: 120, mag: 4, reload: 2.6, spread: 0.003, range: 110, pellets: 1, splash: 10 },
 };
 for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
 
@@ -75,7 +78,12 @@ export const FLOORS = [
   { name: 'Mitternacht',  top: 130, bot: 210, fish: 13 },
   { name: 'Abgrund',      top: 210, bot: 290, fish: 11 },
   { name: 'Tiefseegraben', top: 290, bot: 370, fish: 10 },
+  { name: 'Vulkanschlund', top: 370, bot: 450, fish: 9 },
+  { name: 'Urzeittiefe',   top: 450, bot: 540, fish: 8 },
 ];
+// how much the deep floors glow at a depth: lava = floor 6 (Vulkanschlund), prim = floor 7 (Urzeittiefe), 0..1
+const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+export const deepGlow = (depth) => ({ lava: ss(355, 390, depth) * (1 - ss(440, 470, depth)), prim: ss(440, 470, depth) });
 export const floorAt = (depth) => { for (let i = FLOORS.length - 1; i >= 0; i--) if (depth >= FLOORS[i].top) return i; return 0; };
 // Fish species. value = money when sold, dmg > 0 means it bites back.
 // shape: 0 normal, 1 tall/flat, 2 long (eel), 3 angler (lure light)
@@ -95,6 +103,12 @@ export const FISH = [
   { name: 'Kristallfisch',  floor: 4, value: 650,  hp: 140, size: 0.9,  speed: 9,  col: 0x9ff7ff, glow: 0x6ff0ff, shape: 1, w: 55 },
   { name: 'Drachenfisch',   floor: 4, value: 850,  hp: 170, size: 1.4,  speed: 12, col: 0x1a0d14, glow: 0xff3355, shape: 2, w: 30, dmg: 15 },
   { name: 'Leuchtrochen',   floor: 4, value: 1100, hp: 220, size: 1.8,  speed: 8,  col: 0x251a40, glow: 0xb06bff, shape: 1, w: 15 },
+  { name: 'Glutbarsch',     floor: 5, value: 1500, hp: 300, size: 1.0,  speed: 10, col: 0x2a0a06, glow: 0xff5a1a, shape: 0, w: 55 },
+  { name: 'Magma-Aal',      floor: 5, value: 2000, hp: 380, size: 1.8,  speed: 11, col: 0x1a0804, glow: 0xff7a20, shape: 2, w: 30, dmg: 18 },
+  { name: 'Feuerrochen',    floor: 5, value: 2800, hp: 480, size: 2.0,  speed: 9,  col: 0x3a0a04, glow: 0xffa040, shape: 1, w: 15 },
+  { name: 'Quastenflosser', floor: 6, value: 3800, hp: 600, size: 1.5,  speed: 9,  col: 0x1c2a4a, glow: 0x9fd8ff, shape: 0, w: 55 },
+  { name: 'Säbelzahnfisch', floor: 6, value: 5000, hp: 750, size: 1.6,  speed: 13, col: 0x0a0a10, glow: 0xff3355, shape: 2, w: 30, dmg: 22 },
+  { name: 'Sternenrochen',  floor: 6, value: 7000, hp: 950, size: 2.3,  speed: 9,  col: 0x0a0a20, glow: 0xffffff, shape: 1, w: 15 },
 ];
 export const GOLD_CHANCE = 0.04, GOLD_MUL = 5;
 // Money a caught fish is worth. Bag/aquarium entries are { s: species index, g: 1 if golden }.
@@ -104,8 +118,8 @@ export const fishValue = (e) => e.v ?? (e.b != null ? BOSSES[e.b].reward : FISH[
 // Aquarium: everything living there earns money every second.
 export const AQUARIUM = {
   rate: 0.08 / 60,                              // a fish earns 8 % of its value per minute
-  sizes: [3, 6, 10, 15, 20],                    // places per upgrade level
-  prices: [0, 500, 2000, 6000, 15000],          // price of each upgrade level
+  sizes: [3, 6, 10, 15, 20, 25, 30],                          // places per upgrade level
+  prices: [0, 2500, 10000, 30000, 75000, 180000, 400000],     // price of each upgrade level
   afkTime: 60,                                  // no money after 60 s without moving/looking around (and none while offline)
 };
 // € per second of one caught thing in the aquarium (bosses have their own, much higher number)
@@ -122,48 +136,60 @@ export const BOSSES = [
   { name: 'Laternenschlund', hp: 1700, dmg: 20, reward: 2000, aq: 30,  model: 'fish',  scale: 6,   col: 0x2a1d1a, glow: 0xfff07a, shape: 3, r: 4.0, speed: 9 },
   { name: 'Knochenhai',     hp: 2700, dmg: 20, reward: 5000,  aq: 70,  model: 'shark', scale: 3.2, col: 0x3b4450, r: 4.2, speed: 12 },
   { name: 'Leviathan',      hp: 4200, dmg: 20, reward: 12000, aq: 150, model: 'fish',  scale: 7,   col: 0x10202a, glow: 0x5ef2e0, shape: 2, r: 4.5, speed: 11 },
+  { name: 'Glutkrake',      hp: 7500, dmg: 25, reward: 30000, aq: 320, model: 'octo',  scale: 3.8, col: 0xd2401a, r: 4.8, speed: 10 },
+  { name: 'Megalodon',      hp: 12000, dmg: 30, reward: 80000, aq: 700, model: 'shark', scale: 4.6, col: 0x2a3036, r: 5.6, speed: 13 },
 ];
 export const BOSS_RESPAWN = 120;
 // Air tanks: cap = air units, maxDepth = safe depth (below it the pressure hurts).
 export const TANKS = [
-  { name: 'Mini-Flasche',        cap: 90,  maxDepth: 70,  price: 0 },
-  { name: 'Stahlflasche',        cap: 160, maxDepth: 140, price: 400 },
-  { name: 'Doppelflasche',       cap: 260, maxDepth: 220, price: 1500 },
-  { name: 'Tiefsee-Rebreather',  cap: 400, maxDepth: 300, price: 4500 },
-  { name: 'Abyss-Kreislaufgerät', cap: 600, maxDepth: 400, price: 11000 },
+  { name: 'Mini-Flasche',        cap: 90,   maxDepth: 70,  price: 0 },
+  { name: 'Stahlflasche',        cap: 160,  maxDepth: 140, price: 2000 },
+  { name: 'Doppelflasche',       cap: 260,  maxDepth: 220, price: 7500 },
+  { name: 'Tiefsee-Rebreather',  cap: 400,  maxDepth: 300, price: 22000 },
+  { name: 'Abyss-Kreislaufgerät', cap: 600, maxDepth: 400, price: 55000 },
+  { name: 'Titan-Tieftaucher',   cap: 850,  maxDepth: 470, price: 140000 },
+  { name: 'Urzeit-Kreislauf X',  cap: 1200, maxDepth: 560, price: 320000 },
 ];
 // Breathing training: multiplies air use.
 export const LUNGS = [
   { name: 'Untrainiert',     mul: 1.0,  price: 0 },
-  { name: 'Atemtraining I',  mul: 0.85, price: 250 },
-  { name: 'Atemtraining II', mul: 0.72, price: 1000 },
-  { name: 'Atemtraining III', mul: 0.6, price: 3000 },
-  { name: 'Freitaucher-Profi', mul: 0.5, price: 8000 },
+  { name: 'Atemtraining I',  mul: 0.85, price: 1200 },
+  { name: 'Atemtraining II', mul: 0.72, price: 5000 },
+  { name: 'Atemtraining III', mul: 0.6, price: 15000 },
+  { name: 'Freitaucher-Profi', mul: 0.5, price: 40000 },
+  { name: 'Tiefsee-Legende', mul: 0.4, price: 120000 },
 ];
 // Flashlights: toggle with L, battery (seconds) recharges at the surface.
 export const LAMPS = [
   { name: 'Taschenlampe',      range: 40,  power: 120, angle: 0.38, battery: 60,  price: 0 },
-  { name: 'Tauchlampe',        range: 60,  power: 200, angle: 0.42, battery: 120, price: 300 },
-  { name: 'Halogen-Strahler',  range: 85,  power: 300, angle: 0.47, battery: 200, price: 1200 },
-  { name: 'Tiefsee-Flutlicht', range: 120, power: 450, angle: 0.55, battery: 320, price: 4000 },
+  { name: 'Tauchlampe',        range: 60,  power: 200, angle: 0.42, battery: 120, price: 1500 },
+  { name: 'Halogen-Strahler',  range: 85,  power: 300, angle: 0.47, battery: 200, price: 6000 },
+  { name: 'Tiefsee-Flutlicht', range: 120, power: 450, angle: 0.55, battery: 320, price: 20000 },
+  { name: 'Sonnen-Strahler',   range: 170, power: 650, angle: 0.6,  battery: 480, price: 90000 },
 ];
 // Air used per second at a given depth (before training).
 export const airUse = (depth) => 1 + Math.max(0, depth) / 60;
 export const SHOP_WEAPONS = [
-  { wid: 'needler', rar: 0, price: 150 },
-  { wid: 'scatter', rar: 0, price: 300 },
-  { wid: 'harpoon', rar: 1, price: 700 },
-  { wid: 'needler', rar: 2, price: 1200 },
-  { wid: 'torpedo', rar: 1, price: 2000 },
-  { wid: 'harpoon', rar: 2, price: 3200 },
-  { wid: 'needler', rar: 3, price: 5000 },
-  { wid: 'torpedo', rar: 3, price: 8500 },
+  { wid: 'needler', rar: 0, price: 750 },
+  { wid: 'scatter', rar: 0, price: 1500 },
+  { wid: 'harpoon', rar: 1, price: 3500 },
+  { wid: 'needler', rar: 2, price: 6000 },
+  { wid: 'torpedo', rar: 1, price: 10000 },
+  { wid: 'harpoon', rar: 2, price: 16000 },
+  { wid: 'needler', rar: 3, price: 25000 },
+  { wid: 'torpedo', rar: 3, price: 42500 },
+  { wid: 'plasma',  rar: 1, price: 70000 },
+  { wid: 'plasma',  rar: 3, price: 160000 },
+  { wid: 'sonic',   rar: 2, price: 230000 },
+  { wid: 'sonic',   rar: 3, price: 400000 },
 ];
 // Terrace profile of the expedition funnel: [inner radius, height step]
-const EXP_STEPS = [[45, 100], [100, 85], [160, 80], [220, 55]];
-const EXP_BOTTOM = -225;
+// (7 floors: ground at about 35 / 90 / 170 / 255 / 340 / 420 / 500 m depth)
+const EXP_STEPS = [[30, 80], [62, 80], [98, 85], [138, 85], [185, 80], [232, 55]];
+const EXP_BOTTOM = SURFACE - 500;
+export const EXP_MAX_DEPTH = 560;                 // nobody can dive below this
 // Ledge of each floor: radius range where its boss lives.
-export const EXP_LEDGES = [[240, 275], [180, 210], [120, 150], [62, 92], [0, 30]];
+export const EXP_LEDGES = [[248, 278], [200, 228], [153, 182], [112, 135], [77, 95], [44, 58], [0, 20]];
 
 // ---------- math helpers ----------
 export function rng(seed) {
