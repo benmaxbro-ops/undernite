@@ -34,6 +34,11 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 .slot.on{opacity:1;border-color:var(--glow);border-bottom-color:var(--rar,#55626c);box-shadow:0 0 18px rgba(94,242,224,.18)}
 .slot .k{font-size:11px;color:var(--mute)} .slot .n{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .slot .a{font-size:13px;color:var(--mute)} .slot .a b{color:var(--ink);font-size:17px}
+/* Ersatzmagazine im Rucksack: kleine Patronen, die sich von unten blau füllen */
+.mags{display:inline-flex;gap:2px;vertical-align:-2px;margin:0 3px}
+.mags i{position:relative;width:6px;height:12px;border:1px solid rgba(159,228,255,.55);border-radius:2px;overflow:hidden}
+.mags i b{position:absolute;left:0;right:0;bottom:0;background:#3fa9f5}
+.mags i.full{border-color:#9fe4ff;box-shadow:0 0 4px rgba(63,169,245,.7)} .mags i.full b{background:#9fe4ff}
 .slot .rl{height:3px;background:rgba(255,255,255,.1);margin-top:5px;border-radius:2px;overflow:hidden} .slot .rl i{display:block;height:100%;width:0;background:var(--gold)}
 #catchBar{position:absolute;right:22px;bottom:104px;display:none;gap:6px;align-items:flex-end} #catchBar.on{display:flex}
 .cslot{width:74px;padding:5px 6px;border-radius:9px;background:var(--panel);border:1px solid rgba(255,255,255,.1);opacity:.7;font-size:11px;color:var(--mute);border-bottom:3px solid var(--rar,#3fa9f5)}

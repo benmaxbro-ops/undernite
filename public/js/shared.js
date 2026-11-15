@@ -38,6 +38,13 @@ export const WEAPONS = {
   sonic:   { name: 'Schallkanone',   dmg: 150, rate: 1.1, speed: 120, mag: 4, reload: 2.6, spread: 0.003, range: 110, pellets: 1, splash: 10 },
 };
 for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
+// Kompressor im Rucksack: Jede Waffe hat ein Magazin in der Waffe und "spares" Ersatzmagazine im Rucksack.
+// Der Kompressor füllt die Ersatzmagazine nacheinander wieder auf. fill = Sekunden, bis ein leeres Magazin wieder voll ist
+// (große Waffen brauchen länger). Beim Nachladen kommt das alte Magazin zurück in den Rucksack und wird dort wieder gefüllt.
+export const COMPRESSOR = {
+  spares: 2,
+  fill: { pistol: 6, needler: 8, scatter: 9, harpoon: 10, torpedo: 14, subtorp: 1, plasma: 10, sonic: 16 },
+};
 
 // Finisher (nur Battle Royale): hat ein Gegner höchstens hp × 100 % Leben und ist nah genug (range in Metern),
 // kann man ihn mit G erledigen. Jede Klasse hat ihre eigene Animation (siehe finisher.js).

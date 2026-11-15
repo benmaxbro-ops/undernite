@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
-  CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER,
+  CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
   TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH,
 } from './public/js/shared.js';
@@ -86,7 +86,7 @@ const ev = (...a) => G.events.push(a);
 function mkPlayer(id, name, suit, bot) {
   const S = SUITS[suit];
   return { id, name, suit, bot, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, lx: 0, ly: 0, lz: 0, yaw: 0, pitch: 0,
-    hp: S.hp, maxhp: S.hp, shield: 0, alive: true, weapons: [{ id: 'pistol', rar: 0, ammo: WEAPONS.pistol.mag }, null, null],
+    hp: S.hp, maxhp: S.hp, shield: 0, alive: true, weapons: [newWeapon('pistol', 0), null, null],
     slot: 0, reload: 0, reloadT: 1, nextFire: 0, veh: 0, kills: 0, grabbed: 0, ink: 0, shockT: 0, boost: false, place: 0,
     zoneAcc: 0, ye: [],
     thinkT: rnd() * 0.4, goal: null, crate: -1, target: null, mode: 'loot', skill: 0.12 + rnd() * 0.08, reactT: 0,   // skill = aim error (higher = worse)
@@ -98,8 +98,8 @@ function rollWeapon() {
   for (const [id, w] of LOOT_W) { if ((t -= w) < 0) return id; }
   return 'needler';
 }
-function addPickup(k, x, y, z, wid = '', rar = 0, ammo = -1) {
-  const p = { id: nextId++, k, wid, rar, ammo: ammo < 0 && wid ? WEAPONS[wid].mag : ammo, x, y, z };
+function addPickup(k, x, y, z, wid = '', rar = 0, ammo = -1, spare = null) {
+  const p = { id: nextId++, k, wid, rar, ammo: ammo < 0 && wid ? WEAPONS[wid].mag : ammo, spare, x, y, z };
   G.pickups.set(p.id, p);
   ev('pk+', p.id, k, wid, rar, r2(x), r2(y), r2(z));
   return p;
@@ -242,7 +242,7 @@ function kill(p, src, how) {
   if (p.veh) { const v = G.vehicles.get(p.veh); if (v) v.driver = 0; p.veh = 0; }
   if (p.grabbed) { const o = G.creatures.find(c => c.id === p.grabbed); if (o) releaseOcto(o); }
   for (const w of p.weapons) if (w && !(w.id === 'pistol' && w.rar === 0))
-    addPickup('w', p.x + (rnd() - 0.5) * 2, p.y + rnd(), p.z + (rnd() - 0.5) * 2, w.id, w.rar, w.ammo);
+    addPickup('w', p.x + (rnd() - 0.5) * 2, p.y + rnd(), p.z + (rnd() - 0.5) * 2, w.id, w.rar, w.ammo, w.spare);
   if (rnd() < 0.6) addPickup(rnd() < 0.5 ? 'med' : 'sh', p.x, p.y + 0.5, p.z);
   const label = { zone: 'Schwarzwasser', shark: 'Hai', octo: 'Oktopus', jelly: 'Qualle', left: 'Verbindung', wreck: 'Explosion' }[how];
   let by = label || '?';
@@ -268,12 +268,43 @@ function damageCreature(c, amt, src) {
 }
 
 // ---------- weapons ----------
+const newWeapon = (id, rar, ammo = WEAPONS[id].mag, spare = null) => ({ id, rar, ammo, spare: spare ? [...spare] : Array(COMPRESSOR.spares).fill(1) });
+// das vollste Ersatzmagazin im Rucksack (Index), -1 wenn es keins gibt
+function bestSpare(w) {
+  if (!w.spare) w.spare = Array(COMPRESSOR.spares).fill(1);
+  let b = -1; for (let i = 0; i < w.spare.length; i++) if (b < 0 || w.spare[i] > w.spare[b]) b = i;
+  return b;
+}
+// Nachladen geht nur, wenn im Rucksack ein Magazin ist, das voller ist als das in der Waffe
 function startReload(p) {
   const w = p.weapons[p.slot];
   if (!w || p.reload > 0) return;
   const d = WEAPONS[w.id];
   if (w.ammo >= d.mag) return;
+  const b = bestSpare(w);
+  if (b < 0 || Math.floor(w.spare[b] * d.mag + 1e-6) <= w.ammo) {
+    if (!p.bot && G.time > (p.noMagT || 0)) { p.noMagT = G.time + 2; p.ye.push(['warn', 'Keine vollen Magazine – der Kompressor füllt nach …']); }
+    return;
+  }
   p.reload = p.reloadT = d.reload;
+}
+// Nachladen fertig: das alte Magazin (mit dem Rest darin) kommt in den Rucksack, das vollste kommt in die Waffe
+function finishReload(p) {
+  p.reload = 0;
+  const w = p.weapons[p.slot]; if (!w) return;
+  const d = WEAPONS[w.id], b = bestSpare(w); if (b < 0) return;
+  const take = Math.floor(w.spare[b] * d.mag + 1e-6);
+  w.spare[b] = w.ammo / d.mag;
+  w.ammo = take;
+}
+// Der Kompressor füllt pro Waffe immer das Ersatzmagazin, das schon am vollsten (aber noch nicht voll) ist
+function compress(p, dt) {
+  for (const w of p.weapons) {
+    if (!w) continue;
+    bestSpare(w);
+    let b = -1; for (let i = 0; i < w.spare.length; i++) if (w.spare[i] < 1 && (b < 0 || w.spare[i] > w.spare[b])) b = i;
+    if (b >= 0) w.spare[b] = Math.min(1, w.spare[b] + dt / (COMPRESSOR.fill[w.id] || 8));
+  }
 }
 // Lag-Ausgleich: Im Browser sieht man alles ca. 0,1 s zu spät. Hat der Spieler genau auf ein Ziel gezielt
 // (aim = [Art, id], 1 = Spieler, 3 = Kreatur), zählt ein Hitscan-Treffer bei diesem Ziel noch AIM_HELP Meter daneben.
@@ -398,8 +429,8 @@ const wScore = (w) => w ? W_SCORE[w.id] * RARITY[w.rar].mul : 0;
 const pkScore = (pk) => W_SCORE[pk.wid] * RARITY[pk.rar].mul;
 function takeWeapon(p, pk, slot) {
   const old = p.weapons[slot];
-  if (old) addPickup('w', p.x, p.y + 0.3, p.z, old.id, old.rar, old.ammo);
-  p.weapons[slot] = { id: pk.wid, rar: pk.rar, ammo: pk.ammo };
+  if (old) addPickup('w', p.x, p.y + 0.3, p.z, old.id, old.rar, old.ammo, old.spare);
+  p.weapons[slot] = newWeapon(pk.wid, pk.rar, pk.ammo, pk.spare);
   p.slot = slot; p.reload = 0;
   removePickup(pk);
   if (!p.bot) p.ye.push(['got', pk.k, pk.wid, pk.rar]);
@@ -732,8 +763,8 @@ function expJoin(c) {
   // the aquarium only earns while you really play (no offline money, no AFK money)
   p.actT = G.time; p.act = null; p.afk = false;
   p.baseIdx = pickBase(p, s?.base);
-  if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? { id: w.id, rar: w.rar, ammo: WEAPONS[w.id].mag } : null);
-  if (!p.weapons.some(Boolean)) p.weapons[0] = { id: 'pistol', rar: 0, ammo: WEAPONS.pistol.mag };
+  if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? newWeapon(w.id, w.rar) : null);
+  if (!p.weapons.some(Boolean)) p.weapons[0] = newWeapon('pistol', 0);
   p.slot = Math.max(0, p.weapons.findIndex(Boolean));
   p.hp = p.maxhp = EXP_HP; p.air = TANKS[p.tank].cap; p.envAcc = 0; p.warnT = 0; p.respawnT = 0; p.lowAir = false;
   const s0 = boatSpawn(); p.x = p.lx = s0.x; p.y = p.ly = s0.y; p.z = p.lz = s0.z; p.yaw = s0.yaw; p.pitch = -0.3;
@@ -934,7 +965,7 @@ function expBuy(p, m) {
       let slot = p.weapons.findIndex(w => w && w.id === it.wid);
       if (slot < 0) slot = p.weapons.indexOf(null);
       if (slot < 0) { slot = 0; for (let i = 1; i < 3; i++) if (wScore(p.weapons[i]) < wScore(p.weapons[slot])) slot = i; }
-      p.weapons[slot] = { id: it.wid, rar: it.rar, ammo: WEAPONS[it.wid].mag }; p.slot = slot; p.reload = 0;
+      p.weapons[slot] = newWeapon(it.wid, it.rar); p.slot = slot; p.reload = 0;
     };
   } else return;
   if (p.money < price) { p.ye.push(['shop', `Zu wenig Geld – dir fehlen ${price - p.money} €`]); return; }
@@ -949,7 +980,7 @@ function tickExp(dt) {
       if ((p.respawnT -= dt) <= 0) {
         const s = boatSpawn();
         Object.assign(p, { alive: true, hp: p.maxhp, shield: 0, air: TANKS[p.tank].cap, x: s.x, y: s.y, z: s.z, lx: s.x, ly: s.y, lz: s.z, yaw: s.yaw, envAcc: 0, lowAir: false, reload: 0 });
-        for (const w of p.weapons) if (w) w.ammo = WEAPONS[w.id].mag;
+        for (const w of p.weapons) if (w) { w.ammo = WEAPONS[w.id].mag; w.spare = Array(COMPRESSOR.spares).fill(1); }
         p.ye.push(['spawn', r2(s.x), r2(s.y), r2(s.z), r2(s.yaw)]);
       }
       continue;
@@ -957,7 +988,8 @@ function tickExp(dt) {
     const k = 0.5;
     p.vx += ((p.x - p.lx) / dt - p.vx) * k; p.vy += ((p.y - p.ly) / dt - p.vy) * k; p.vz += ((p.z - p.lz) / dt - p.vz) * k;
     p.lx = p.x; p.ly = p.y; p.lz = p.z;
-    if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) { p.reload = 0; const w = p.weapons[p.slot]; if (w) w.ammo = WEAPONS[w.id].mag; } }
+    if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) finishReload(p); }
+    compress(p, dt);
     // air and pressure
     const depth = depthOf(p), T = TANKS[p.tank];
     if (depth < 2.6 || nearBase(p, 14)) { p.air = Math.min(T.cap, p.air + T.cap * 0.35 * dt); p.lowAir = false; }   // surface or air station in the base
@@ -1025,7 +1057,8 @@ function tick(dt) {
       p.vx += ((p.x - p.lx) / dt - p.vx) * k; p.vy += ((p.y - p.ly) / dt - p.vy) * k; p.vz += ((p.z - p.lz) / dt - p.vz) * k;
       p.lx = p.x; p.ly = p.y; p.lz = p.z;
     }
-    if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) { p.reload = 0; const w = p.weapons[p.slot]; if (w) w.ammo = WEAPONS[w.id].mag; } }
+    if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) finishReload(p); }
+    compress(p, dt);
     if (p.ink > 0) p.ink -= dt;
     if (dist2d(p, z.x, z.z) > z.r) { p.zoneAcc += dps * dt; if (p.zoneAcc >= 1) { const a = Math.floor(p.zoneAcc); p.zoneAcc -= a; damage(p, a, null, 'zone', z.x, z.z); } }
     if (p.alive) autoCollect(p);
@@ -1070,7 +1103,7 @@ function snapshot() {
     if (p) {
       const v = p.veh && G.vehicles.get(p.veh);
       you = { alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxhp, sh: Math.round(p.shield), slot: p.slot, kills: p.kills, place: p.place,
-        w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
+        w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo, (w.spare || []).map(s => Math.round(s * 100) / 100)] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)) };
       if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, e) => a + fishValue(e), 0), air: r2(p.air),
         tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)),

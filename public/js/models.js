@@ -312,12 +312,12 @@ export function makeProjectile(widx) { return new THREE.Mesh(PGEO[widx] || PGEO[
 // kind: 'pistol' = Pistole, 'rifle' = Gewehr, 'tube' = Werferrohr. L = Länge, H = Höhe, W = Breite, R = Rohr-Radius.
 const GUNS = [
   /* 0 Bolzenpistole  */ { kind: 'pistol', L: 0.2,  H: 0.034, W: 0.03,  barrel: 0.02, br: 0.009, gills: 3 },
-  /* 1 Nadler         */ { kind: 'rifle',  L: 0.28, H: 0.05,  W: 0.04,  barrel: 0.16, br: 0.009, gills: 3, stock: 'short', mag: true },
-  /* 2 Splitterwerfer */ { kind: 'rifle',  L: 0.34, H: 0.06,  W: 0.05,  barrel: 0.3,  br: 0.02,  gills: 4, stock: 'full', pump: true },
-  /* 3 Harpune        */ { kind: 'rifle',  L: 0.34, H: 0.05,  W: 0.04,  barrel: 0.45, br: 0.012, gills: 4, stock: 'full', scope: true },
+  /* 1 Nadler         */ { kind: 'rifle',  L: 0.28, H: 0.05,  W: 0.04,  barrel: 0.16, br: 0.009, gills: 3, stock: 'short', magK: 1 },
+  /* 2 Splitterwerfer */ { kind: 'rifle',  L: 0.34, H: 0.06,  W: 0.05,  barrel: 0.3,  br: 0.02,  gills: 4, stock: 'full', pump: true, magK: 1.2 },
+  /* 3 Harpune        */ { kind: 'rifle',  L: 0.34, H: 0.05,  W: 0.04,  barrel: 0.45, br: 0.012, gills: 4, stock: 'full', scope: true, magK: 0.85 },
   /* 4 Torpedowerfer  */ { kind: 'tube',   L: 0.75, R: 0.075, gills: 5 },
   /* 5 Bordtorpedo    */ { kind: 'tube',   L: 0.75, R: 0.075, gills: 5 },
-  /* 6 Plasmalanze    */ { kind: 'rifle',  L: 0.4,  H: 0.065, W: 0.05,  barrel: 0.3,  br: 0.016, gills: 4, stock: 'full', scope: true, mag: true },
+  /* 6 Plasmalanze    */ { kind: 'rifle',  L: 0.4,  H: 0.065, W: 0.05,  barrel: 0.3,  br: 0.016, gills: 4, stock: 'full', scope: true, magK: 1.15 },
   /* 7 Schallkanone   */ { kind: 'tube',   L: 0.85, R: 0.095, gills: 6, dish: true },
 ];
 const GUN_WHITE = 0xf2f7fa, GUN_BLUE = 0x2fa8ff;
@@ -333,6 +333,7 @@ const RBOX = (() => {
   return geo;
 })();
 const GUN_CYL = zCyl(1, 1, 1, 32);     // glatte Zylinder (32 Ecken statt 14)
+const GUN_CYL_Y = new THREE.CylinderGeometry(1, 1, 1, 24);   // stehender Zylinder (für Magazine)
 const FINGER = new THREE.CylinderGeometry(1, 1, 1, 14).rotateX(Math.PI / 2), KNUCKLE = new THREE.SphereGeometry(1, 14, 10);
 function profileGeo(key, pts, depth, holes = []) {
   if (GUN_GEO.has(key)) return GUN_GEO.get(key);
@@ -367,6 +368,34 @@ export function makeWaterGun(widx, fp = false) {
   const side = (key, mat, pts, w, holes) => part(profileGeo(K + key, pts, w, holes), mat);
   const ring = (u, v, r, mat = blue) => tube(mat, u - 0.004, u + 0.004, v, r);
   const flaps = [];   // Kiemen-Lamellen
+  // Magazin: eine Gruppe, deren Ursprung das obere Ende ist (das Ende, das in der Waffe steckt); es zeigt nach unten (−y).
+  // magFill leuchtet je nachdem, wie voll das Magazin ist.
+  const magFill = new THREE.MeshStandardMaterial({ color: 0x7fdcff, emissive: GUN_BLUE, emissiveIntensity: 1.6 });
+  let mag = null;
+  const makeMag = (kind, k = 1) => {
+    const m = new THREE.Group(), at = (geo, mat, y, sx, sy, sz) => { const o = new THREE.Mesh(geo, mat); o.position.y = y; o.scale.set(sx, sy, sz); m.add(o); return o; };
+    let len;
+    if (kind === 'pistol') {          // flaches Magazin, steckt fast ganz im Griff, unten die blaue Bodenplatte
+      len = 0.104;
+      at(RBOX, glass, -0.05, P.W * 0.55, 0.1, 0.03); at(RBOX, magFill, -0.05, P.W * 0.35, 0.09, 0.018);
+      at(RBOX, blue, -0.101, P.W * 0.9, 0.009, 0.046);
+    } else if (kind === 'rifle') {    // durchsichtige Druckpatrone mit Metallkappe
+      len = 0.1 * k;
+      at(GUN_CYL_Y, glass, -0.045 * k, 0.018 * k, 0.09 * k, 0.018 * k); at(GUN_CYL_Y, magFill, -0.045 * k, 0.012 * k, 0.08 * k, 0.012 * k);
+      at(GUN_CYL_Y, metal, -0.095 * k, 0.02 * k, 0.012, 0.02 * k); at(GUN_CYL_Y, blue, -0.088 * k, 0.0205 * k, 0.004, 0.0205 * k);
+    } else {                          // dicke Patrone für die Werfer
+      len = 0.15;
+      at(GUN_CYL_Y, glass, -0.065, P.R * 0.62, 0.13, P.R * 0.62); at(GUN_CYL_Y, magFill, -0.065, P.R * 0.45, 0.12, P.R * 0.45);
+      at(GUN_CYL_Y, metal, -0.14, P.R * 0.68, 0.02, P.R * 0.68); at(GUN_CYL_Y, blue, -0.128, P.R * 0.69, 0.006, P.R * 0.69);
+    }
+    return { m, len };
+  };
+  const seatMag = (kind, k, x, y, z, tilt) => {
+    const { m, len } = makeMag(kind, k);
+    m.position.set(x, y, z); m.rotation.x = tilt; g.add(m);
+    const out = new THREE.Vector3(0, -1, 0).applyQuaternion(m.quaternion);   // in diese Richtung wird es herausgezogen
+    mag = { g: m, seat: m.position.clone(), seatQ: m.quaternion.clone(), out, len, fill: magFill };
+  };
   let rear = 0, chargeBars = [];
   // muzzleAt = wo der Schuss rauskommt, gripTop/gripW = Griff für die rechte Hand, support = Stelle für die linke Hand
   let muzzleAt = [0, 0, 0], gripTop = 0, gripW = 0.04, support = null;
@@ -393,9 +422,9 @@ export function makeWaterGun(widx, fp = false) {
     }
   };
   // Griff mit Abzugsbügel und Abzug; top = Unterkante des Gehäuses
-  const grip = (top, w, len = 0.1) => {
+  const grip = (top, w, len = 0.1, plate = true) => {
     side('grip', gripM, [[-0.006, top], [0.034, top], [0.016, top - len], [-0.03, top - len], [-0.026, top - len * 0.25]], w * 0.85);
-    box(blue, -0.03, 0.016, top - len - 0.008, top - len, w * 0.9);                                         // blaue Bodenplatte
+    if (plate) box(blue, -0.03, 0.016, top - len - 0.008, top - len, w * 0.9);                              // blaue Bodenplatte
     for (let i = 1; i < 4; i++) box(dark, -0.026 + i * 0.002, 0.03 - i * 0.004, top - len * (0.2 + i * 0.2), top - len * (0.2 + i * 0.2) + 0.003, w * 0.87);   // Griffrillen
     side('guard', white, [[0.034, top], [0.1, top], [0.1, top - 0.01], [0.075, top - 0.036], [0.03, top - 0.036]], w * 0.35,
       [[[0.04, top - 0.006], [0.09, top - 0.006], [0.07, top - 0.028], [0.04, top - 0.028]]]);
@@ -417,7 +446,8 @@ export function makeWaterGun(widx, fp = false) {
     box(glass, 0.02, 0.09, H - 0.003, H + 0.001, W * 0.5);                                // Fenster oben
     chargeBar(0.015, 0.075, H * 0.25, 0.008, W / 2 + 0.002);
     gills(3, 0.085, 0.024, H * 0.5, H * 0.75, W / 2 + 0.002);
-    grip(-0.014, W);
+    grip(-0.014, W, 0.1, false);
+    seatMag('pistol', 1, 0, -0.016, -0.014, -0.207);   // schräg wie der Griff
     rear = 0.035;
     muzzleAt = [0, H * 0.5, -(L - 0.015)]; gripTop = -0.014; gripW = W;
   } else if (P.kind === 'rifle') {
@@ -454,13 +484,10 @@ export function makeWaterGun(widx, fp = false) {
       tube(metal, front + hg, front + hg + 0.1, -H * 0.4, P.br * 1.2);
       for (let i = 0; i < 6; i++) tube(dark, front + hg + 0.01 + i * 0.015, front + hg + 0.017 + i * 0.015, -H * 0.4, P.br * 1.3);
     }
-    // Druckpatrone (Magazin): durchsichtig, innen leuchtet das Wasser
-    if (P.mag) {
-      const mu = front * 0.45, mv = -H / 2 - 0.05;
-      const m1 = part(GEO.cyl, glass, 0, mv, -mu); m1.scale.set(0.017, 0.09, 0.017); m1.rotation.x = -0.25;
-      const m2 = part(GEO.cyl, fill, 0, mv, -mu); m2.scale.set(0.011, 0.075, 0.011); m2.rotation.x = -0.25;
-      const m3 = part(GEO.cyl, metal, 0, mv - 0.046, -mu - 0.012); m3.scale.set(0.019, 0.012, 0.019); m3.rotation.x = -0.25;
-    }
+    // Druckpatrone (Magazin): durchsichtig, innen leuchtet das Wasser, unten nach vorne geneigt
+    const mu = Math.max(0.13, front * 0.5);                                                     // vor dem Abzugsbügel
+    box(metal, mu - 0.02, mu + 0.02, -H / 2 - 0.008, -H / 2 + 0.002, W * 0.7);                  // Magazinschacht
+    seatMag('rifle', P.magK || 1, 0, -H / 2 + 0.004, -mu, 0.25);
     // Schaft
     if (fp) rear = back;
     else if (P.stock === 'full') {
@@ -483,8 +510,8 @@ export function makeWaterGun(widx, fp = false) {
     tube(white, u0, u1, 0, R);
     tube(metal, u1, u1 + 0.03, 0, R * 1.12);                                                // vorderer Rand
     tube(dark, u1 + 0.02, u1 + 0.031, 0, R * 0.85);                                         // dunkle Öffnung
-    tube(metal, u0 - 0.03, u0, 0, R * 1.08);                                                // hintere Kappe
-    tube(dark, u0 - 0.032, u0 - 0.028, 0, R * 0.7);
+    tube(metal, u0 - 0.03, u0, 0, R * 1.08);                                                // hinterer Ring
+    seatMag('tube', 1, 0, 0, -(u0 + 0.12), -Math.PI / 2);                                   // Patrone wird von hinten eingeschoben
     for (const u of [u0 + 0.04, L * 0.15, u1 - 0.05]) ring(u, 0, R * 1.03);                 // blaue Bänder
     if (P.dish) {                                                                           // Schallkanone: Trichter vorne
       const cone = part(new THREE.CylinderGeometry(R * 1.6, R * 1.05, 0.08, 20, 1, true).rotateX(Math.PI / 2), metal, 0, 0, -(u1 + 0.07)); cone.material.side = THREE.DoubleSide;
@@ -528,7 +555,7 @@ export function makeWaterGun(widx, fp = false) {
   const muzzle = new THREE.Object3D(); muzzle.position.set(...muzzleAt); g.add(muzzle);
   // fpShift: Werferrohre sitzen in der Ego-Perspektive weiter vorne und weiter rechts (sonst schaut man ins Rohr)
   const fpShift = P.kind === 'tube' ? [0.07, -0.035, -0.32] : [0, 0, 0];
-  Object.assign(g.userData, { muzzle, gripTop, gripW, support, fpShift });
+  Object.assign(g.userData, { muzzle, gripTop, gripW, support, fpShift, mag });
   g.userData.setGills(0); g.userData.setCharge(1);
   return g;
 }
@@ -564,7 +591,9 @@ export function makeViewArms(suit, gun) {
   chain(g, sleeve, [[0.01, t - 0.07, 0.068], [0.16, t - 0.34, back]], 0.036 * big);              // Unterarm bis aus dem Bild
   if (big > 1.2) { const p = add(g, RBOX, acc, 0.05, t - 0.13, 0.19); p.scale.set(0.09, 0.05, 0.16); p.rotation.set(-0.6, 0.3, 0.2); }   // Panzerplatte
   // linke Hand (Gewehre und Werfer): Handfläche unten, Finger rechts hoch, Daumen links
+  const right = g; g.userData.left = null;
   if (gun.support) {
+    const g = new THREE.Group(); right.add(g); right.userData.left = g;
     const [sx, sy, sz] = gun.support;
     const h = add(g, KNUCKLE, glove, sx, sy - 0.02, sz + 0.005); h.scale.set(0.034, 0.024, 0.045);
     for (let i = 0; i < 4; i++) { const z = sz - 0.03 + i * 0.019, r = i === 3 ? 0.0078 : 0.0092; chain(g, glove, [[0.016, sy - 0.028, z], [0.032, sy - 0.012, z], [0.034, sy + 0.012, z - 0.003], [0.026, sy + 0.028, z - 0.006]], r); }
@@ -572,7 +601,64 @@ export function makeViewArms(suit, gun) {
     chain(g, acc, [[-0.004, sy - 0.04, sz + 0.04], [-0.012, sy - 0.055, sz + 0.075]], 0.03 * big);
     chain(g, sleeve, [[-0.012, sy - 0.055, sz + 0.072], [-0.24, sy - 0.32, back]], 0.035 * big);
   }
+  return right;
+}
+// Die linke Hand beim Nachladen: hält das Magazin zwischen Daumen und Fingern.
+// setArm(hand, ellbogen) setzt die Hand an einen Punkt und zieht den Unterarm bis zum Ellbogen (außerhalb des Bildes).
+export function makeReloadHand(suit) {
+  const g = new THREE.Group(), col = SUIT_COL[suit] || 0x1fd6b4;
+  const glove = new THREE.MeshStandardMaterial({ color: 0x353d45, emissive: 0x141a20, emissiveIntensity: 0.65, roughness: 0.55, bumpMap: neoprene(), bumpScale: 0.8 });
+  const sleeve = new THREE.MeshStandardMaterial({ color: 0x1c2126, emissive: 0x0c1014, emissiveIntensity: 0.7, roughness: 0.8, bumpMap: neoprene(), bumpScale: 1.2 });
+  const acc = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4, roughness: 0.45 });
+  const big = suit === 'bulwark' ? 1.3 : suit === 'manta' ? 0.9 : 1;
+  const hand = new THREE.Group(); g.add(hand);
+  add(hand, KNUCKLE, glove, 0, -0.012, 0.012).scale.set(0.03, 0.026, 0.04);                                  // Handfläche
+  for (let i = 0; i < 4; i++) { const x = -0.018 + i * 0.012; chain(hand, glove, [[x, -0.01, -0.012], [x, 0.008, -0.03], [x * 0.8, 0.02, -0.036]], i === 3 ? 0.0075 : 0.0088); }   // Finger umfassen das Magazin
+  chain(hand, glove, [[0.026, -0.012, 0.01], [0.032, 0.006, -0.008], [0.026, 0.02, -0.02]], 0.01);         // Daumen
+  const cuff = new THREE.Mesh(FINGER, acc), arm = new THREE.Mesh(FINGER, sleeve); g.add(cuff); g.add(arm);
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3();
+  const seg = (m, a, b, r) => { D.copy(b).sub(a); const l = D.length() || 0.001; m.scale.set(r, r, l); m.position.copy(a).addScaledVector(D, 0.5); m.quaternion.setFromUnitVectors(Z_AXIS, D.normalize()); };
+  g.userData.setArm = (handPos, elbowPos) => {
+    hand.position.copy(handPos);
+    A.copy(handPos).add(new THREE.Vector3(0, -0.02, 0.03)); B.copy(A).lerp(elbowPos, 0.12);
+    seg(cuff, A, B, 0.03 * big); seg(arm, B, elbowPos, 0.035 * big);
+  };
   return g;
+}
+
+// ---------- Nachladen: Magazin wechseln ----------
+// Die zweite Hand zieht das alte Magazin raus, steckt es hinten in den Rucksack (dort füllt es der Kompressor wieder),
+// holt das vollste Magazin raus, schiebt es ein und klopft es fest. Die Abschnitte (0 = Anfang, 1 = fertig):
+export const RELOAD_STEPS = {
+  grab: 0.12,    // Hand kommt zum Magazin
+  pull: 0.25,    // altes Magazin rausziehen
+  stow: 0.45,    // nach hinten in den Rucksack stecken
+  fetch: 0.62,   // neues Magazin aus dem Rucksack holen
+  insert: 0.75,  // einschieben – Klack!
+  slap: 0.85,    // festklopfen, dann ist die Waffe bereit
+};
+const RV = { hand: new THREE.Vector3(), tmp: new THREE.Vector3(), mag: new THREE.Vector3(), out: new THREE.Vector3(), elbow: new THREE.Vector3(), pack: new THREE.Vector3() };
+// done = 0…1 Fortschritt, gunUD = userData der Waffe, rHand = makeReloadHand(...)
+export function poseReload(done, gunUD, rHand) {
+  const M = gunUD.mag, S = RELOAD_STEPS; if (!M) return;
+  const k = (a, b) => { const x = Math.max(0, Math.min(1, (done - a) / (b - a))); return x * x * (3 - 2 * x); };
+  // Punkte in Waffen-Koordinaten: sitzt (seat), herausgezogen (out), Rucksack (pack – hinter dir, außerhalb des Bildes)
+  const seat = M.seat, out = RV.out.copy(M.out).multiplyScalar(M.len + 0.04).add(seat);
+  const pack = RV.pack.set(-0.3, -0.42, gunUD.rear + 0.45);
+  const bottom = (p, into = RV.hand) => into.copy(M.out).multiplyScalar(M.len).add(p);   // die Hand hält das Magazin unten
+  let magPos = seat, showMag = true, newMag = false;
+  if (done < S.grab) { magPos = seat; RV.hand.copy(pack).lerp(bottom(seat, RV.tmp), k(0, S.grab)); }
+  else if (done < S.pull) { magPos = RV.mag.copy(seat).lerp(out, k(S.grab, S.pull)); bottom(magPos); }
+  else if (done < S.stow) { magPos = RV.mag.copy(out).lerp(pack, k(S.pull, S.stow)); bottom(magPos); showMag = done < S.stow - 0.04; }
+  else if (done < S.fetch) { newMag = true; magPos = RV.mag.copy(pack).lerp(out, k(S.stow, S.fetch)); bottom(magPos); showMag = done > S.stow + 0.04; }
+  else if (done < S.insert) { newMag = true; magPos = RV.mag.copy(out).lerp(seat, k(S.fetch, S.insert)); bottom(magPos); }
+  else { newMag = true; magPos = seat; bottom(seat); RV.hand.addScaledVector(M.out, -0.012 * Math.sin(k(S.insert, S.slap) * Math.PI));   // Klaps von unten
+         if (done > S.slap) RV.hand.lerp(gunUD.support ? new THREE.Vector3(...gunUD.support) : pack, k(S.slap, 1)); }
+  M.g.position.copy(magPos); M.g.visible = showMag;
+  // altes Magazin dunkel (fast leer), neues hell (voll)
+  M.fill.emissiveIntensity = newMag ? 1.8 : 0.35;
+  rHand.visible = true;
+  rHand.userData.setArm(RV.hand, RV.elbow.set(-0.32, -0.5, gunUD.rear + 0.3));
 }
 
 // ---------- Wasserstrahl (Hitscan-Waffen) ----------

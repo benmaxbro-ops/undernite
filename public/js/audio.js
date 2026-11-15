@@ -80,43 +80,15 @@ export class Sfx {
     src.start(t, Math.random()); src.stop(t + 0.38);
     this.tone(1100, 520, 0.28, 0.05 * vol, 'sine');   // leises Pfeifen mit Doppler-Effekt (Ton fällt, wenn es vorbei ist)
   }
-  // Wasser ansaugen: ein Rauschen, das anschwillt und heller wird, dazu gluckernde Blasen
-  suck(dur) {
-    const ctx = this.ctx; if (!ctx) return;
-    const t = ctx.currentTime, src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
-    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.6;
-    f.frequency.setValueAtTime(250, t); f.frequency.exponentialRampToValueAtTime(1400, t + dur);
-    // Gluckern: die Lautstärke wackelt schnell auf und ab (LFO = langsamer Wackel-Oszillator)
-    const g = ctx.createGain(); g.gain.setValueAtTime(0.001, t);
-    g.gain.exponentialRampToValueAtTime(0.4, t + dur * 0.7); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    const lfo = ctx.createOscillator(), lg = ctx.createGain(), wob = ctx.createGain();
-    lfo.frequency.value = 14; lg.gain.value = 0.5; wob.gain.value = 1;
-    lfo.connect(lg).connect(wob.gain);
-    src.connect(f).connect(wob).connect(g).connect(this.master);
-    src.start(t, Math.random()); src.stop(t + dur + 0.05); lfo.start(t); lfo.stop(t + dur + 0.05);
-    // einzelne Blasen: kurze Töne, die nach oben "ploppen"
-    for (let i = 0; i < 6 + dur * 4; i++) { const at = Math.random() * dur * 0.9, p = 180 + Math.random() * 380; this.tone(p, p * 2.2, 0.05, 0.13, 'sine', at); }
-    this.noise(0.12, 900, 1, 0.25, 'lowpass', 200, dur - 0.08);   // Schlürfen am Ende
+  // ---------- Magazin wechseln ----------
+  magOut() { this.tone(1500, 1100, 0.03, 0.22, 'square'); this.noise(0.12, 1800, 2, 0.25, 'bandpass', 900, 0.02); }          // Klick – Magazin löst sich und rutscht raus
+  stow() {                                                                                                                       // ins Rucksack-Fach stecken, Kompressor zischt kurz
+    this.noise(0.18, 700, 1, 0.22, 'lowpass', 300); this.tone(220, 120, 0.08, 0.25, 'square', 0.1);
+    this.noise(0.35, 5000, 1, 0.08, 'highpass', 0, 0.15);
   }
-  // Komprimieren: ein Kompressor, dessen Ton immer höher wird (der Druck steigt), Zischen, und am Ende "Klack – fertig"
-  compress(dur) {
-    const ctx = this.ctx; if (!ctx) return;
-    const t = ctx.currentTime;
-    const o = ctx.createOscillator(); o.type = 'sawtooth';
-    o.frequency.setValueAtTime(55, t); o.frequency.exponentialRampToValueAtTime(180, t + dur);
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 4;
-    lp.frequency.setValueAtTime(200, t); lp.frequency.exponentialRampToValueAtTime(1500, t + dur);
-    const g = ctx.createGain(); g.gain.setValueAtTime(0.001, t);
-    g.gain.exponentialRampToValueAtTime(0.18, t + 0.08); g.gain.setValueAtTime(0.18, t + dur - 0.05); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(lp).connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.05);
-    // Pumpstöße: der Kolben drückt mehrmals, immer schneller
-    const n = Math.max(3, Math.round(dur * 5));
-    for (let i = 0; i < n; i++) { const at = dur * (1 - Math.pow(1 - i / n, 1.6)); this.noise(0.06, 600 + i * 120, 2, 0.22, 'bandpass', 250, at); this.tone(90 + i * 12, 50, 0.07, 0.25, 'sine', at); }
-    this.noise(dur, 3000, 1, 0.08, 'highpass', 0, 0);                        // leises Zischen die ganze Zeit
-    this.tone(1300, 900, 0.04, 0.3, 'square', dur);                          // Klack!
-    this.noise(0.05, 4000, 2, 0.35, 'bandpass', 0, dur);
-    this.noise(0.25, 6000, 0.8, 0.18, 'highpass', 0, dur + 0.03);            // Pssst – Druck ist drin
-  }
+  magGrab() { this.noise(0.1, 900, 1, 0.18, 'lowpass', 400); this.tone(900, 700, 0.03, 0.12, 'square', 0.05); }                // neues Magazin aus dem Fach ziehen
+  magIn() { this.tone(260, 110, 0.07, 0.5, 'square'); this.noise(0.05, 2400, 2, 0.45, 'bandpass'); this.tone(1700, 1300, 0.025, 0.2, 'square', 0.04); }   // Klack!
+  ready() { this.noise(0.25, 4500, 1, 0.14, 'highpass', 0); this.tone(1900, 2100, 0.05, 0.12, 'triangle', 0.05); }            // Pssst – Druck liegt an, bereit
   // Schild zerbricht: wie Glas – viele kurze helle Splitter, fallende Glas-Töne und ein dumpfer Schlag
   shieldBreak(vol = 1) {
     this.tone(220, 60, 0.25, 0.5 * vol, 'sine');                               // dumpfer Schlag

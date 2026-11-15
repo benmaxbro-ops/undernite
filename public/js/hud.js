@@ -176,13 +176,15 @@ export class Hud {
         if (w) {
           const def = WEAPONS[w[0]];
           sl.n.textContent = def.name; sl.d.style.setProperty('--rar', RARITY[w[1]].color);
-          // Nachladen hat zwei Hälften: erst Wasser ansaugen (blau), dann zusammenpressen (gelb)
+          // Nachladen = Magazin wechseln. Daneben die Ersatzmagazine im Rucksack: jedes zeigt, wie voll es ist (der Kompressor füllt nach).
           const reloading = y.slot === i && y.rl > 0;
           const done = reloading ? 1 - y.rl / y.rlT : 0;   // 0 = gerade angefangen, 1 = fertig
-          const sucking = done < 0.5;
-          sl.a.innerHTML = reloading ? (sucking ? '💧 saugt Wasser an …' : '🔧 komprimiert …') : `<b class="num">${w[2]}</b> / ${def.mag} · ${def.range} m`;
+          const spares = w[3] || [];
+          const mags = `<span class="mags">${spares.map(f => `<i class="${f >= 1 ? 'full' : ''}"><b style="height:${Math.round(f * 100)}%"></b></i>`).join('')}</span>`;
+          const waiting = w[2] === 0 && !spares.some(f => f * def.mag >= 1);
+          sl.a.innerHTML = reloading ? '🔄 Magazin wechseln …' : waiting ? `${mags} Kompressor füllt …` : `<b class="num">${w[2]}</b> / ${def.mag} ${mags} · ${def.range} m`;
           sl.rl.style.width = done * 100 + '%';
-          sl.rl.style.background = sucking ? '#3fa9f5' : '';
+          sl.rl.style.background = '#3fa9f5';
         } else { sl.n.textContent = '–'; sl.a.textContent = 'leer'; sl.d.style.setProperty('--rar', '#35424b'); sl.rl.style.width = '0'; }
       }
       this.set('ink', 'opacity', y.ink > 0 ? Math.min(1, y.ink / 0.8) : 0);

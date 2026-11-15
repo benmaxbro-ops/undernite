@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER,
   creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow } from './shared.js';
 import { buildEnvironment } from './world.js';
-import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeFish, makeBoss, makeTrophy } from './models.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, RELOAD_STEPS, makeFish, makeBoss, makeTrophy } from './models.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
@@ -43,7 +43,7 @@ let held = -1;   // expedition: index of the caught fish/boss in your hand (-1 =
 const beams = [], BEAM_TIME = 0.18;
 // Waffe in der Ego-Perspektive: hängt an der Kamera, rechts unten im Bild.
 // gills = wie weit die Kiemen offen sind (0…1), charge = wie voll das Druckfenster ist (0…1), kick = Rückstoß nach einem Schuss
-const view = { g: new THREE.Group(), gun: null, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, stage: 0 };
+const view = { g: new THREE.Group(), gun: null, arms: null, rHand: null, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, tilt: 0, rsnd: 0 };
 view.g.position.set(0.15, -0.13, 0);   // rechts, unten (die Tiefe kommt von der Waffe selbst, siehe updateViewModel)
 camera.add(view.g);
 // firstPerson = Taste V gedrückt (Ego-Perspektive), fpOn = sie ist gerade wirklich aktiv (nicht in Fahrzeugen)
@@ -578,25 +578,25 @@ function recoil(def) {
   shake = Math.max(shake, k * 2.5);
   view.kick = 1;
 }
-// Kiemen, Druckfenster, Nachlade-Geräusche und die Waffe vor der Kamera (Ego-Perspektive)
+// ---------- Nachladen: Magazin wechseln (die Bewegungen stehen in models.js bei poseReload) ----------
+// Nachlade-Geräusche: [Zeitpunkt 0…1, Name des Sounds in audio.js]
+const RELOAD_SOUNDS = [[0.13, 'magOut'], [0.36, 'stow'], [0.5, 'magGrab'], [0.75, 'magIn'], [0.86, 'ready']];
+// Kiemen, Druckanzeige, Nachladen und die Waffe vor der Kamera (Ego-Perspektive)
 function updateViewModel(dt) {
   // Rückstoß zurückfedern lassen
   const back = Math.min(recoilBack, dt * 0.6); camPitch -= back; recoilBack -= back;
   updateScope(dt);
   const w = you && you.alive ? you.w[you.slot] : null;
-  // Nachladen: erste Hälfte = Wasser ansaugen (Kiemen auf), zweite Hälfte = komprimieren (Kiemen zu, Druckfenster füllt sich)
   const reloading = !!w && you.rl > 0;
   const done = reloading ? 1 - you.rl / you.rlT : 0;
-  const sucking = reloading && done < 0.5;
-  // Geräusche genau dann starten, wenn eine neue Hälfte beginnt (0 = nichts, 1 = ansaugen, 2 = komprimieren)
-  const stage = !reloading ? 0 : sucking ? 1 : 2;
-  if (stage !== view.stage) {
-    if (stage === 1) sfx.suck(you.rlT * 0.5);
-    if (stage === 2) sfx.compress(you.rl);
-    view.stage = stage;
-  }
-  view.gills += ((sucking ? 1 : 0) - view.gills) * Math.min(1, dt * 8);
-  view.charge = reloading && !sucking ? (done - 0.5) * 2 : Math.max(0, view.charge - dt * 4);
+  // Nachlade-Geräusche: jedes einmal, wenn sein Zeitpunkt erreicht ist
+  if (!reloading) view.rsnd = 0;
+  else while (view.rsnd < RELOAD_SOUNDS.length && done >= RELOAD_SOUNDS[view.rsnd][0]) sfx[RELOAD_SOUNDS[view.rsnd++][1]]();
+  // Kiemen: beim Schuss puffen sie kurz auf (der Druck entweicht)
+  view.gills = Math.max(view.gills - dt * 4, view.kick * 0.7);
+  // Druckanzeige = wie voll das Magazin in der Waffe ist
+  const def = w ? WEAPONS[w[0]] : null;
+  view.charge = def ? (reloading ? Math.max(0, done - RELOAD_STEPS.insert) / (1 - RELOAD_STEPS.insert) : w[2] / def.mag) : 0;
   // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
   view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5;   // beim Zielen durchs Fernrohr ist die Waffe nicht zu sehen
   if (!view.g.visible) return;
@@ -604,19 +604,28 @@ function updateViewModel(dt) {
   if (widx !== view.widx) {   // Waffe gewechselt: neues Modell bauen
     view.widx = widx; view.g.clear();
     view.gun = makeWaterGun(widx, true); view.g.add(view.gun);
-    view.gun.add(makeViewArms(mySuit, view.gun.userData));   // Arm und Hände halten die Waffe
+    view.arms = makeViewArms(mySuit, view.gun.userData); view.gun.add(view.arms);   // Arm und Hände halten die Waffe
+    view.rHand = makeReloadHand(mySuit); view.gun.add(view.rHand);                   // zweite Hand fürs Nachladen
   }
-  view.gun.userData.setGills(view.gills);
-  view.gun.userData.setCharge(view.charge);
-  // Schwanken beim Schwimmen, Rückstoß beim Schießen, beim Ansaugen zur Seite drehen (damit man die Kiemen sieht)
+  const U = view.gun.userData;
+  U.setGills(view.gills);
+  U.setCharge(view.charge);
+  // Nachladen: zweite Hand und Magazin bewegen, die normale linke Hand ausblenden
+  const rl = reloading && !!U.mag;
+  if (view.arms.userData.left) view.arms.userData.left.visible = !rl;
+  if (rl) poseReload(done, U, view.rHand);
+  else { view.rHand.visible = false; if (U.mag) { U.mag.g.position.copy(U.mag.seat); U.mag.g.visible = true; U.mag.fill.emissiveIntensity = 0.4 + 1.4 * view.charge; } }
+  // beim Nachladen die Waffe zur Seite kippen, damit man den Magazinschacht sieht
+  view.tilt += ((rl ? 1 : 0) - view.tilt) * Math.min(1, dt * 7);
+  // Schwanken beim Schwimmen, Rückstoß beim Schießen
   const speed = Math.hypot(me.vx, me.vy, me.vz);
   view.bob += dt * (2 + speed * 0.6);
   view.kick = Math.max(0, view.kick - dt * 10);
   const sway = Math.min(1, speed / 10) * 0.012;
   // die Waffe so weit nach vorne schieben, dass ihr hinteres Ende 0,3 m vor der Kamera ist
-  const sh = view.gun.userData.fpShift, z = -(view.gun.userData.rear + 0.3) + sh[2];
-  view.gun.position.set(sh[0] + Math.cos(view.bob) * sway, sh[1] + Math.abs(Math.sin(view.bob)) * sway - view.gills * 0.03 + view.kick * 0.015, z + view.kick * 0.09);
-  view.gun.rotation.set(view.kick * 0.22 + view.gills * 0.12, view.gills * 0.45, view.gills * 0.55);
+  const sh = U.fpShift, z = -(U.rear + 0.3) + sh[2];
+  view.gun.position.set(sh[0] + Math.cos(view.bob) * sway - view.tilt * 0.07, sh[1] + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.09 + view.kick * 0.015, z + view.kick * 0.09);
+  view.gun.rotation.set(view.kick * 0.22 + view.tilt * 0.1, view.tilt * 0.35, view.tilt * 0.6);
 }
 const V = new THREE.Vector3();
 function updateCamera(dt) {

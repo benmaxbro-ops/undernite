@@ -26,7 +26,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | Shift | Schub (verbraucht Energie) |
 | Linksklick | feuern |
 | 1 2 3 / Mausrad | Waffe wechseln |
-| R | nachladen |
+| R | nachladen: Magazin wechseln (das alte kommt in den Rucksack, der Kompressor füllt es wieder auf) |
 | E | Truhe öffnen, Waffe aufheben/tauschen, Fahrzeug ein-/aussteigen |
 | F | aus dem Oktopusgriff befreien (hämmern) |
 | L | Taschenlampe an/aus (Expedition) |

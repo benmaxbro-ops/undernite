@@ -75,6 +75,19 @@ export function buildRealDiver(suit, accent) {
   put(g, CYL, rubber, 0, 0.32, -0.5, 0.04, 0.03, 0.04);                                // valve knob
   put(g, SPH, chrome, 0.05, 0.27, -0.55, 0.04, 0.035, 0.04);                           // first stage
 
+  // ----- Rucksack-Kompressor: füllt ständig die Magazine nach -----
+  const compM = mat(0x2a3138, { roughness: 0.4, metalness: 0.6 }), glowB = mat(0x2fa8ff, { emissive: 0x2fa8ff, emissiveIntensity: 1.4 });
+  const magGlass = mat(0x9fe4ff, { emissive: 0x2fa8ff, emissiveIntensity: 0.7, transparent: true, opacity: 0.75, roughness: 0.1 });
+  put(g, CYL, compM, 0, 0.2, 0.33, 0.075, 0.28, 0.075).rotation.z = Math.PI / 2;          // Kompressor quer unter der Flasche
+  for (const s of [-1, 1]) put(g, CYL, glowB, s * 0.1, 0.2, 0.33, 0.078, 0.012, 0.078).rotation.z = Math.PI / 2;   // blaue Ringe
+  put(g, BOX, glowB, 0, 0.27, 0.33, 0.06, 0.012, 0.035);                                   // leuchtendes Druckfenster
+  hose(g, [[0, 0.24, 0.27], [0, 0.26, 0.22], [0, 0.23, 0.18]], hoseM, 0.012);             // Leitung zur Flasche
+  // Magazinhalter links und rechts an der Weste, mit je zwei Druckmagazinen
+  for (const s of [-1, 1]) {
+    put(g, BOX, compM, s * 0.19 * wide, 0.1, 0.0, 0.035, 0.07, 0.2);
+    for (const z of [-0.05, 0.05]) put(g, CYL, magGlass, s * 0.215 * wide, 0.11, z, 0.018, 0.075, 0.018);
+  }
+
   // ----- head: hood, mask, regulator -----
   const head = new THREE.Group(); head.position.set(0, 0.04, -0.68); g.add(head);
   put(g, CYL, suitBlack, 0, 0.03, -0.58, 0.07, 0.12, 0.07).rotation.x = Math.PI / 2 - 0.3;   // neck
