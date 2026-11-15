@@ -9,6 +9,11 @@ import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
 import { settings, onSettings, openSettings, closeSettings, QUALITY } from './settings.js';
 import { setReefQuality } from './reef.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -32,7 +37,32 @@ const torchBeam = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).trans
     fragmentShader: 'uniform vec3 c; uniform float o; varying float vz; void main() { gl_FragColor = vec4(c, o * pow(1.0 - vz, 1.8)); }',
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
 torchBeam.rotation.order = 'YXZ'; torchBeam.visible = false; scene.add(torchBeam);
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  if (post.composer) { post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(innerWidth, innerHeight); }
+}
+// ---------- Grafik-Nachbearbeitung (je nach Qualitätsstufe) ----------
+// Das Bild wird erst normal gezeichnet und dann bearbeitet:
+//   GTAO  = weiche Schatten in Spalten, Höhlen und Ecken (macht alles weniger "blockig")
+//   Bloom = helle, leuchtende Dinge strahlen in ihre Umgebung (Korallen, Quallen, Mündungsblitz, Lampe)
+const post = { on: false, composer: null, bloom: null, ao: null };
+function setupPost(Q) {
+  post.on = Q.bloom > 0 || Q.ao;
+  if (!post.on) return;
+  if (!post.composer) {
+    post.composer = new EffectComposer(renderer);
+    post.composer.addPass(new RenderPass(scene, camera));
+    post.ao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+    post.ao.updateGtaoMaterial({ radius: 1.4, distanceExponent: 1.6, thickness: 2, scale: 1.3, samples: 12 });
+    post.composer.addPass(post.ao);
+    post.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.55, 0.7);
+    post.composer.addPass(post.bloom);
+    post.composer.addPass(new OutputPass());   // Farben und Helligkeit wie ohne Nachbearbeitung (Tone Mapping)
+  }
+  post.ao.enabled = !!Q.ao;
+  post.bloom.enabled = Q.bloom > 0; post.bloom.strength = Q.bloom;
+  post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(innerWidth, innerHeight);
+}
 addEventListener('resize', resize); resize();
 
 const hud = new Hud(), sfx = new Sfx();
@@ -640,9 +670,11 @@ let FOV = 72; const SCOPE_FOV = 16, ADS_FOV = 50, SWAY_MIN = 0.0015, SWAY_MAX = 
 let scoping = false, aim = 0, scoped = 0, swayT = 0, swayX = 0, swayY = 0;
 // Einstellungen anwenden (hier, weil FOV erst ab dieser Stelle existiert)
 onSettings((s) => {
+  const Q = QUALITY[s.quality] || QUALITY.high;
   sfx.setVolume(s.volume);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY[s.quality].pr)); resize();
-  setReefQuality(QUALITY[s.quality].reef);   // gilt ab der nächsten Welt (nächste Runde)
+  renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); resize();
+  setupPost(Q);                 // Leuchten und weiche Schatten
+  setReefQuality(Q.reef);       // gilt ab der nächsten Welt (nächste Runde)
   FOV = s.fov;
   document.getElementById('fpsBox').classList.toggle('hidden', !s.fps);
 });
@@ -857,7 +889,7 @@ function frame(now) {
     if (mode !== 'exp' && you) updateTorch(dt, SURFACE - fx.y + DEEP.brOffset);
   } else lobbyCamera();
   if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);
-  renderer.render(scene, camera);
+  if (post.on) post.composer.render(); else renderer.render(scene, camera);
   // FPS-Anzeige (Bilder pro Sekunde), zweimal pro Sekunde aktualisiert
   if (settings.fps) { fpsN++; fpsT += dt; if (fpsT >= 0.5) { document.getElementById('fpsBox').textContent = Math.round(fpsN / fpsT) + ' FPS'; fpsN = 0; fpsT = 0; } }
   requestAnimationFrame(frame);

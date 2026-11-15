@@ -2,12 +2,18 @@
 // Sie werden im Browser gespeichert (localStorage) und gelten beim nächsten Start wieder.
 // Neue Einstellung hinzufügen: in DEFAULTS eintragen, in ROWS eine Zeile dazu, und in main.js bei onSettings anwenden.
 
-export const DEFAULTS = { volume: 0.8, music: 0.5, sens: 1, invertY: false, fov: 72, quality: 'high', fps: false };
-// Grafikqualität: pr = Bildauflösung (Pixel pro Bildpunkt), reef = wie dicht die Riffe sind (1 = alles)
+// Handy oder Tablet? (Touchscreen als Hauptbedienung) – dann startet das Spiel mit der sparsamen Handy-Grafik
+export const IS_PHONE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod/i.test(typeof navigator === 'object' ? navigator.userAgent : '');
+export const DEFAULTS = { volume: 0.8, music: 0.5, sens: 1, invertY: false, fov: 72, quality: IS_PHONE ? 'phone' : 'high', fps: false };
+// Grafikqualität: pr = Bildauflösung (Pixel pro Bildpunkt), reef = wie dicht die Riffe sind (1 = normal),
+// bloom = wie stark Leuchtendes strahlt (0 = aus), ao = weiche Schatten in Spalten und Ecken (Ambient Occlusion)
 export const QUALITY = {
-  low:  { name: 'Niedrig', pr: 0.75, reef: 0.35 },
-  mid:  { name: 'Mittel',  pr: 1,    reef: 0.65 },
-  high: { name: 'Hoch',    pr: 1.5,  reef: 1 },
+  phone: { name: 'Handy',   pr: 0.6,  reef: 0.12, bloom: 0,    ao: false },   // so wenig wie möglich, damit das Handy nicht heiß wird
+  low:   { name: 'Niedrig', pr: 0.75, reef: 0.35, bloom: 0,    ao: false },
+  mid:   { name: 'Mittel',  pr: 1,    reef: 0.65, bloom: 0.55, ao: false },
+  high:  { name: 'Hoch',    pr: 1.5,  reef: 1,    bloom: 0.7,  ao: true },
+  ultra: { name: 'Ultra',   pr: 2,    reef: 1.5,  bloom: 0.9,  ao: true,
+           warn: '⚠️ Ultra belastet die Grafikkarte sehr stark: Sie kann heiß und laut werden, und das Spiel kann ruckeln. Nur mit einer starken Grafikkarte benutzen.' },
 };
 const KEY = 'undernite.settings';
 
@@ -30,7 +36,7 @@ const ROWS = [
   { k: 'sens', label: 'Mausempfindlichkeit', type: 'range', min: 0.2, max: 3, step: 0.05, fmt: (v) => v.toFixed(2) + '×' },
   { k: 'invertY', label: 'Maus umkehren (hoch/runter)', type: 'check' },
   { k: 'fov', label: 'Sichtfeld', type: 'range', min: 60, max: 100, step: 1, fmt: (v) => v + '°' },
-  { k: 'quality', label: 'Grafikqualität', type: 'select', options: QUALITY, note: 'Die Riff-Dichte gilt ab der nächsten Runde.' },
+  { k: 'quality', label: 'Grafikqualität', type: 'select', options: QUALITY, note: 'Leuchten und Schatten gelten sofort, die Riff-Dichte ab der nächsten Runde.' },
   { k: 'fps', label: 'FPS anzeigen (Bilder pro Sekunde)', type: 'check' },
 ];
 
@@ -57,8 +63,15 @@ function buildUI() {
     } else {
       input = document.createElement('select');
       for (const [id, o] of Object.entries(r.options)) { const op = document.createElement('option'); op.value = id; op.textContent = o.name; input.appendChild(op); }
-      input.value = settings[r.k]; input.onchange = () => setSetting(r.k, input.value);
+      input.value = settings[r.k];
       row.appendChild(input);
+      // Warnung anzeigen, wenn die gewählte Stufe eine hat (z. B. Ultra)
+      const warn = document.createElement('div'); warn.className = 'setWarn';
+      const showWarn = () => { const w = r.options[input.value].warn; warn.textContent = w || ''; warn.style.display = w ? '' : 'none'; };
+      input.onchange = () => { setSetting(r.k, input.value); showWarn(); };
+      box.appendChild(row); box.appendChild(warn); showWarn();
+      if (r.note) { const n = document.createElement('div'); n.className = 'setNote'; n.textContent = r.note; box.appendChild(n); }
+      continue;
     }
     box.appendChild(row);
     if (r.note) { const n = document.createElement('div'); n.className = 'setNote'; n.textContent = r.note; box.appendChild(n); }
