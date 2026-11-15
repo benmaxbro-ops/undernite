@@ -25,11 +25,12 @@ export const SUITS = {
 export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp', 'plasma', 'sonic'];
 // range = how far (metres) a shot flies before it is gone. The starter pistol has the shortest.
 // hitscan: true = trifft sofort (kein Flug), schießt einen Wasserstrahl. beam = Dicke des Strahls in Metern.
+// scope: true = mit der rechten Maustaste durchs Zielfernrohr schauen (je weniger Leben, desto wackliger).
 export const WEAPONS = {
   pistol:  { name: 'Bolzenpistole',  dmg: 14, rate: 3.5, speed: 95,  mag: 12, reload: 1.3, spread: 0.008, range: 22, pellets: 1, splash: 0, hitscan: true, beam: 0.07 },
   needler: { name: 'Nadler',         dmg: 10, rate: 9,   speed: 115, mag: 30, reload: 1.8, spread: 0.022, range: 38, pellets: 1, splash: 0, hitscan: true, beam: 0.05 },
   scatter: { name: 'Splitterwerfer', dmg: 9,  rate: 1.3, speed: 85,  mag: 5,  reload: 2.0, spread: 0.085, range: 26, pellets: 7, splash: 0, hitscan: true, beam: 0.06 },
-  harpoon: { name: 'Harpune',        dmg: 68, rate: 0.9, speed: 150, mag: 3,  reload: 2.2, spread: 0.002, range: 65, pellets: 1, splash: 0 },
+  harpoon: { name: 'Harpune',        dmg: 68, rate: 0.9, speed: 150, mag: 3,  reload: 2.2, spread: 0.002, range: 65, pellets: 1, splash: 0, hitscan: true, beam: 0.08, scope: true },
   torpedo: { name: 'Torpedowerfer',  dmg: 80, rate: 0.7, speed: 44,  mag: 2,  reload: 2.8, spread: 0.004, range: 80, pellets: 1, splash: 9 },
   subtorp: { name: 'Bordtorpedo',    dmg: 60, rate: 1.1, speed: 58,  mag: 99, reload: 0,   spread: 0.004, range: 90, pellets: 1, splash: 8 },
   // expedition shop only (not in the Battle Royale loot)
@@ -40,7 +41,7 @@ for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight 
 
 // Finisher (nur Battle Royale): hat ein Gegner höchstens hp × 100 % Leben und ist nah genug (range in Metern),
 // kann man ihn mit G erledigen. Jede Klasse hat ihre eigene Animation (siehe finisher.js).
-export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 4, goliath: 6 } };
+export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 10, goliath: 6 } };
 
 export const RARITY = [
   { name: 'Gewöhnlich', color: '#9fb2bd', mul: 1.0 },

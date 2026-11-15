@@ -52,6 +52,14 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #banner{position:absolute;top:19%;left:50%;transform:translateX(-50%);font-size:26px;font-weight:700;letter-spacing:.06em;text-shadow:0 2px 12px #000,0 0 30px rgba(94,242,224,.5);opacity:0;transition:opacity .4s;text-align:center;white-space:nowrap}
 #banner.on{opacity:1}
 #prompt{position:absolute;top:60%;left:50%;transform:translateX(-50%);padding:8px 16px;font-size:16px} #prompt kbd{display:inline-block;background:var(--glow);color:#03222a;border-radius:5px;padding:1px 8px;font-weight:700;margin-right:8px;font-family:var(--display)}
+/* Zielfernrohr: schwarzer Rand, rundes Sichtfeld mit leichtem Blaustich, Fadenkreuz und Entfernungsstriche */
+#scope{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .12s;
+  background:radial-gradient(circle at 50% 50%,rgba(40,140,200,.06) 0,rgba(40,140,200,.06) 34vmin,rgba(0,0,0,.85) 34.6vmin,#000 36vmin)}
+#scope.on{opacity:1}
+#scope i{position:absolute;background:rgba(10,20,25,.9);box-shadow:0 0 2px rgba(120,220,255,.6)}
+#scope .h{left:calc(50% - 34vmin);width:68vmin;top:50%;height:1.5px;margin-top:-.75px}
+#scope .v{top:calc(50% - 34vmin);height:68vmin;left:50%;width:1.5px;margin-left:-.75px}
+#scope .m{left:calc(50% - 1.5vmin);width:3vmin;height:1.5px} #scope .m1{top:calc(50% + 4vmin)} #scope .m2{top:calc(50% + 8vmin)} #scope .m3{top:calc(50% + 12vmin)}
 #cross{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px;opacity:.9}
 #cross:before,#cross:after{content:"";position:absolute;background:#fff;box-shadow:0 0 3px #000}
 #cross:before{left:12px;top:0;width:2px;height:26px;clip-path:polygon(0 0,100% 0,100% 34%,0 34%,0 66%,100% 66%,100% 100%,0 100%)}
@@ -146,6 +154,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
     <canvas id="mini" width="190" height="190"></canvas>
     <div id="counts"><div class="panel"><span id="cntA">Überlebende</span><b class="num" id="alive">0</b></div><div class="panel"><span id="cntK">Kills</span><b class="num" id="kills">0</b></div></div>
   </div>
+  <div id="scope"><i class="h"></i><i class="v"></i><i class="m m1"></i><i class="m m2"></i><i class="m m3"></i></div>
   <div id="cross"></div><div id="hitm"></div><div id="dmgNum" class="num"></div>
   <div id="prompt" class="panel hidden"></div>
   <div id="spec" class="panel hidden"></div>
@@ -189,7 +198,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
   <div class="keys panel">
     <span><kbd>W A S D</kbd>schwimmen</span><span><kbd>Maus</kbd>zielen</span><span><kbd>Leertaste</kbd>auf</span><span><kbd>C</kbd>ab</span>
     <span><kbd>Shift</kbd>Schub</span><span><kbd>Linksklick</kbd>feuern</span><span><kbd>1 2 3</kbd>Waffe</span><span><kbd>R</kbd>nachladen</span>
-    <span><kbd>E</kbd>öffnen / aufheben / einsteigen</span><span><kbd>F</kbd>aus Oktopusgriff befreien</span><span><kbd>L</kbd>Taschenlampe (Expedition)</span>
+    <span><kbd>E</kbd>öffnen / aufheben / einsteigen</span><span><kbd>F</kbd>aus Oktopusgriff befreien</span><span><kbd>L</kbd>Taschenlampe (Expedition)</span><span><kbd>V</kbd>Ego-Perspektive</span><span><kbd>G</kbd>Finisher</span><span><kbd>Rechtsklick</kbd>Zielfernrohr (Harpune)</span>
   </div>
 </div>
 

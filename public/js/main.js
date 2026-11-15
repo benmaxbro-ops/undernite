@@ -159,6 +159,21 @@ function muzzleOf(id) {
   else { const e = players.get(id); if (e && e.mesh.visible && e.mesh.userData.muzzle) m = e.mesh.userData.muzzle(); }
   return m ? m.getWorldPosition(MZ) : null;
 }
+// Knapp vorbei: wie nah (Meter) ein fremder Schuss an dir vorbei muss, damit es "Schusch" macht
+const NEAR_MISS = 2.5;
+function whooshAt(x, y, z, d) {
+  const rx = Math.cos(camYaw), rz = -Math.sin(camYaw);                     // "rechts" von der Kamera aus
+  const side = ((x - me.x) * rx + (z - me.z) * rz) / Math.max(0.3, d);
+  sfx.whoosh(1 - d / (NEAR_MISS + 0.5), side);
+}
+function nearMiss(x0, y0, z0, x1, y1, z1) {
+  if (!you || !you.alive) return;
+  // der Punkt auf dem Strahl, der mir am nächsten ist
+  const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, L = dx * dx + dy * dy + dz * dz || 1;
+  const k = Math.max(0, Math.min(1, ((me.x - x0) * dx + (me.y - y0) * dy + (me.z - z0) * dz) / L));
+  const px = x0 + dx * k, py = y0 + dy * k, pz = z0 + dz * k, d = Math.hypot(px - me.x, py - me.y, pz - me.z);
+  if (d < NEAR_MISS) whooshAt(px, py, pz, d);
+}
 function addBeam(x0, y0, z0, x1, y1, z1, r) {
   const mesh = makeBeam(x0, y0, z0, x1, y1, z1, r);
   dyn.add(mesh);
@@ -171,7 +186,7 @@ function onEvent(e) {
       const mz = muzzleOf(e[3]); if (mz) { e[4] = mz.x; e[5] = mz.y; e[6] = mz.z; }
       const widx = e[2], def = WEAPONS[WEAPON_IDS[widx]], mesh = makeProjectile(widx);
       mesh.position.set(e[4], e[5], e[6]); mesh.lookAt(e[4] + e[7], e[5] + e[8], e[6] + e[9]); dyn.add(mesh);
-      projs.set(e[1], { mesh, x: e[4], y: e[5], z: e[6], dx: e[7], dy: e[8], dz: e[9], sp: def.speed, life: def.life, trail: widx >= 4 ? 0.03 : 0.09, tt: 0 });
+      projs.set(e[1], { mesh, x: e[4], y: e[5], z: e[6], dx: e[7], dy: e[8], dz: e[9], sp: def.speed, life: def.life, trail: widx >= 4 ? 0.03 : 0.09, tt: 0, mine: e[3] === myId });
       if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]));
       projs.lastShot = time;
       if (e[3] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
@@ -182,6 +197,7 @@ function onEvent(e) {
       const widx = e[1], def = WEAPONS[WEAPON_IDS[widx]];
       const mz = muzzleOf(e[2]); if (mz) { e[3] = mz.x; e[4] = mz.y; e[5] = mz.z; }   // der Strahl beginnt an der Mündung
       addBeam(e[3], e[4], e[5], e[6], e[7], e[8], def.beam || 0.06);
+      if (e[2] !== myId) nearMiss(e[3], e[4], e[5], e[6], e[7], e[8]);
       // ein paar Blasen entlang des Strahls
       for (let i = 0; i < 4; i++) { const k = Math.random(); env.bubble(e[3] + (e[6] - e[3]) * k, e[4] + (e[7] - e[4]) * k, e[5] + (e[8] - e[5]) * k, 1, 0.15, 0.5); }
       // Splitterwerfer schießt 7 Strahlen gleichzeitig – das Geräusch nur einmal abspielen
@@ -217,7 +233,7 @@ let lastGrunt = 0;
 const finCtx = {
   dyn, sfx, get env() { return env; },
   posOf: (id) => id === myId ? me : players.get(id),
-  muzzleOf, beam: addBeam, shake: (v) => { shake = Math.max(shake, v); },
+  muzzleOf, beam: addBeam, shake: (v) => { shake = Math.max(shake, v); }, zone: () => zone,
 };
 // welcher Gegner kann gerade gefinisht werden? (nah genug und wenig Leben)
 function finTarget() {
@@ -307,12 +323,13 @@ addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; firing = false; });
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas) return;
-  camYaw -= e.movementX * 0.0022; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - e.movementY * 0.0022));
+  const sens = 0.0022 * camera.fov / FOV;   // mit Zoom (kleines Sichtfeld) entsprechend langsamer
+  camYaw -= e.movementX * sens; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - e.movementY * sens));
 });
 const lock = () => { sfx.init(); if (phase === 'play' && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); };
-canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !== canvas) { lock(); return; } if (e.button !== 0) return; if (held >= 0) { if (nearBase()) placeHeld(); return; } firing = true; });
+canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !== canvas) { lock(); return; } if (e.button === 2) { scoping = true; return; } if (e.button !== 0) return; if (held >= 0) { if (nearBase()) placeHeld(); return; } firing = true; });
 document.getElementById('pause').addEventListener('click', lock);
-addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; });
+addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) scoping = false; });
 addEventListener('wheel', (e) => {
   if (phase !== 'play' || !you || !you.alive) return;
   const dir = e.deltaY > 0 ? 1 : -1;
@@ -493,7 +510,9 @@ function updateEntities(dt) {
     if (e.mesh.userData.tag) e.mesh.userData.tag.visible = near < 55 * 55;
     // breathing: every few seconds the diver exhales a cloud of bubbles from the regulator
     e.breath = (e.breath ?? Math.random() * 4) - dt * (e.fl & 2 ? 1.7 : 1);
-    if (e.breath <= 0) { e.breath = 3.4 + Math.random() * 1.4; e.exhale = 0.9; }
+    const myBreath = e.id === myId && you && you.alive && SURFACE - e.y > 1.2 && !myFin;
+    if (myBreath && !e.inhaled && e.breath < 1.9) { e.inhaled = true; sfx.inhale(BREATH_VOL); }
+    if (e.breath <= 0) { e.breath = 3.4 + Math.random() * 1.4; e.exhale = 0.9; e.inhaled = false; if (myBreath) sfx.exhale(BREATH_VOL); }
     if (e.exhale > 0 && near < 90 * 90 && SURFACE - e.y > 1.2) {
       e.exhale -= dt;
       const f = dirFrom(e.yaw, e.pitch), big = e.exhale > 0.45, n = Math.random() < (big ? 0.9 : 0.5) ? (big ? 2 : 1) : 0;
@@ -515,6 +534,8 @@ function updateEntities(dt) {
   for (const [id, p] of projs) {
     const st = p.sp * dt; p.x += p.dx * st; p.y += p.dy * st; p.z += p.dz * st; p.life -= dt;
     p.mesh.position.set(p.x, p.y, p.z);
+    // fremdes Geschoss fliegt knapp an mir vorbei → "Schusch" (nur einmal pro Geschoss)
+    if (!p.mine && !p.wh && you && you.alive) { const d = Math.hypot(p.x - me.x, p.y - me.y, p.z - me.z); if (d < NEAR_MISS + 0.5) { p.wh = true; whooshAt(p.x, p.y, p.z, d); } }
     p.tt -= dt; if (p.tt <= 0) { p.tt = p.trail; env.bubble(p.x, p.y, p.z, 1, 0.1, 0, 0.025 + Math.random() * 0.03); }
     if (p.life <= -0.15 || p.y < W.heightAt(p.x, p.z) - 0.5) removeProj(id);
   }
@@ -524,6 +545,26 @@ function updateEntities(dt) {
     if (b.t <= 0) { dyn.remove(b.mesh); b.mesh.userData.dispose(); beams.splice(i, 1); }
     else b.mesh.userData.fade(b.t / BEAM_TIME);
   }
+}
+// ---------- Zielfernrohr (Harpune) ----------
+// Rechte Maustaste halten: Zoom (Sichtfeld von FOV auf SCOPE_FOV Grad), Fernrohr-Bild, und das Zielen wackelt.
+// Je weniger Leben man hat, desto mehr wackelt es (SWAY_MIN bei vollem Leben, SWAY_MAX kurz vor dem Tod).
+const FOV = 72, SCOPE_FOV = 16, SWAY_MIN = 0.0015, SWAY_MAX = 0.018;
+let scoping = false, scoped = 0, swayT = 0, swayX = 0, swayY = 0;
+const BREATH_VOL = 0.8;   // Lautstärke der Atemgeräusche
+function updateScope(dt) {
+  const w = you && you.alive && !you.veh && held < 0 ? you.w[you.slot] : null;
+  const can = scoping && w && WEAPONS[w[0]].scope && !myFin;
+  scoped += ((can ? 1 : 0) - scoped) * Math.min(1, dt * 12);
+  const fov = FOV + (SCOPE_FOV - FOV) * scoped;
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  hud.scope(scoped > 0.5);
+  // Wackeln: zwei langsame Wellen übereinander, das sieht aus wie zitternde Hände. Es verschiebt das echte Zielen!
+  const lifeLeft = you && you.mhp ? Math.max(0, Math.min(1, you.hp / you.mhp)) : 1;
+  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * scoped;
+  swayT += dt;
+  const nx = (Math.sin(swayT * 0.9) + Math.sin(swayT * 2.3 + 1) * 0.45) * amp, ny = (Math.cos(swayT * 1.1) + Math.sin(swayT * 2.9) * 0.4) * amp;
+  camYaw += nx - swayX; camPitch += ny - swayY; swayX = nx; swayY = ny;
 }
 // Rückstoß: die Kamera springt beim Schuss nach oben (und etwas zur Seite) und federt dann zum Großteil zurück.
 // Mehr Schaden pro Schuss = mehr Rückstoß. RECOIL_BACK = wie viel davon zurückfedert (0.75 = 75 %).
@@ -541,6 +582,7 @@ function recoil(def) {
 function updateViewModel(dt) {
   // Rückstoß zurückfedern lassen
   const back = Math.min(recoilBack, dt * 0.6); camPitch -= back; recoilBack -= back;
+  updateScope(dt);
   const w = you && you.alive ? you.w[you.slot] : null;
   // Nachladen: erste Hälfte = Wasser ansaugen (Kiemen auf), zweite Hälfte = komprimieren (Kiemen zu, Druckfenster füllt sich)
   const reloading = !!w && you.rl > 0;
@@ -556,7 +598,7 @@ function updateViewModel(dt) {
   view.gills += ((sucking ? 1 : 0) - view.gills) * Math.min(1, dt * 8);
   view.charge = reloading && !sucking ? (done - 0.5) * 2 : Math.max(0, view.charge - dt * 4);
   // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
-  view.g.visible = fpOn && !!w && held < 0;
+  view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5;   // beim Zielen durchs Fernrohr ist die Waffe nicht zu sehen
   if (!view.g.visible) return;
   const widx = WEAPON_IDS.indexOf(w[0]);
   if (widx !== view.widx) {   // Waffe gewechselt: neues Modell bauen
@@ -583,7 +625,7 @@ function updateCamera(dt) {
   fpOn = false;
   if (myFin) {
     const G = myFin.ghost.position, mx = (me.x + G.x) / 2, my = (me.y + G.y) / 2 + 0.6, mz = (me.z + G.z) / 2;
-    const a = camYaw + 1.9 + myFin.p * 0.9, d = 5.5;
+    const a = camYaw + 1.9 + myFin.p * 0.9, d = 5.5 + Math.hypot(me.x - G.x, me.z - G.z) * 0.55;   // weiter weg, wenn der Gegner weit fliegt
     let px = mx + Math.sin(a) * d, py = my + 1.6, pz = mz + Math.cos(a) * d;
     py = Math.min(SURFACE - 0.6, Math.max(py, W.heightAt(px, pz) + 0.8));
     shake = Math.max(0, shake - dt * 2.2);
@@ -599,7 +641,7 @@ function updateCamera(dt) {
     // swimming at the surface: head out of the water, the camera looks across the sea
     if (SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
     // Ego-Perspektive: Kamera fährt in den Kopf (Abstand 0), nicht zur Seite, nicht nach oben
-    if (firstPerson && !v) { fpOn = true; want = 0; side = 0; up = 0; }
+    if ((firstPerson || scoped > 0.5) && !v) { fpOn = true; want = 0; side = 0; up = 0; }
     else ty += headUp * 2.2;
   } else {
     let e = players.get(specId);
@@ -620,6 +662,7 @@ function updateCamera(dt) {
 }
 function lobbyCamera() {
   view.g.visible = false;   // keine Waffe vor der Kamera in der Lobby
+  if (camera.fov !== FOV) { camera.fov = FOV; camera.updateProjectionMatrix(); } scoped = 0; hud.scope(false);   // Zoom aus
   if (!W) return;
   const a = time * 0.05, w = W.wreck;
   camera.position.set(w.x + Math.cos(a) * 46, w.y + 20, w.z + Math.sin(a) * 46);

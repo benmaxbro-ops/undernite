@@ -5,6 +5,7 @@ import { SUITS, RARITY, FISH, BOSSES } from './shared.js';
 import { makeRealFish, makeRealShark, makeRealOcto, makeRealBoss } from './creatures.js';
 import { makeShip } from './ship.js';
 import { buildRealDiver } from './diver.js';
+import { polymer, brushed, stipple, neoprene } from './textures.js';
 
 const TAU = Math.PI * 2;
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1, ...o });
@@ -122,11 +123,11 @@ export function makePlayerModel(suit, id, name) {
       inner.rotation.x = s.pitch * 0.2;
       for (const a of parts.arms) a.rotation.x = s.pitch;
       parts.legs[0].rotation.x = Math.sin(phase * 0.6) * amp; parts.legs[1].rotation.x = -Math.sin(phase * 0.6) * amp;
-      // Goliath-Finisher: beide Arme hoch über den Kopf … und runter!
+      // Goliath-Finisher: nach vorne greifen, hoch über den Kopf heben … und werfen!
       if (s.fin) {
-        const p = s.fin.p, up = Math.min(1, p / 0.3), down = Math.max(0, Math.min(1, (p - 0.3) / 0.1));
-        const x = p < 0.3 ? up * 1.9 : 1.9 - down * 2.3;
-        for (const a of parts.arms) a.rotation.x = p < 0.75 ? x : s.pitch;
+        const p = s.fin.p, k = (a, b) => Math.max(0, Math.min(1, (p - a) / (b - a)));
+        const x = p < 0.22 ? k(0, 0.22) * 0.5 : p < 0.45 ? 0.5 + k(0.22, 0.45) * 1.9 : 2.4 - k(0.45, 0.52) * 2.6;
+        for (const a of parts.arms) a.rotation.x = p < 0.7 ? x : s.pitch;
       }
     } else {
       // at the surface the diver turns upright and treads water, head out of the water
@@ -167,9 +168,8 @@ export function makePlayerModel(suit, id, name) {
         if (f && f.type === 'manta') {          // ausholen … und quer durchziehen
           const p = f.p, cut = Math.max(0, Math.min(1, (p - 0.45) / 0.1));   // 0 = ausgeholt, 1 = durchgezogen
           parts.hand.rotation.y = handBase.y + (p < 0.45 ? 0.9 * Math.min(1, p / 0.3) : 0.9 - cut * 1.9);
-        } else if (f) {                          // Faust: zurückziehen … und zuschlagen
-          const p = f.p, back = Math.min(1, p / 0.35), hit = Math.max(0, Math.min(1, (p - 0.38) / 0.07));
-          parts.hand.rotation.x = handBase.x + back * 0.9 - hit * 1.4;
+        } else if (f) {                          // Bollwerk: Arm nach vorne, hält die Minigun (die Minigun selbst baut finisher.js)
+          parts.hand.rotation.x = handBase.x - 0.35 * Math.min(1, f.p / 0.12);
         }
       }
     }
@@ -323,6 +323,17 @@ const GUNS = [
 const GUN_WHITE = 0xf2f7fa, GUN_BLUE = 0x2fa8ff;
 // Profile werden pro Waffe nur einmal gebaut und dann wiederverwendet (spart Speicher)
 const GUN_GEO = new Map();
+// Würfel mit abgerundeten Kanten (1 × 1 × 1), damit nichts mehr kantig aussieht
+const RBOX = (() => {
+  const bs = 0.14, bt = 0.14, h = 0.5 - bs, r = 0.12, s = new THREE.Shape();
+  s.moveTo(-h + r, -h); s.lineTo(h - r, -h); s.quadraticCurveTo(h, -h, h, -h + r); s.lineTo(h, h - r); s.quadraticCurveTo(h, h, h - r, h);
+  s.lineTo(-h + r, h); s.quadraticCurveTo(-h, h, -h, h - r); s.lineTo(-h, -h + r); s.quadraticCurveTo(-h, -h, -h + r, -h);
+  const d = 1 - 2 * bt, geo = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelThickness: bt, bevelSize: bs, bevelSegments: 3, curveSegments: 4 });
+  geo.translate(0, 0, -d / 2); geo.computeVertexNormals();
+  return geo;
+})();
+const GUN_CYL = zCyl(1, 1, 1, 32);     // glatte Zylinder (32 Ecken statt 14)
+const FINGER = new THREE.CylinderGeometry(1, 1, 1, 14).rotateX(Math.PI / 2), KNUCKLE = new THREE.SphereGeometry(1, 14, 10);
 function profileGeo(key, pts, depth, holes = []) {
   if (GUN_GEO.has(key)) return GUN_GEO.get(key);
   const sh = new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v)));
@@ -339,8 +350,10 @@ export function makeWaterGun(widx, fp = false) {
   const P = GUNS[widx] || GUNS[0], K = 'g' + widx + ':';
   const g = new THREE.Group();
   // Materialien (jede Waffe eigene, weil Kiemen und Druckanzeige leuchten)
-  const white = new THREE.MeshStandardMaterial({ color: GUN_WHITE, emissive: 0x55606a, emissiveIntensity: 0.45, roughness: 0.3, metalness: 0.05 });
-  const metal = new THREE.MeshStandardMaterial({ color: 0x7d8b96, emissive: 0x1c252c, emissiveIntensity: 0.6, roughness: 0.35, metalness: 0.7 });
+  // weißer Kunststoff mit feiner Körnung, gebürstetes Metall, Griff mit Noppen
+  const white = new THREE.MeshStandardMaterial({ color: GUN_WHITE, emissive: 0x55606a, emissiveIntensity: 0.45, roughness: 0.32, metalness: 0.05, bumpMap: polymer(), bumpScale: 0.3 });
+  const metal = new THREE.MeshStandardMaterial({ color: 0x7d8b96, emissive: 0x1c252c, emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.75, bumpMap: brushed(), bumpScale: 0.5 });
+  const gripM = new THREE.MeshStandardMaterial({ color: 0x5f6d78, emissive: 0x1a232a, emissiveIntensity: 0.6, roughness: 0.75, metalness: 0.1, bumpMap: stipple(), bumpScale: 1.5 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x1a2229, emissive: 0x0a1218, emissiveIntensity: 0.5, roughness: 0.7 });
   const blue = new THREE.MeshStandardMaterial({ color: GUN_BLUE, emissive: GUN_BLUE, emissiveIntensity: 1.3, roughness: 0.3 });
   const gillIn = new THREE.MeshStandardMaterial({ color: 0x08233d, emissive: GUN_BLUE, emissiveIntensity: 0.15, roughness: 0.5 });
@@ -348,9 +361,9 @@ export function makeWaterGun(widx, fp = false) {
   const fill = new THREE.MeshStandardMaterial({ color: 0x7fdcff, emissive: GUN_BLUE, emissiveIntensity: 1.6 });
   const part = (geo, mat, x = 0, y = 0, z = 0) => add(g, geo, mat, x, y, z);
   // Box von u0 bis u1 (vorne), v0 bis v1 (oben), Breite w, seitlich verschoben um x
-  const box = (mat, u0, u1, v0, v1, w, x = 0) => { const m = part(GEO.box, mat, x, (v0 + v1) / 2, -(u0 + u1) / 2); m.scale.set(w, v1 - v0, u1 - u0); return m; };
+  const box = (mat, u0, u1, v0, v1, w, x = 0) => { const m = part(RBOX, mat, x, (v0 + v1) / 2, -(u0 + u1) / 2); m.scale.set(w, v1 - v0, u1 - u0); return m; };
   // Zylinder entlang der Waffe (nach vorne), von u0 bis u1 auf Höhe v
-  const tube = (mat, u0, u1, v, r) => { const m = part(GEO.zcyl, mat, 0, v, -(u0 + u1) / 2); m.scale.set(r, r, u1 - u0); return m; };
+  const tube = (mat, u0, u1, v, r) => { const m = part(GUN_CYL, mat, 0, v, -(u0 + u1) / 2); m.scale.set(r, r, u1 - u0); return m; };
   const side = (key, mat, pts, w, holes) => part(profileGeo(K + key, pts, w, holes), mat);
   const ring = (u, v, r, mat = blue) => tube(mat, u - 0.004, u + 0.004, v, r);
   const flaps = [];   // Kiemen-Lamellen
@@ -381,7 +394,7 @@ export function makeWaterGun(widx, fp = false) {
   };
   // Griff mit Abzugsbügel und Abzug; top = Unterkante des Gehäuses
   const grip = (top, w, len = 0.1) => {
-    side('grip', metal, [[-0.006, top], [0.034, top], [0.016, top - len], [-0.03, top - len], [-0.026, top - len * 0.25]], w * 0.85);
+    side('grip', gripM, [[-0.006, top], [0.034, top], [0.016, top - len], [-0.03, top - len], [-0.026, top - len * 0.25]], w * 0.85);
     box(blue, -0.03, 0.016, top - len - 0.008, top - len, w * 0.9);                                         // blaue Bodenplatte
     for (let i = 1; i < 4; i++) box(dark, -0.026 + i * 0.002, 0.03 - i * 0.004, top - len * (0.2 + i * 0.2), top - len * (0.2 + i * 0.2) + 0.003, w * 0.87);   // Griffrillen
     side('guard', white, [[0.034, top], [0.1, top], [0.1, top - 0.01], [0.075, top - 0.036], [0.03, top - 0.036]], w * 0.35,
@@ -522,37 +535,42 @@ export function makeWaterGun(widx, fp = false) {
 
 // ---------- Arme und Hände in der Ego-Perspektive ----------
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
-// ein Zylinder von Punkt a nach Punkt b (für Arme und Finger)
-function limb(parent, mat, a, b, r) {
-  const A = new THREE.Vector3(...a), d = new THREE.Vector3(...b).sub(A), len = d.length();
-  const m = new THREE.Mesh(GEO.zcyl, mat); m.scale.set(r, r, len);
-  m.position.copy(A).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(Z_AXIS, d.normalize());
-  parent.add(m); return m;
-}
 // gun = userData der Waffe (gripTop, gripW, support, rear). Die Arme werden an die Waffe gehängt und bewegen sich mit ihr.
+// Finger als Kette: Glieder (Zylinder) mit runden Knöcheln (Kugeln) an jedem Gelenk; pts = Gelenkpunkte, r = Dicke
+function chain(parent, mat, pts, r) {
+  for (let i = 0; i < pts.length; i++) {
+    const k = new THREE.Mesh(KNUCKLE, mat); k.position.set(...pts[i]); k.scale.setScalar(r * (i === pts.length - 1 ? 0.95 : 1.08)); parent.add(k);
+    if (i > 0) { const A = new THREE.Vector3(...pts[i - 1]), d = new THREE.Vector3(...pts[i]).sub(A), len = d.length(); const m = new THREE.Mesh(FINGER, mat); m.scale.set(r, r, len); m.position.copy(A).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(Z_AXIS, d.normalize()); parent.add(m); }
+  }
+}
+// gun = userData der Waffe (gripTop, gripW, support, rear). Die Arme hängen an der Waffe und bewegen sich mit ihr.
 export function makeViewArms(suit, gun) {
   const g = new THREE.Group(), col = SUIT_COL[suit] || 0x1fd6b4;
-  const sleeve = new THREE.MeshStandardMaterial({ color: 0x1a1f24, emissive: 0x0c1014, emissiveIntensity: 0.7, roughness: 0.85 });
-  const glove = new THREE.MeshStandardMaterial({ color: 0x343c44, emissive: 0x141a20, emissiveIntensity: 0.7, roughness: 0.6 });
-  const acc = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.45, roughness: 0.5 });
+  const sleeve = new THREE.MeshStandardMaterial({ color: 0x1c2126, emissive: 0x0c1014, emissiveIntensity: 0.7, roughness: 0.8, bumpMap: neoprene(), bumpScale: 1.2 });
+  const glove = new THREE.MeshStandardMaterial({ color: 0x353d45, emissive: 0x141a20, emissiveIntensity: 0.65, roughness: 0.55, bumpMap: neoprene(), bumpScale: 0.8 });
+  const acc = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4, roughness: 0.45, bumpMap: neoprene(), bumpScale: 0.6 });
   const big = suit === 'bulwark' ? 1.3 : suit === 'manta' ? 0.9 : 1;   // Bollwerk hat dicke Panzerarme
-  const t = gun.gripTop, w = gun.gripW, back = gun.rear + 0.2;
-  // rechte Hand: umschließt den Griff, Zeigefinger am Abzug, Daumen auf der linken Seite
-  const palm = add(g, GEO.box, glove, 0, t - 0.04, 0.004); palm.scale.set(w + 0.026, 0.065, 0.05);
-  for (let i = 0; i < 3; i++) { const y = t - 0.032 - i * 0.019, z = -(0.03 - i * 0.005); limb(g, glove, [-w / 2 - 0.012, y, z], [w / 2 + 0.012, y, z], 0.0095); }
-  limb(g, glove, [w / 2 + 0.006, t - 0.012, -0.025], [0.004, t - 0.018, -0.06], 0.008);
-  limb(g, glove, [-w / 2 - 0.011, t - 0.035, 0.018], [-w / 2 - 0.011, t - 0.008, -0.028], 0.0095);
-  limb(g, acc, [0, t - 0.055, 0.025], [0.006, t - 0.065, 0.065], 0.031 * big);                // Bündchen in Anzugfarbe
-  limb(g, sleeve, [0.006, t - 0.065, 0.06], [0.16, t - 0.34, back], 0.036 * big);            // Unterarm bis aus dem Bild
-  if (big > 1.2) limb(g, acc, [0.03, t - 0.1, 0.13], [0.07, t - 0.16, 0.25], 0.043 * big);     // Panzerplatte
-  // linke Hand (Gewehre und Werfer): stützt die Waffe vorne von unten
+  const t = gun.gripTop, w = gun.gripW, back = gun.rear + 0.2, R = w / 2 + 0.009;
+  // rechte Hand: Handfläche rechts am Griff, die Finger legen sich vorne herum bis auf die linke Seite
+  const palm = add(g, KNUCKLE, glove, R * 0.55, t - 0.046, 0.012); palm.scale.set(0.024, 0.042, 0.036);
+  add(g, KNUCKLE, glove, 0, t - 0.03, 0.03).scale.set(w / 2 + 0.012, 0.03, 0.022);              // Handrücken hinter dem Griff
+  for (let i = 0; i < 3; i++) {                                                                  // Mittel-, Ring-, kleiner Finger
+    const y = t - 0.034 - i * 0.02, f = -(0.028 - i * 0.004), r = 0.0098 - i * 0.0008;
+    chain(g, glove, [[R, y, f + 0.026], [R + 0.002, y, f - 0.004], [0, y - 0.002, f - 0.014], [-R, y - 0.002, f - 0.002], [-R - 0.002, y - 0.001, f + 0.016]], r);
+  }
+  chain(g, glove, [[R, t - 0.014, -0.006], [R - 0.002, t - 0.016, -0.034], [0.006, t - 0.02, -0.052], [0, t - 0.03, -0.058]], 0.009);   // Zeigefinger am Abzug
+  chain(g, glove, [[R * 0.6, t - 0.04, 0.03], [-R * 0.3, t - 0.02, 0.026], [-R - 0.004, t - 0.008, 0.004], [-R - 0.004, t - 0.004, -0.02]], 0.0105);   // Daumen
+  chain(g, acc, [[0.004, t - 0.058, 0.034], [0.01, t - 0.07, 0.07]], 0.031 * big);                // Bündchen in Anzugfarbe
+  chain(g, sleeve, [[0.01, t - 0.07, 0.068], [0.16, t - 0.34, back]], 0.036 * big);              // Unterarm bis aus dem Bild
+  if (big > 1.2) { const p = add(g, RBOX, acc, 0.05, t - 0.13, 0.19); p.scale.set(0.09, 0.05, 0.16); p.rotation.set(-0.6, 0.3, 0.2); }   // Panzerplatte
+  // linke Hand (Gewehre und Werfer): Handfläche unten, Finger rechts hoch, Daumen links
   if (gun.support) {
     const [sx, sy, sz] = gun.support;
-    const h = add(g, GEO.box, glove, sx, sy - 0.012, sz); h.scale.set(0.05, 0.05, 0.075);
-    for (let i = 0; i < 3; i++) { const z = sz - 0.025 + i * 0.022; limb(g, glove, [0.026, sy - 0.02, z], [0.026, sy + 0.022, z - 0.004], 0.0085); }
-    limb(g, glove, [-0.026, sy - 0.015, sz + 0.02], [-0.026, sy + 0.02, sz - 0.01], 0.009);
-    limb(g, acc, [0, sy - 0.035, sz + 0.035], [-0.01, sy - 0.05, sz + 0.07], 0.03 * big);
-    limb(g, sleeve, [-0.01, sy - 0.05, sz + 0.065], [-0.24, sy - 0.32, back], 0.035 * big);
+    const h = add(g, KNUCKLE, glove, sx, sy - 0.02, sz + 0.005); h.scale.set(0.034, 0.024, 0.045);
+    for (let i = 0; i < 4; i++) { const z = sz - 0.03 + i * 0.019, r = i === 3 ? 0.0078 : 0.0092; chain(g, glove, [[0.016, sy - 0.028, z], [0.032, sy - 0.012, z], [0.034, sy + 0.012, z - 0.003], [0.026, sy + 0.028, z - 0.006]], r); }
+    chain(g, glove, [[-0.018, sy - 0.03, sz + 0.02], [-0.032, sy - 0.006, sz + 0.008], [-0.03, sy + 0.02, sz - 0.012]], 0.0105);
+    chain(g, acc, [[-0.004, sy - 0.04, sz + 0.04], [-0.012, sy - 0.055, sz + 0.075]], 0.03 * big);
+    chain(g, sleeve, [[-0.012, sy - 0.055, sz + 0.072], [-0.24, sy - 0.32, back]], 0.035 * big);
   }
   return g;
 }

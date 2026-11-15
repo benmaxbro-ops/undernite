@@ -246,6 +246,8 @@ export class Hud {
   banner(text, dur = 2.6) { const b = $('banner'); b.textContent = text; b.classList.add('on'); this.bannerT = dur; }
   prompt(p) { const el = $('prompt'), key = p ? p.join() : ''; if (this.pKey === key) return; this.pKey = key; el.classList.toggle('hidden', !p); if (p) el.innerHTML = `<kbd>${p[0]}</kbd>${esc(p[1])}`; }
   // left = wie viel Leben das Ziel noch hat (1 = voll, 0 = tot). Die Zahl geht von grün (voll) über gelb nach rot (fast tot).
+  // Fernrohr-Bild beim Zielen ein- und ausblenden (das normale Fadenkreuz verschwindet dann)
+  scope(on) { if (this.scopeOn === on) return; this.scopeOn = on; $('scope').classList.toggle('on', on); $('cross').style.display = on ? 'none' : ''; }
   hitmark(dmg, kill, left) {
     const h = $('hitm'); h.classList.remove('on'); h.classList.toggle('kill', !!kill); void h.offsetWidth; h.classList.add('on');
     const d = $('dmgNum'); d.textContent = dmg; d.classList.remove('on'); void d.offsetWidth; d.classList.add('on');

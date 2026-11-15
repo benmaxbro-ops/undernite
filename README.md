@@ -32,6 +32,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | L | Taschenlampe an/aus (Expedition) |
 | V | Ego-Perspektive an/aus (nicht in Fahrzeugen) |
 | G | Finisher (Battle Royale): Gegner mit höchstens 30 % Leben in der Nähe erledigen |
+| Rechtsklick (halten) | Zielfernrohr der Harpune – je weniger Leben, desto mehr wackelt es |
 
 ## Was drin ist (v0.1)
 

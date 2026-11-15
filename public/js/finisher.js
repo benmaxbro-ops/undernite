@@ -1,21 +1,46 @@
 // Undernite – Finisher: kurze Animationen, wenn man einen Gegner mit wenig Leben per G erledigt (nur Battle Royale).
 // Jede Klasse hat ihren eigenen Finisher:
 //   Manta    – schleicht sich hinter den Gegner und schneidet mit dem Messer den Luftschlauch durch
-//   Triton   – ein sauberer Kopfschuss, der Gegner ist einfach weg
-//   Bollwerk – haut den Gegner mit der Faust k.o.
-//   Goliath  – der Mech holt aus und schlägt einmal zu, der Gegner fliegt weg
+//   Triton   – beschwört einen leuchtenden Fischschwarm und schickt ihn auf den Gegner
+//   Bollwerk – zieht eine Minigun und ballert den Gegner weg
+//   Goliath  – packt den Gegner, hebt ihn hoch und wirft ihn ins Schwarzwasser (die Zone)
 // Der Server hat den Gegner schon erledigt. Hier wird nur gezeigt, wie es passiert: dafür wird eine Kopie
 // des Gegners ("ghost") an seine Stelle gesetzt und animiert.
+import * as THREE from 'three';
 import { SUIT_ORDER, dirFrom } from './shared.js';
 import { makePlayerModel } from './models.js';
+import { schoolFishGeo } from './reef.js';
 
 // wie lange jeder Finisher dauert (Sekunden) und wann genau der Treffer passiert (0 = Anfang, 1 = Ende)
-export const FIN_TIME = { manta: 1.8, triton: 1.1, bulwark: 1.4, goliath: 1.4 };
-const HIT_AT = { manta: 0.5, triton: 0.3, bulwark: 0.45, goliath: 0.4 };
+export const FIN_TIME = { manta: 1.8, triton: 2.4, bulwark: 2.4, goliath: 2.8 };
+const HIT_AT = { manta: 0.5, triton: 0.6, bulwark: 0.25, goliath: 0.22 };
 
+const TAU = Math.PI * 2;
 const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };   // weich anfahren und abbremsen
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
-// c = Hilfsmittel aus main.js: { dyn, env, sfx, posOf(id), muzzleOf(id), beam(x0,y0,z0,x1,y1,z1,r), shake(stärke) }
+// ---------- Minigun (Bollwerk) ----------
+// Gebaut entlang +z, damit lookAt sie direkt auf den Gegner richten kann
+function makeMinigun() {
+  const g = new THREE.Group();
+  const metal = new THREE.MeshStandardMaterial({ color: 0x4a545c, roughness: 0.35, metalness: 0.85 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1a1f24, roughness: 0.6, metalness: 0.4 });
+  const white = new THREE.MeshStandardMaterial({ color: 0xf2f7fa, roughness: 0.35, emissive: 0x55606a, emissiveIntensity: 0.4 });
+  const blue = new THREE.MeshStandardMaterial({ color: 0x2fa8ff, emissive: 0x2fa8ff, emissiveIntensity: 1.5 });
+  const cyl = (r, len, mat, z, x = 0, y = 0, seg = 20) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, seg).rotateX(Math.PI / 2), mat); m.position.set(x, y, z); return m; };
+  g.add(cyl(0.11, 0.42, white, -0.05));                       // Gehäuse mit Motor
+  g.add(cyl(0.115, 0.02, blue, 0.1)); g.add(cyl(0.115, 0.02, blue, -0.2));
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.12, 24), white); drum.position.set(-0.17, -0.06, -0.08); drum.rotation.z = Math.PI / 2; g.add(drum);   // Munitionstrommel (Druckwasser)
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.015, 8, 20, Math.PI), dark); handle.position.set(0, 0.11, -0.05); handle.rotation.y = Math.PI / 2; g.add(handle);
+  const barrels = new THREE.Group(); barrels.position.z = 0.17; g.add(barrels);
+  for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; barrels.add(cyl(0.018, 0.75, metal, 0.37, Math.cos(a) * 0.055, Math.sin(a) * 0.055, 10)); }
+  barrels.add(cyl(0.085, 0.03, dark, 0.12)); barrels.add(cyl(0.085, 0.03, dark, 0.55)); barrels.add(cyl(0.08, 0.03, blue, 0.73));
+  g.userData.barrels = barrels;
+  g.userData.muzzleZ = 0.8;
+  return g;
+}
+
+// c = Hilfsmittel aus main.js: { dyn, env, sfx, posOf(id), muzzleOf(id), beam(...), shake(stärke), zone() }
 // e = ['fin', Angreifer, Opfer, Klasse Angreifer, Klasse Opfer, x, y, z, Blickrichtung Opfer]
 export function startFinisher(c, e) {
   const attacker = e[1], type = SUIT_ORDER[e[3]], vSuit = SUIT_ORDER[e[4]];
@@ -34,12 +59,29 @@ export function startFinisher(c, e) {
   const vf = dirFrom(V.yaw, 0);                       // wohin der Gegner schaut
   // wo der Angreifer am Ende stehen soll
   const goal = type === 'manta' ? { x: V.x - vf[0] * 1.2, y: V.y + 0.1, z: V.z - vf[2] * 1.2, yaw: V.yaw }   // direkt hinter ihm
-    : type === 'bulwark' ? { x: V.x - dx * 1.5, y: V.y, z: V.z - dz * 1.5, yaw: faceV }                       // vor ihm
-    : type === 'goliath' ? { x: V.x - dx * 3, y: V.y, z: V.z - dz * 3, yaw: faceV }
-    : { x: A0.x, y: A0.y, z: A0.z, yaw: faceV };                                                              // Triton bleibt stehen
-  const moveEnd = type === 'manta' ? 0.4 : type === 'triton' ? 0.01 : 0.33;
+    : type === 'goliath' ? { x: V.x - dx * 2.2, y: V.y, z: V.z - dz * 2.2, yaw: faceV }                       // ganz nah ran zum Packen
+    : { x: A0.x, y: A0.y, z: A0.z, yaw: faceV };                                                              // Triton und Bollwerk bleiben stehen
+  const moveEnd = type === 'manta' ? 0.4 : type === 'goliath' ? 0.2 : 0.01;
   const dur = FIN_TIME[type], hitAt = HIT_AT[type];
-  let t = 0, hit = false, vx = 0, vy = 0, vz = 0, spin = 0, gone = 0;
+  let t = 0, hit = false, gone = 0;
+  const extras = [];    // zusätzliche Dinge (Fische, Minigun), die am Ende entfernt werden
+
+  // ----- Triton: Fischschwarm -----
+  let fish = null, fishData = null;
+  if (type === 'triton') {
+    const N = 56, mat = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0x9fe8ff, emissive: 0x1fa8e0, emissiveIntensity: 0.9, metalness: 0.5, roughness: 0.3, side: THREE.DoubleSide, transparent: true });
+    fish = new THREE.InstancedMesh(schoolFishGeo(), mat, N); fish.frustumCulled = false;
+    fishData = Array.from({ length: N }, (_, i) => ({ a: (i / N) * TAU * 3, r: 0.6 + Math.random() * 0.8, h: Math.random() - 0.5, d: Math.random() * 0.25, s: 1 + Math.random() * 0.8, prev: new THREE.Vector3(A0.x, A0.y, A0.z), q: new THREE.Quaternion() }));
+    c.dyn.add(fish); extras.push(fish);
+    c.sfx.summon(); c.sfx.swarm(dur * 0.85);
+  }
+  // ----- Bollwerk: Minigun -----
+  let gun = null, spin = 0, fireT = 0;
+  if (type === 'bulwark') { gun = makeMinigun(); c.dyn.add(gun); extras.push(gun); c.sfx.spin(true, dur * hitAt); }
+  // ----- Goliath: Wurf ins Schwarzwasser -----
+  let throwFrom = null, throwTo = null, landed = false;
+
+  const M4 = new THREE.Matrix4(), P = new THREE.Vector3(), S = new THREE.Vector3(), UPV = new THREE.Vector3(0, 1, 0), G = new THREE.Vector3();
 
   const f = {
     attacker, type, p: 0, pose: null, ghost,
@@ -51,55 +93,125 @@ export function startFinisher(c, e) {
       f.pose = { x: A0.x + (goal.x - A0.x) * m, y: A0.y + (goal.y - A0.y) * m, z: A0.z + (goal.z - A0.z) * m, yaw: goal.yaw };
       // 2) der Treffer
       if (!hit && p >= hitAt) { hit = true; onHit(); }
-      // 3) was danach mit dem Gegner passiert
-      if (hit) afterHit(dt, p);
+      // 3) was mit dem Gegner (und Fischen, Minigun) passiert
+      if (type === 'manta') manta(dt, p);
+      else if (type === 'triton') triton(dt, p);
+      else if (type === 'bulwark') bulwark(dt, p);
+      else goliath(dt, p);
       ghost.userData.update(dt, gs);
       // am Ende ausblenden
-      const fade = type === 'triton' ? 1 - gone : 1 - ease((p - 0.7) / 0.3);
+      const fade = type === 'triton' ? 1 - gone : 1 - ease((p - 0.82) / 0.18);
       for (const mt of mats) mt.opacity = fade;
-      if (p >= 1) { c.dyn.remove(ghost); return false; }
+      if (p >= 1) { c.dyn.remove(ghost); for (const x of extras) c.dyn.remove(x); return false; }
       return true;
     },
   };
 
   function onHit() {
-    const gx = ghost.position.x, gy = ghost.position.y, gz = ghost.position.z;
-    if (type === 'manta') {
-      c.sfx.knife(); c.sfx.hoseCut(); c.shake(0.15);
-    } else if (type === 'triton') {
-      // sauberer Kopfschuss: Strahl von der Mündung zum Kopf, Blitz und Blasen – und weg ist er
-      const mz = c.muzzleOf(attacker) || { x: A0.x, y: A0.y + 0.3, z: A0.z };
-      c.beam(mz.x, mz.y, mz.z, gx, gy + 0.35, gz, 0.09);
-      c.sfx.headshot(); c.env.bubble(gx, gy + 0.35, gz, 50, 0.5, 4);
-    } else if (type === 'bulwark') {
-      c.sfx.punch(); c.shake(0.5);
-      vx = dx * 10; vy = 2.5; vz = dz * 10; spin = 7;
-      c.env.bubble(gx, gy + 0.2, gz, 25, 0.4, 3);
-    } else {
-      c.sfx.slam(); c.shake(1.1);
-      vx = dx * 22; vy = 6; vz = dz * 22; spin = 11;
-      c.env.explosion(gx, gy, gz, 4);
+    const g = ghost.position;
+    if (type === 'manta') { c.sfx.knife(); c.sfx.hoseCut(); c.shake(0.15); }
+    else if (type === 'triton') { c.sfx.bite(1); setTimeout(() => c.sfx.bite(0.8), 120); setTimeout(() => c.sfx.bite(0.9), 260); c.env.bubble(g.x, g.y, g.z, 40, 0.8, 3); }
+    else if (type === 'bulwark') c.sfx.minigun(dur * (0.78 - hitAt));
+    else { c.sfx.grab(); c.shake(0.4); }
+  }
+
+  // Manta: Luft sprudelt aus dem durchgeschnittenen Schlauch, der Gegner zappelt, dann sinkt er bewusstlos weg
+  function manta(dt, p) {
+    if (!hit) return;
+    const g = ghost, s = Math.max(0, 1 - (p - hitAt) * 2.5);
+    g.rotation.z = Math.sin(t * 25) * 0.25 * s;
+    g.rotation.x = -ease((p - 0.65) / 0.3) * 1.2;
+    g.position.y -= dt * 0.9 * ease((p - 0.6) / 0.2);
+    if (Math.random() < 0.8) c.env.bubble(g.position.x - vf[0] * 0.35, g.position.y + 0.35, g.position.z - vf[2] * 0.35, 2, 0.1, 2.5, 0.03 + Math.random() * 0.05);
+  }
+
+  // Triton: Schwarm entsteht in einer Spirale um Triton, schießt zum Gegner, wirbelt um ihn herum und verschwindet mit ihm
+  function triton(dt, p) {
+    const A = f.pose, g = ghost.position;
+    for (let i = 0; i < fishData.length; i++) {
+      const fd = fishData[i];
+      const spiral = (k) => P.set(A.x + Math.cos(fd.a + t * 4) * (0.5 + 2.2 * fd.r * k), A.y + 0.4 + fd.h * 1.6 + Math.sin(t * 3 + fd.a) * 0.2, A.z + Math.sin(fd.a + t * 4) * (0.5 + 2.2 * fd.r * k));
+      const swirlR = 1.3 * (1 - clamp01((p - hitAt) / 0.28) * 0.55);
+      const swirl = () => G.set(g.x + Math.cos(fd.a * 2 + t * 9) * swirlR * fd.r, g.y + fd.h * 2 + Math.sin(t * 5 + fd.a) * 0.3, g.z + Math.sin(fd.a * 2 + t * 9) * swirlR * fd.r);
+      let scale = fd.s;
+      if (p < 0.28) { spiral(ease(p / 0.28)); scale *= ease(p / 0.15); }
+      else if (p < hitAt) {
+        const k = ease((p - 0.28) / (hitAt - 0.28) * (1 + fd.d) - fd.d);
+        spiral(1); swirl(); P.lerp(G, k); P.y += Math.sin(k * Math.PI) * 2;   // im Bogen zum Gegner
+      } else if (p < 0.88) { swirl(); P.copy(G); }
+      else { swirl(); P.copy(G); const k = (p - 0.88) / 0.12; P.x += Math.cos(fd.a) * k * 8; P.z += Math.sin(fd.a) * k * 8; P.y += fd.h * k * 4; scale *= 1 - k; }   // Schwarm stiebt auseinander
+      // Blickrichtung = Bewegungsrichtung
+      if (P.distanceToSquared(fd.prev) > 1e-6) { M4.lookAt(fd.prev, P, UPV); fd.q.setFromRotationMatrix(M4); }
+      fd.prev.copy(P);
+      fish.setMatrixAt(i, M4.compose(P, fd.q, S.set(scale, scale, scale)));
+    }
+    fish.instanceMatrix.needsUpdate = true;
+    if (p > 0.92) fish.material.opacity = 1 - (p - 0.92) / 0.08;
+    if (hit) {   // der Gegner wird herumgewirbelt und verschwindet im Schwarm
+      ghost.rotation.y += dt * 9;
+      gone = clamp01((p - hitAt) / 0.25);
+      ghost.scale.setScalar(Math.max(0.01, 1 - gone));
+      if (Math.random() < 0.5) c.env.bubble(g.x, g.y, g.z, 3, 0.8, 2);
     }
   }
-  function afterHit(dt, p) {
-    const g = ghost;
-    if (type === 'manta') {
-      // Luft sprudelt aus dem durchgeschnittenen Schlauch, der Gegner zappelt, dann sinkt er bewusstlos weg
-      const s = Math.max(0, 1 - (p - hitAt) * 2.5);
-      g.rotation.z = Math.sin(t * 25) * 0.25 * s;
-      g.rotation.x = -ease((p - 0.65) / 0.3) * 1.2;
-      g.position.y -= dt * 0.9 * ease((p - 0.6) / 0.2);
-      if (Math.random() < 0.8) c.env.bubble(g.position.x - vf[0] * 0.35, g.position.y + 0.35, g.position.z - vf[2] * 0.35, 2, 0.1, 2.5, 0.03 + Math.random() * 0.05);
-    } else if (type === 'triton') {
-      gone = Math.min(1, gone + dt * 7);       // in weniger als 0,2 s verschwunden
-      g.scale.setScalar(Math.max(0.01, 1 - gone));
-    } else {
-      // k.o. geschlagen: fliegt weg, überschlägt sich, wird langsamer
-      g.position.x += vx * dt; g.position.y += vy * dt; g.position.z += vz * dt;
-      const k = Math.exp(-dt * 2.8); vx *= k; vy *= k; vz *= k;
-      g.rotation.x -= spin * dt; spin *= Math.exp(-dt * 1.5);
-      if (Math.random() < 0.4) c.env.bubble(g.position.x, g.position.y, g.position.z, 1, 0.3, 0.5);
+
+  // Bollwerk: Minigun ausfahren, hochdrehen, ballern (viele kleine Wasserstrahlen), runterdrehen
+  function bulwark(dt, p) {
+    const A = f.pose, g = ghost.position;
+    const fx = -Math.sin(A.yaw), fz = -Math.cos(A.yaw), rx = Math.cos(A.yaw), rz = -Math.sin(A.yaw);
+    const out = ease(p / 0.12);
+    gun.position.set(A.x + fx * 0.55 + rx * 0.35, A.y - 0.05 - (1 - out) * 0.4, A.z + fz * 0.55 + rz * 0.35);
+    gun.lookAt(g.x, g.y, g.z); gun.updateMatrixWorld(true);
+    gun.scale.setScalar(Math.max(0.01, out) * 1.5);   // 1,5-mal so groß, damit man sie gut sieht
+    const firing = p >= hitAt && p < 0.78;
+    spin = firing ? Math.min(40, spin + dt * 80) : p < hitAt ? Math.min(30, spin + dt * 30) : Math.max(0, spin - dt * 25);
+    gun.userData.barrels.rotation.z += spin * dt;
+    if (firing) {
+      fireT -= dt;
+      while (fireT <= 0) {
+        fireT += 1 / 28;
+        const mz = gun.localToWorld(P.set(0, 0, gun.userData.muzzleZ));   // Mündung (localToWorld rechnet die Größe mit ein)
+        const jx = (Math.random() - 0.5) * 0.5, jy = (Math.random() - 0.3) * 0.7, jz = (Math.random() - 0.5) * 0.5;
+        c.beam(mz.x, mz.y, mz.z, g.x + jx, g.y + jy, g.z + jz, 0.03);
+        c.env.bubble(g.x + jx, g.y + jy, g.z + jz, 2, 0.15, 1.5);
+        if (Math.random() < 0.25) c.env.blood(g.x + jx, g.y + jy, g.z + jz);
+      }
+      // der Gegner wird zurückgedrückt und durchgeschüttelt
+      ghost.position.x += fx * dt * 2.2; ghost.position.z += fz * dt * 2.2;
+      ghost.rotation.z = (Math.random() - 0.5) * 0.3; ghost.rotation.x = (Math.random() - 0.5) * 0.2;
+      c.shake(0.12);
     }
+    if (p >= 0.78 && !f.spunDown) { f.spunDown = true; c.sfx.spin(false, 0.5); }
+    if (p >= 0.78) { ghost.rotation.x = -ease((p - 0.78) / 0.2) * 1.4; ghost.position.y -= dt * 0.8; }   // kippt um und sinkt
+  }
+
+  // Goliath: packen, hochheben, werfen – im hohen Bogen ins Schwarzwasser
+  function goliath(dt, p) {
+    const A = f.pose, fx = -Math.sin(A.yaw), fz = -Math.cos(A.yaw), g = ghost.position;
+    if (p < hitAt) return;
+    if (p < 0.45) {                                     // in der Mech-Hand, wird hochgehoben und zappelt
+      const lift = ease((p - hitAt) / (0.45 - hitAt));
+      g.set(A.x + fx * (1.6 - lift * 0.8), A.y + 1.2 + lift * 2.6, A.z + fz * (1.6 - lift * 0.8));
+      ghost.rotation.z = Math.sin(t * 18) * 0.35; ghost.rotation.x = Math.sin(t * 13) * 0.2;
+      return;
+    }
+    if (!throwFrom) {
+      // Ziel: der nächste Rand der Zone, ein Stück dahinter (höchstens 55 m weit). Ohne Zone einfach weit nach vorne.
+      throwFrom = g.clone();
+      const z = c.zone();
+      if (z && z[2] > 1) {
+        let ox = g.x - z[0], oz = g.z - z[1]; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;
+        throwTo = new THREE.Vector3(z[0] + ox * (z[2] + 8), g.y - 2, z[1] + oz * (z[2] + 8));
+      } else throwTo = new THREE.Vector3(g.x + fx * 40, g.y, g.z + fz * 40);
+      const d = throwTo.distanceTo(throwFrom);
+      if (d > 55) throwTo.sub(throwFrom).multiplyScalar(55 / d).add(throwFrom);
+      c.sfx.hurl(); c.shake(0.6);
+    }
+    const k = clamp01((p - 0.45) / 0.42), arc = Math.min(14, throwFrom.distanceTo(throwTo) * 0.3);
+    g.lerpVectors(throwFrom, throwTo, k); g.y += Math.sin(k * Math.PI) * arc;      // hoher Bogen
+    ghost.rotation.x -= dt * 9; ghost.rotation.z += dt * 4;                         // überschlägt sich
+    if (Math.random() < 0.6) c.env.bubble(g.x, g.y, g.z, 2, 0.3, 0.5);
+    if (k >= 1 && !landed) { landed = true; c.sfx.zoneZap(); c.env.ink(g.x, g.y, g.z); c.env.explosion(g.x, g.y, g.z, 3); }
   }
   return f;
 }

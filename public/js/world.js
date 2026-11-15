@@ -1,6 +1,8 @@
 // Undernite - environment rendering: seafloor, flora, wreck, ruins, water
 // surface, light shafts, plankton, bubbles, effects and the zone wall.
 import * as THREE from 'three';
+import { buildReef } from './reef.js';
+import { sand, rock } from './textures.js';
 import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT, deepGlow } from './shared.js';
 const LAVA_FOG = new THREE.Color(0x4a1206), PRIM_FOG = new THREE.Color(0x061a3a);
 import { makeBoat, makeTag } from './models.js';
@@ -121,18 +123,20 @@ export function buildEnvironment(scene, W) {
     col[i * 3] = r * j; col[i * 3 + 1] = g * j; col[i * 3 + 2] = b * j;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const floor = new THREE.Mesh(geo, addCaustics(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), uTime));
+  const sandTex = sand(); sandTex.repeat.set(SIZE / 5, SIZE / 5);   // alle 5 m wiederholt sich das Sandmuster
+  const floor = new THREE.Mesh(geo, addCaustics(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, map: sandTex, bumpMap: sandTex, bumpScale: 1.5 }), uTime));
   root.add(floor);
 
   // ----- rocks -----
-  const rg = new THREE.IcosahedronGeometry(1, 2), rp = rg.attributes.position;
+  const rg = new THREE.IcosahedronGeometry(1, 3), rp = rg.attributes.position;   // 3 = fein unterteilt (rund statt kantig, aber noch schnell)
   for (let i = 0; i < rp.count; i++) {
     const x = rp.getX(i), y = rp.getY(i), z = rp.getZ(i);
     const n = 1 + 0.16 * Math.sin(x * 5.1 + y * 3.3) * Math.cos(z * 4.7 + x * 2.1) + 0.08 * Math.sin(y * 9 + z * 7);
     rp.setXYZ(i, x * n, y * n, z * n);
   }
   rg.computeVertexNormals();
-  const rocks = new THREE.InstancedMesh(rg, addCaustics(new THREE.MeshStandardMaterial({ color: 0x55626c, roughness: 0.95, flatShading: true }), uTime, 0.8), W.rocks.length);
+  const rockTex = rock();
+  const rocks = new THREE.InstancedMesh(rg, addCaustics(new THREE.MeshStandardMaterial({ color: 0x6a7780, roughness: 0.95, map: rockTex, bumpMap: rockTex, bumpScale: 3 }), uTime, 0.8), W.rocks.length);
   W.rocks.forEach((r, i) => put(rocks, i, r.x, r.y, r.z, 0, r.rot, 0, r.r * r.sx, r.r * r.sy, r.r * r.sz));
   root.add(rocks);
 
@@ -158,17 +162,8 @@ export function buildEnvironment(scene, W) {
   W.kelp.forEach((k, i) => { put(kelp, i * 2, k.x, k.y, k.z, 0, k.rot, 0, 1.6, k.h, 1.6); put(kelp, i * 2 + 1, k.x, k.y, k.z, 0, k.rot + 1.57, 0, 1.6, k.h * 0.92, 1.6); });
   root.add(kelp);
 
-  // ----- coral -----
-  const cgeos = [new THREE.IcosahedronGeometry(0.6, 1), new THREE.ConeGeometry(0.28, 1.6, 7, 1, true).translate(0, 0.8, 0).rotateX(Math.PI), new THREE.CircleGeometry(0.9, 9, 0, Math.PI).translate(0, 0, 0)];
-  cgeos[1].translate(0, 1.6, 0);
-  const cmats = [new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide }), new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide })];
-  for (let t = 0; t < 3; t++) {
-    const list = W.coral.filter(c => c.type === t);
-    const im = new THREE.InstancedMesh(cgeos[t], cmats[t], list.length);
-    list.forEach((c, i) => { put(im, i, c.x, c.y + (t === 0 ? 0.2 * c.s : 0), c.z, 0, c.rot, 0, c.s, c.s * (t === 0 ? 0.75 : 1), c.s); im.setColorAt(i, C.setHex(c.col)); });
-    if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    root.add(im);
-  }
+  // ----- Korallen und Fischschwärme: alles in reef.js -----
+  const reef = buildReef(root, W, (m) => addCaustics(m, uTime, 0.8), uTime);
 
   // ----- ruins -----
   const stone = addCaustics(new THREE.MeshStandardMaterial({ color: 0xa89f86, roughness: 0.9 }), uTime, 0.7);
@@ -315,6 +310,7 @@ export function buildEnvironment(scene, W) {
     seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat, base, bases,
     update(dt, t, cam, zone, outside) {
       uTime.value = t;
+      reef.update(t);
       surfTex.offset.x = t * 0.004; surfTex.offset.y = t * 0.0025;
       zTex.offset.y = -t * 0.12; zTex.offset.x = t * 0.004;
       // plankton wraps around the camera

@@ -3,6 +3,7 @@
 // from hips, knees and ankles. The diver lies horizontally, head towards -z, back up (+y).
 import * as THREE from 'three';
 import { loft } from './creatures.js';
+import { neoprene } from './textures.js';
 
 const TAU = Math.PI * 2;
 const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05, ...o });
@@ -30,7 +31,8 @@ function hose(parent, points, m, r = 0.012) {
 export function buildRealDiver(suit, accent) {
   const g = new THREE.Group();
   const heavy = suit === 'bulwark', slim = suit === 'manta';
-  const suitBlack = mat(0x121519, { roughness: 0.42, metalness: 0.12 });
+  // Neopren: das Strickmuster kommt als "bump"-Textur, so sieht der Anzug nach Stoff aus statt nach Plastik
+  const suitBlack = mat(0x121519, { roughness: 0.5, metalness: 0.08, bumpMap: neoprene(), bumpScale: 1.2 });
   const rubber = mat(0x0b0c0e, { roughness: 0.65 });
   const acc = mat(accent, { roughness: 0.45, emissive: accent, emissiveIntensity: 0.18 });
   const tankCol = slim ? 0xc8ced4 : heavy ? 0x3e4a56 : 0xd9d24a;
@@ -48,7 +50,7 @@ export function buildRealDiver(suit, accent) {
     else if (v > 0.55 && t < 0.3) C.copy(GRY);                                     // shoulder panel
     return C;
   }, 26, 20);
-  const torsoMesh = put(g, torso, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.12 }), 0, 0, -0.12);
+  const torsoMesh = put(g, torso, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.08, bumpMap: neoprene(), bumpScale: 1.2 }), 0, 0, -0.12);
   // BCD vest: back plate, shoulder straps, waist belt, inflator hose
   const bcd = mat(0x24292f, { roughness: 0.6 });
   put(g, BOX, bcd, 0, 0.12, -0.18, 0.36 * wide, 0.05, 0.52);
@@ -78,9 +80,20 @@ export function buildRealDiver(suit, accent) {
   put(g, CYL, suitBlack, 0, 0.03, -0.58, 0.07, 0.12, 0.07).rotation.x = Math.PI / 2 - 0.3;   // neck
   put(head, SPH, suitBlack, 0, 0, 0, 0.11, 0.115, 0.13);                                         // hooded head
   put(head, SPH, mat(0x0d0f12, { roughness: 0.6 }), 0, -0.02, 0.08, 0.1, 0.1, 0.1);              // back of hood
-  const skirt = put(head, BOX, rubber, 0, -0.035, -0.12, 0.17, 0.085, 0.06);                    // mask skirt
-  skirt.rotation.x = -0.25;
-  const glass = new THREE.MeshPhysicalMaterial({ color: 0x9fd8f0, metalness: 0.9, roughness: 0.04, clearcoat: 1, clearcoatRoughness: 0.05, emissive: 0x0a2a3a, emissiveIntensity: 0.6 });
+  const skirt = new THREE.Mesh(new THREE.TorusGeometry(1, 0.22, 10, 28), rubber);               // Maskenrahmen (rund)
+  skirt.scale.set(0.082, 0.04, 0.12); skirt.position.set(0, -0.04, -0.148); skirt.rotation.x = -0.25; head.add(skirt);
+  // Gesicht hinter der Maske: Haut, Augen mit Pupillen, Augenbrauen – so sieht man, dass ein Mensch im Anzug steckt
+  const skin = mat(0xd9a27e, { roughness: 0.6 }), eyeW = mat(0xf4f4f0, { roughness: 0.2 }), iris = mat(0x2a4a6a, { roughness: 0.2 }), brow = mat(0x3a2a20);
+  const face = new THREE.Group(); face.position.set(0, -0.038, -0.128); face.rotation.x = -0.25; head.add(face);
+  put(face, SPH, skin, 0, 0, 0, 0.068, 0.034, 0.025);
+  for (const s of [-1, 1]) {
+    put(face, SPH, eyeW, s * 0.03, 0.002, -0.017, 0.013, 0.009, 0.008);
+    put(face, SPH, iris, s * 0.03, 0.002, -0.024, 0.006, 0.006, 0.003);
+    put(face, BOX, brow, s * 0.03, 0.016, -0.02, 0.024, 0.004, 0.004).rotation.z = -s * 0.15;
+  }
+  put(face, SPH, skin, 0, -0.016, -0.02, 0.009, 0.012, 0.01);   // Nase (steckt in der Nasentasche der Maske)
+  // Maskenglas: durchsichtig mit Spiegelung, damit man das Gesicht dahinter sieht
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0xbfe8f8, metalness: 0.2, roughness: 0.02, clearcoat: 1, clearcoatRoughness: 0.03, transparent: true, opacity: 0.32 });
   const lens = put(head, BOX, glass, 0, -0.04, -0.155, 0.145, 0.06, 0.012); lens.rotation.x = -0.25;
   const strap = new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 6, 20), rubber); strap.scale.set(0.12, 0.12, 0.12); strap.rotation.y = Math.PI / 2; strap.rotation.z = 0.3; strap.position.set(0, -0.02, 0); head.add(strap);
   // regulator in the mouth with the exhaust tee where the bubbles come out
@@ -106,7 +119,7 @@ export function buildRealDiver(suit, accent) {
   const rightHand = arm(1, [-0.32, 0.28, 0], [0.18, -0.05, 0]);
   arm(-1, [0.55, Math.PI + 0.35, 0], [0, 1.6, 0]);
   // weapon in the right hand: the white-blue water gun is put in here by makePlayerModel (models.js)
-  const gun = new THREE.Group(); gun.position.set(0, 0.08, -0.3); rightHand.add(gun);
+  const gun = new THREE.Group(); gun.position.set(0, 0.05, -0.25); rightHand.add(gun);
 
   // ----- legs with long fins -----
   const finM = mat(0x0f1114, { roughness: 0.55, side: THREE.DoubleSide });
