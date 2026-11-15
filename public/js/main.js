@@ -803,6 +803,7 @@ function frame(now) {
       sendT += dt; if (sendT >= 1 / 30) { sendT = 0; send({ t: 'm', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), yaw: +me.byaw.toFixed(3), pitch: +me.bpitch.toFixed(3), b: me.boost ? 1 : 0 }); }
     }
     updateFinishers(dt); updateViewModel(dt); updateEntities(dt); updateCamera(dt); updateGlow(dt);
+    sfx.setDepth(SURFACE - camera.position.y + depthOffset());   // die Gasblasen-Physik der Sounds hängt von der Tiefe ab
     if (bleedT > 0 && you && you.alive) { bleedT -= dt; bleedPuff -= dt; if (bleedPuff <= 0) { bleedPuff = 0.35; env.blood(me.x + (Math.random() - 0.5) * 0.6, me.y, me.z + (Math.random() - 0.5) * 0.6); } }
     const fx = alive ? me : camera.position;
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];

@@ -23,11 +23,20 @@ export const PLASMA = {
   ring: 0.12,      // elektrisches Brummen (Ringmodulation): 0 = aus, 1 = stark (zu viel macht den Schuss dünn)
   zap: 0.25,       // Lautstärke des "Dzzzt"
 };
+// ---------- Physik der Gasblase (Rayleigh-Willis-Formel) ----------
+// Bei jedem Schuss und jeder Explosion unter Wasser entsteht eine Gasblase. Sie dehnt sich aus, fällt in sich zusammen
+// ("Plopp") und schwingt nach – jedes Mal leiser. Wie lange eine Schwingung dauert, hängt von der Ladung W (kg) und der
+// Tiefe D (m) ab:   T = 2,11 · W^(1/3) / (D + 10)^(5/6)   Sekunden.
+// Je tiefer, desto höher der Wasserdruck → desto schneller schwingt die Blase (in der Tiefsee ein kurzes, hartes "Brrumm").
+export const bubblePeriod = (W, depth) => 2.11 * Math.cbrt(W) / Math.pow(Math.max(0, depth) + 10, 5 / 6);
+// Ladung (kg) je Waffe – nur für den Klang (Reihenfolge wie WEAPON_IDS)
+const CHARGE = [0.004, 0.003, 0.008, 0.01, 0.03, 0.03, 0.006, 0.015];
 // Schuss-Aufnahme je Waffe (Reihenfolge wie WEAPON_IDS)
 const SHOT_FILES = ['shot_pistol', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic'];
 const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd'];
 export class Sfx {
-  constructor() { this.ctx = null; }
+  constructor() { this.ctx = null; this.depth = 30; }
+  setDepth(d) { this.depth = d; }   // main.js sagt jedes Bild, wie tief man ist (für die Gasblasen-Physik)
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -141,6 +150,8 @@ export class Sfx {
     this.cur = null;
     // 4) Mechanik: der Verschluss klackt kurz nach dem Schuss (bei Werfern ein dumpfes Klonk)
     this.sample(w === 4 || w === 5 || w === 7 ? 'mag_in' : 'slide_fwd', SHOT.mech * vol * (w === 1 ? 0.5 : 1), { at: 0.02, rate: 1.2, bus: 'shot' });
+    // 4b) Physik: Druckstoß, Gasblase und Kavitation
+    this.shotPhysics(w, vol, own);
     // 5) Plasma-"Dzzzt" (leise darunter) und bei Torpedos das "Wusch"
     this.zap(big, PLASMA.zap * vol * (0.6 + big * 0.4));
     if (w === 4 || w === 5) this.launch(vol);
@@ -150,6 +161,25 @@ export class Sfx {
       gw.linearRampToValueAtTime(1 - SHOT.duck, t + 0.008); gw.setTargetAtTime(1, t + 0.06, 0.09);
     }
     return true;
+  }
+  shotPhysics(w, vol, own) {
+    const T = bubblePeriod(CHARGE[w] || 0.004, this.depth), f = Math.min(160, Math.max(35, 0.9 / T));   // Blasen-Schwingzeit und -ton
+    this.cur = own ? this.uwShot : this.uw;
+    // Druckstoß: wenige Millisekunden, durchs Wasser gedämpft – ein hartes "Tock"
+    this.noise(0.006, 1400, 0.7, 0.9 * vol, 'bandpass');
+    this.tone(900, 500, 0.008, 0.35 * vol, 'triangle');
+    // Gasblase: fällt nach T in sich zusammen ("Plopp") und schwingt 2-mal nach, jedes Mal schwächer
+    let at = T, v = 0.75;
+    for (let i = 0; i < 3; i++) {
+      if (at > 0.006) { this.tone(f * 3.2, f * 1.6, 0.03, v * vol * 0.5, 'sine', at); this.noise(0.035, 700, 1, v * vol * 0.45, 'lowpass', 160, at); }
+      this.tone(f * 1.2, f * 0.8, 3 / f, v * vol * 0.6, 'sine', at);   // die Blase "wummert" in ihrer Eigenschwingung
+      at += T * (0.72 - i * 0.08); v *= 0.5;
+    }
+    // Kavitation: die Kugel zieht einen Hohlraum hinter sich her – kurzes "Zzzip" (nur bei kleinen Waffen deutlich)
+    if (w <= 3 || w === 6) this.noise(0.13, 3600, 1.6, (own ? 0.22 : 0.1) * vol, 'bandpass', 1100, 0.005);
+    // Gasblasen gurgeln nach oben
+    for (let i = 0; i < 5; i++) { const a = 0.12 + Math.random() * 0.5, p = 140 + Math.random() * 220; this.tone(p, p * 2.1, 0.05, 0.07 * vol, 'sine', a); }
+    this.cur = null;
   }
   // Torpedo-Start: Druckluft stößt ihn raus ("Pfff"), dann läuft der Propeller an ("Wuuusch")
   launch(vol = 1) {
@@ -334,17 +364,28 @@ export class Sfx {
     this.noise(0.28, 4500, 1.2, 0.16 * vol, 'bandpass', 1800, 0.025);            // Zischen der Blasenspur
   }
   hitmark(kill) { this.tone(kill ? 1300 : 950, kill ? 1900 : 950, kill ? 0.22 : 0.05, 0.22, 'triangle'); }
-  // far = Lautstärke der tiefen Teile (tragen sehr weit), near = Lautstärke des Klicks (nur in der Nähe)
-  boom(far, near = far) {
+  // far = Lautstärke der tiefen Teile (tragen sehr weit), near = Lautstärke des Klicks (nur in der Nähe), W = Ladung in kg
+  boom(far, near = far, W = 3) {
     if (far < 0.01) return;
-    if (near > 0.02) { this.tone(3200, 1800, 0.02, 0.8 * near, 'square'); this.noise(0.03, 4000, 2, 0.9 * near, 'bandpass'); }   // hartes metallisches Klick (Stoßwelle)
-    this.tone(58, 16, 1.6, 1.3 * far, 'sine');                              // tiefes Grollen
-    this.noise(2.0, 260, 0.7, 1.0 * far, 'lowpass', 30, 0.02);              // Rumpeln
-    for (const [at, v] of [[0.32, 0.7], [0.58, 0.4]]) {                     // Nachschläge: die Gasblase zieht sich zusammen und dehnt sich wieder
-      this.tone(48, 22, 0.35, v * far, 'sine', at); this.noise(0.3, 200, 0.7, v * 0.7 * far, 'lowpass', 40, at);
-      if (near > 0.02) this.tone(2400, 1600, 0.015, v * 0.4 * near, 'square', at);
+    const T = bubblePeriod(W, this.depth);   // z. B. 10 m tief: 0,3 s – 400 m tief: 0,04 s
+    // 1) Stoßwelle: hartes, metallisches Klick + Knacken (nur in der Nähe deutlich)
+    if (near > 0.02) { this.tone(3200, 1800, 0.02, 0.8 * near, 'square'); this.noise(0.03, 4000, 2, 0.9 * near, 'bandpass'); this.noise(0.012, 900, 0.7, 1.0 * near, 'bandpass'); }
+    // 2) tiefes Grollen und Rumpeln (trägt weit)
+    this.tone(58, 16, 1.4, 1.2 * far, 'sine');
+    this.noise(1.8, 260, 0.7, 0.9 * far, 'lowpass', 30, 0.02);
+    // 3) Blasen-Pulse: die Gasblase fällt zusammen und dehnt sich wieder aus – im Takt T, jedes Mal schwächer
+    let at = T, v = 0.75;
+    for (let i = 0; i < 4 && v > 0.08; i++) {
+      this.tone(52, 22, Math.max(0.12, T * 0.9), v * far, 'sine', at);
+      this.noise(Math.max(0.1, T * 0.8), 220, 0.7, v * 0.75 * far, 'lowpass', 45, at);
+      if (near > 0.02) this.tone(2400, 1600, 0.015, v * 0.45 * near, 'square', at);
+      at += T * (0.75 - i * 0.07); v *= 0.55;
     }
-    for (let i = 0; i < 14; i++) { const at = 0.7 + Math.random() * 1.2, p = 70 + Math.random() * 160; this.tone(p, p * 2, 0.12, 0.22 * far, 'sine', at); }   // Gasblasen blubbern hoch
+    // 4) Gasblasen blubbern hoch – in flachem Wasser länger (die Blase ist größer)
+    const n = Math.round(8 + Math.min(14, T * 40));
+    for (let i = 0; i < n; i++) { const t2 = at + Math.random() * (0.6 + T * 3), p = 70 + Math.random() * 160; this.tone(p, p * 2, 0.12, 0.2 * far, 'sine', t2); }
+    // 5) ganz nah: Ohrenpfeifen (der Druckstoß trifft das Trommelfell)
+    if (near > 0.5) this.tone(5200, 5000, 1.6, 0.04 * near, 'sine', 0.05);
   }
   // ---------- Dauer-Geräusche (laufen, solange etwas passiert) ----------
   // Torpedo: hohes, sirrendes Heulen + Zischen (Kavitation). Gibt { set(lautstärke), stop() } zurück.
