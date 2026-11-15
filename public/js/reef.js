@@ -233,14 +233,14 @@ export function buildReef(root, W, decorate, uTime) {
     im.instanceColor.needsUpdate = true; root.add(im);
     // dicht bewachsen: Platten-, Hirn-, Tisch-Korallen und Röhrenschwämme auf der oberen Hälfte jedes Hügels
     mounds.forEach((m, i) => {
-      const R = seeded(i * 6151 + 11), n = Math.min(26, Math.round(m.r * REEF.mound));
+      const R = seeded(i * 6151 + 11), n = Math.min(30, Math.round(m.r * REEF.mound)), big = 0.7 + m.r * 0.12;   // auf großen Hügeln größere Korallen
       for (let k = 0; k < n; k++) {
         // Richtung auf dem Hügel (lokal, vor der Drehung), dann genau die Oberfläche in dieser Richtung nehmen
         const a = R() * TAU, up = 0.25 + R() * 0.75, h = Math.sqrt(1 - up * up), dx = Math.cos(a) * h, dz = Math.sin(a) * h, n = moundN(dx, up, dz) * 0.97;
         const cr = Math.cos(m.rot), sr = Math.sin(m.rot), lx = dx * n * m.r * m.sx, lz = dz * n * m.r * m.sz;
         const x = m.x + lx * cr + lz * sr, y = m.y + up * n * m.r * m.sy, z = m.z - lx * sr + lz * cr;
         const t = [6, 6, 6, 1, 2, 4, 3, 7, 8, 9, 7, 6][(R() * 12) | 0];
-        spots[t].push({ x, y, z, s: 0.6 + R() * 0.8, rot: R() * TAU, tilt: (1 - up) * 0.8 * (R() < 0.5 ? -1 : 1), col: PAL[(R() * PAL.length) | 0], light: 0.9 + R() * 0.3 });
+        spots[t].push({ x, y, z, s: (0.6 + R() * 0.8) * big, rot: R() * TAU, tilt: (1 - up) * 0.8 * (R() < 0.5 ? -1 : 1), col: PAL[(R() * PAL.length) | 0], light: 0.9 + R() * 0.3 });
       }
     });
   }

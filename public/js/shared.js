@@ -65,7 +65,7 @@ export const CAVE = { ring: 3.6, stones: 9, stone: 1.9, height: 3.6 };
 // Korallen-Berge an jedem Riff: count Hügel mit Radius min…max Metern
 // Korallen-Berge an jedem Riff: count Hügel mit Radius min…max Metern, dicht in spread Metern um die Riffmitte.
 // Sie stapeln sich aufeinander → ein großes, zusammenhängendes Riff mit Bergen und Graten.
-export const REEF_MOUNDS = { count: 45, min: 4, max: 13, spread: 32 };
+export const REEF_MOUNDS = { count: 75, min: 3, max: 12, spread: 28 };
 export const GLOW_CORALS = { count: 520, dmg: 6, bleed: 4, bleedDps: 2.5, cooldown: 1.2 };
 
 export const RARITY = [
