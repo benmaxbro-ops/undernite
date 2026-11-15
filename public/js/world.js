@@ -47,9 +47,9 @@ function noiseTexture(size, draw) {
   return t;
 }
 
-// ---------- underwater base (expedition): floor 1, 50 m deep, on the west cliff ----------
-function buildBase(root, W) {
-  const B = W.base, c = B.c, g = new THREE.Group(); g.position.set(c.x, c.y, c.z); root.add(g);
+// ---------- underwater bases (expedition): floor 1, 50 m deep, around the cliff edge ----------
+function buildBase(root, W, B) {
+  const c = B.c, g = new THREE.Group(); g.position.set(c.x, c.y, c.z); root.add(g);
   const metal = new THREE.MeshStandardMaterial({ color: 0xd9a63a, roughness: 0.45, metalness: 0.6 });     // yellow station paint
   const steel = new THREE.MeshStandardMaterial({ color: 0x6c7880, roughness: 0.4, metalness: 0.8 });
   const glassM = new THREE.MeshStandardMaterial({ color: 0xbff2ff, transparent: true, opacity: 0.2, roughness: 0.05, metalness: 0.4, depthWrite: false, side: THREE.DoubleSide });
@@ -191,7 +191,7 @@ export function buildEnvironment(scene, W) {
   root.add(wr);
 
   // ----- expedition: glowing crystals in the deep + trader boat -----
-  let boat = null, base = null;
+  let boat = null, base = null, bases = [];
   if (exp) {
     if (W.crystals.length) {
       const cg = new THREE.OctahedronGeometry(0.5, 0).scale(0.6, 2.2, 0.6).translate(0, 0.9, 0);
@@ -203,7 +203,7 @@ export function buildEnvironment(scene, W) {
       root.add(im);
     }
     boat = makeBoat(); boat.position.set(EXP_BOAT.x, SURFACE, EXP_BOAT.z); root.add(boat);
-    base = buildBase(root, W);
+    bases = W.bases.map(B => buildBase(root, W, B)); base = bases[0];
   }
 
   // ----- water surface + light shafts -----
@@ -310,7 +310,7 @@ export function buildEnvironment(scene, W) {
 
   const shallow = new THREE.Color(0x2b8fb0), deepC = new THREE.Color(0x05202e), toxic = new THREE.Color(0x1d0a33), abyss = new THREE.Color(0x010307);
   return {
-    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat, base,
+    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat, base, bases,
     update(dt, t, cam, zone, outside) {
       uTime.value = t;
       surfTex.offset.x = t * 0.004; surfTex.offset.y = t * 0.0025;
@@ -353,7 +353,7 @@ export function buildEnvironment(scene, W) {
         fog.color.lerp(abyss, dd); fog.density += 0.008 * dd;
         const g = deepGlow(SURFACE - cy);   // red lava glow on floor 6, blue shimmer on floor 7
         fog.color.lerp(LAVA_FOG, g.lava * 0.9).lerp(PRIM_FOG, g.prim * 0.8);
-        boat.userData.update(dt); base.update(dt);
+        boat.userData.update(dt); for (const b of bases) b.update(dt);
         // the guiding light beam only shows once you are deeper down
         boat.userData.beam.material.opacity = 0.07 * Math.max(0, Math.min(1, (SURFACE - cy - 10) / 30));
       }

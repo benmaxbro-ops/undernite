@@ -325,17 +325,22 @@ export class World {
       this.cols.push({ x, y, z, r: r * 0.92 });
     }
 
-    // expedition: underwater base on the left (west) edge of the first floor, platform at 50 m depth
-    this.base = null;
+    // expedition: 6 underwater bases, all with the platform at 50 m depth on the cliff edge of the first floor,
+    // spread around the rim every 60° (the first one on the left / west). They share one aquarium.
+    this.base = null; this.bases = [];
     if (exp) {
-      let br = 240;
-      for (let r = 196; r <= 286; r += 0.5) if (SURFACE - this.heightAt(-r, 0) <= 53) { br = r; break; }
-      // 16 m out from the cliff edge, over the abyss on stilts (closer it would stick in the rock wall)
-      const c = { x: -br + 16, y: SURFACE - 50, z: 0 };
-      this.base = { c, dome: { x: c.x, y: c.y, z: c.z - 3.5 }, tank: { x: c.x, y: c.y, z: c.z + 5 } };
-      const near = (o) => (o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 16 * 16 && Math.abs(o.y - c.y) < 16;
-      this.rocks = this.rocks.filter(o => !near(o)); this.cols = this.cols.filter(o => !near(o));   // clear the building site
-      this.cols.push({ x: c.x, y: c.y + 1.2, z: c.z - 3.5, r: 4.6 }, { x: c.x, y: c.y + 1.6, z: c.z + 5, r: 3.7 }, { x: c.x, y: c.y + 3.6, z: c.z + 5, r: 3.7 });
+      for (let k = 0; k < 6; k++) {
+        const a = Math.PI + k * Math.PI / 3, dx = Math.cos(a), dz = Math.sin(a);
+        let br = 240;
+        for (let r = 196; r <= 286; r += 0.5) if (SURFACE - this.heightAt(dx * r, dz * r) <= 53) { br = r; break; }
+        // 16 m out from the cliff edge, over the abyss on stilts (closer it would stick in the rock wall)
+        const c = { x: dx * (br - 16), y: SURFACE - 50, z: dz * (br - 16) };
+        this.bases.push({ c, dome: { x: c.x, y: c.y, z: c.z - 3.5 }, tank: { x: c.x, y: c.y, z: c.z + 5 } });
+        const near = (o) => (o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 16 * 16 && Math.abs(o.y - c.y) < 16;
+        this.rocks = this.rocks.filter(o => !near(o)); this.cols = this.cols.filter(o => !near(o));   // clear the building site
+        this.cols.push({ x: c.x, y: c.y + 1.2, z: c.z - 3.5, r: 4.6 }, { x: c.x, y: c.y + 1.6, z: c.z + 5, r: 3.7 }, { x: c.x, y: c.y + 3.6, z: c.z + 5, r: 3.7 });
+      }
+      this.base = this.bases[0];
     }
 
     // collider hash
@@ -418,11 +423,12 @@ export class World {
         const p = ringSite(r0, r1), y = this.heightAt(p.x, p.z), depth = SURFACE - y;
         const lair = { x: p.x, z: p.z, y: Math.min(SURFACE - FLOORS[i].top - 6, y + 7) };
         if (!best) best = lair;
+        if (this.bases.some(b => Math.hypot(b.c.x - lair.x, b.c.z - lair.z) < 55)) continue;   // keep bosses away from the bases
         if (depth > FLOORS[i].top + 5 && depth < FLOORS[i].bot + 10) { best = lair; break; }
       }
       return best;
     });
-    this.pois = exp ? [{ n: 'Boot', x: EXP_BOAT.x, z: EXP_BOAT.z }, { n: 'Basis', x: this.base.c.x, z: this.base.c.z }] : [
+    this.pois = exp ? [{ n: 'Boot', x: EXP_BOAT.x, z: EXP_BOAT.z }, ...this.bases.map(b => ({ n: 'Basis', x: b.c.x, z: b.c.z }))] : [
       { n: 'Wrack', x: ws.x, z: ws.z }, { n: 'Ruinen', x: rs.x, z: rs.z },
       { n: 'Seeberg', x: this.smx, z: this.smz }, { n: 'Kelpwald', x: kelpSites[0].x, z: kelpSites[0].z },
     ];

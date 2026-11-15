@@ -74,7 +74,7 @@ function ensureWorld(seed, wmode = 'br') {
 }
 // ---------- expedition shop ----------
 const nearBoat = () => Math.hypot(me.x - EXP_BOAT.x, me.z - EXP_BOAT.z) < 20 && SURFACE - me.y < 9;
-const nearBase = () => !!W.base && Math.hypot(me.x - W.base.c.x, me.y - W.base.c.y, me.z - W.base.c.z) < 16;
+const nearBase = () => !!W.bases && W.bases.some(b => Math.hypot(me.x - b.c.x, me.y - b.c.y, me.z - b.c.z) < 16);
 function openShop(kind) { hud.openShop(you, kind); firing = false; if (document.pointerLockElement) document.exitPointerLock(); }
 function closeShop() { hud.closeShop(); lock(); }
 hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeShop(); send({ t: 'quit' }); });
@@ -265,15 +265,19 @@ function controlMe(dt) {
   me.surfaced = atTop;
 }
 // ---------- aquarium in the underwater base: your fish swim in the round glass tank ----------
-const aqView = { base: null, fish: [], key: '' };
+// (one shared aquarium: the fish swim in the tank of whichever base is closest to the camera)
+const aqView = { base: null, fish: [], key: '', world: null };
 function updateAquarium(dt) {
-  if (mode !== 'exp' || !env || !env.base || !you || !you.x) return;
-  const B = env.base;
-  if (aqView.base !== B) { aqView.base = B; aqView.fish = []; aqView.key = ''; }   // new world
+  if (mode !== 'exp' || !env || !env.bases || !env.bases.length || !you || !you.x) return;
+  if (aqView.world !== env) { aqView.world = env; aqView.base = null; aqView.fish = []; aqView.key = ''; }   // new world
+  let bi = 0, bd = 1e9;
+  W.bases.forEach((b, i) => { const d = Math.hypot(camera.position.x - b.c.x, camera.position.y - b.c.y, camera.position.z - b.c.z); if (d < bd) { bd = d; bi = i; } });
+  const B = env.bases[bi];
+  if (aqView.base !== B) { aqView.base = B; for (const f of aqView.fish) B.tank.add(f.mesh); }   // move the fish over to the nearest base
   const key = JSON.stringify(you.x.aq);
   if (key !== aqView.key) {   // the fish in the tank changed: rebuild them
     aqView.key = key;
-    for (const f of aqView.fish) B.tank.remove(f.mesh);
+    for (const f of aqView.fish) f.mesh.removeFromParent();
     aqView.fish = you.x.aq.map((net) => {
       const c = catchFromNet(net), mesh = makeTrophy(c, c.b != null ? 1.6 + c.b * 0.2 : 0.45 + FISH[c.s].size * 0.45); B.tank.add(mesh);
       const a = Math.random() * 6.28, r = Math.random() * B.tankR;
@@ -281,8 +285,7 @@ function updateAquarium(dt) {
     });
   }
   // only animate when you are close enough to see it
-  const c = W.base.c;
-  if (Math.hypot(camera.position.x - c.x, camera.position.y - c.y, camera.position.z - c.z) > 80) return;
+  if (bd > 80) return;
   for (const f of aqView.fish) {
     if ((f.t -= dt) <= 0) {
       f.t = 2 + Math.random() * 3; const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * B.tankR;
@@ -459,7 +462,7 @@ function frame(now) {
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap
       let bb = null, bd = 70;
-      marks = [{ x: EXP_BOAT.x, z: EXP_BOAT.z, c: '#ffc94d', s: 4 }, { x: W.base.c.x, z: W.base.c.z, c: '#5ef2e0', s: 4 }];
+      marks = [{ x: EXP_BOAT.x, z: EXP_BOAT.z, c: '#ffc94d', s: 4 }, ...W.bases.map(b => ({ x: b.c.x, z: b.c.z, c: '#5ef2e0', s: 4 }))];
       for (const c of creatures.values()) if (c.type === 'boss') {
         marks.push({ x: c.x, z: c.z, c: '#ff4d4d', s: 3.5 });
         const d = Math.hypot(c.x - fx.x, c.y - fx.y, c.z - fx.z); if (d < bd) { bd = d; bb = c; }
