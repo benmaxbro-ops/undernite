@@ -63,7 +63,9 @@ export const DEEP = { brOffset: 380, brCeil: 25 };
 // Höhlen um Truhen im Riff: ring = Abstand der Felsbrocken von der Truhe, stones = Anzahl, stone = Größe, height = Dachhöhe
 export const CAVE = { ring: 3.6, stones: 9, stone: 1.9, height: 3.6 };
 // Korallen-Berge an jedem Riff: count Hügel mit Radius min…max Metern
-export const REEF_MOUNDS = { count: 14, min: 4, max: 9, spread: 26 };
+// Korallen-Berge an jedem Riff: count Hügel mit Radius min…max Metern, dicht in spread Metern um die Riffmitte.
+// Sie stapeln sich aufeinander → ein großes, zusammenhängendes Riff mit Bergen und Graten.
+export const REEF_MOUNDS = { count: 45, min: 4, max: 13, spread: 32 };
 export const GLOW_CORALS = { count: 520, dmg: 6, bleed: 4, bleedDps: 2.5, cooldown: 1.2 };
 
 export const RARITY = [
@@ -500,13 +502,27 @@ export class World {
       for (let i = 0; i < 3; i++) { const a = door + Math.PI + (i - 1) * 1.6; rock(cr.x + Math.cos(a) * ring * 0.8, top - 0.6, cr.z + Math.sin(a) * ring * 0.8, CAVE.stone * 0.9); }
       this.caves.push({ x: cr.x, y: cr.y, z: cr.z, door, ring, top });
     }
-    // große Korallen-Hügel an jedem Riff (nicht auf die Höhlen und nicht auf andere Truhen)
+    // großes Riff: viele Korallen-Hügel dicht beieinander, die sich aufeinander stapeln (Berge und Grate).
+    // Frei bleiben: das Innere der Höhlen, ein Gang vor jedem Höhleneingang und die übrigen Truhen.
+    const blocksCave = (x, z, r) => this.caves.some(c => {
+      if (Math.hypot(c.x - x, c.z - z) < c.ring + r * 0.55) return true;                      // Höhle selbst
+      const ex = Math.cos(c.door), ez = Math.sin(c.door), px = x - c.x, pz = z - c.z;         // Gang vor dem Eingang (8 m lang)
+      const along = px * ex + pz * ez, side = Math.abs(-px * ez + pz * ex);
+      return along > 0 && along < c.ring + 8 + r && side < r + 1.6;
+    });
+    const start = this.reefMounds.length;
     for (const s of reefs) for (let k = 0; k < REEF_MOUNDS.count; k++) {
-      const a = RC() * TAU, d = RC() * REEF_MOUNDS.spread, x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d;
-      const r = REEF_MOUNDS.min + RC() * (REEF_MOUNDS.max - REEF_MOUNDS.min);
-      if (this.caves.some(c => Math.hypot(c.x - x, c.z - z) < c.ring + r + 1.5)) continue;
-      if (this.crates.some(c => Math.hypot(c.x - x, c.z - z) < r + 2)) continue;
-      rock(x, this.heightAt(x, z) + r * 0.3, z, r);
+      const a = RC() * TAU, d = Math.pow(RC(), 0.7) * REEF_MOUNDS.spread, x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d;
+      const r = REEF_MOUNDS.min + RC() * RC() * (REEF_MOUNDS.max - REEF_MOUNDS.min) * (1 - d / REEF_MOUNDS.spread * 0.5);   // in der Mitte größer
+      if (blocksCave(x, z, r)) continue;
+      if (this.crates.some(c => !this.caves.some(cv => cv.x === c.x && cv.z === c.z) && Math.hypot(c.x - x, c.z - z) < r + 2)) continue;
+      // auf die schon gebauten Hügel setzen (stapeln), sonst auf den Boden
+      let y = this.heightAt(x, z) + r * 0.3;
+      for (let i = start; i < this.reefMounds.length; i++) {
+        const m = this.reefMounds[i], hd = Math.hypot(m.x - x, m.z - z);
+        if (hd < m.r * 0.9) y = Math.max(y, m.y + Math.sqrt(m.r * m.r * 0.81 - hd * hd) * m.sy - r * 0.45);
+      }
+      rock(x, y, z, r);
     }
   }
 

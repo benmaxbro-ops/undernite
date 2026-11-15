@@ -213,7 +213,7 @@ export function buildReef(root, W, decorate, uTime) {
   // ---------- Korallen-Berge (Positionen aus shared.js – der Server kennt sie, man kann nicht hindurch) ----------
   const mounds = W.reefMounds || [];
   if (mounds.length) {
-    const mg = new THREE.SphereGeometry(1, 48, 32), MP = mg.attributes.position, mcol = new Float32Array(MP.count * 3);
+    const mg = new THREE.SphereGeometry(1, 40, 26), MP = mg.attributes.position, mcol = new Float32Array(MP.count * 3);
     for (let i = 0; i < MP.count; i++) {
       let x = MP.getX(i), y = MP.getY(i), z = MP.getZ(i);
       const n = moundN(x, y, z);   // knubbelig
@@ -233,7 +233,7 @@ export function buildReef(root, W, decorate, uTime) {
     im.instanceColor.needsUpdate = true; root.add(im);
     // dicht bewachsen: Platten-, Hirn-, Tisch-Korallen und Röhrenschwämme auf der oberen Hälfte jedes Hügels
     mounds.forEach((m, i) => {
-      const R = seeded(i * 6151 + 11), n = Math.round(m.r * REEF.mound);
+      const R = seeded(i * 6151 + 11), n = Math.min(26, Math.round(m.r * REEF.mound));
       for (let k = 0; k < n; k++) {
         // Richtung auf dem Hügel (lokal, vor der Drehung), dann genau die Oberfläche in dieser Richtung nehmen
         const a = R() * TAU, up = 0.25 + R() * 0.75, h = Math.sqrt(1 - up * up), dx = Math.cos(a) * h, dz = Math.sin(a) * h, n = moundN(dx, up, dz) * 0.97;
@@ -258,8 +258,6 @@ export function buildReef(root, W, decorate, uTime) {
         list.push({ x, y: W.heightAt(x, z) + r * (slab ? 0.25 : 0.2), z, sx: r * (slab ? 1.4 : 1), sy: r * (slab ? 0.25 : 0.6 + R() * 0.4), sz: r * (slab ? 0.9 : 1), rx: slab ? (R() - 0.5) * 1.2 : R(), ry: R() * TAU, rz: slab ? (R() - 0.5) * 1.2 : R() });
       }
     });
-    // Steine auch an den Flanken der Hügel (halb eingegraben)
-    mounds.forEach((m, i) => { const R = seeded(i * 313 + 7); for (let k = 0; k < 3; k++) { const a = R() * TAU, r = 0.4 + R() * 0.8; const x = m.x + Math.cos(a) * m.r * m.sx * 0.95, z = m.z + Math.sin(a) * m.r * m.sz * 0.95; list.push({ x, y: W.heightAt(x, z) + r * 0.2, z, sx: r, sy: r * 0.7, sz: r, rx: R(), ry: R() * TAU, rz: R() }); } });
     const im = new THREE.InstancedMesh(stoneGeo, stoneMat, Math.max(1, list.length));
     list.forEach((p, i) => im.setMatrixAt(i, M4.compose(V.set(p.x, p.y, p.z), Q.setFromEuler(E.set(p.rx, p.ry, p.rz)), S.set(p.sx, p.sy, p.sz))));
     root.add(im);
