@@ -53,8 +53,9 @@ In der Lobby rechts zwischen **Battle Royale** und **Tiefsee-Expedition** wähle
 - **Fische jagen:** 21 Fischarten, 3 pro Etage, tauchen zufällig auf. Je tiefer, desto wertvoller. Selten gibt es
   **goldene Fische** (5× Wert). Manche beißen zurück (Barrakuda, Viperfisch, Anglerfisch, Drachenfisch, Magma-Aal, Säbelzahnfisch).
 - **Verkaufen:** Am Boot E drücken – Fische einzeln oder alle verkaufen, Ausrüstung kaufen.
-- **6 Unterwasser-Basen:** alle auf Etage 1, 50 m tief, rund um den Rand verteilt (etwa alle 60°, die erste links im Westen; auf der Minikarte „Basis“), frei auf Stelzen vor der Felswand.
-  Alle teilen sich dein Aquarium (die Fische schwimmen immer in der Basis, die dir am nächsten ist). Jede Basis ist auch eine Luftstation.
+- **6 Unterwasser-Basen:** alle auf Etage 1, 50 m tief, rund um den Rand verteilt (etwa alle 60°). **Jeder Spieler bekommt seine eigene Basis**
+  (bis zu 6 Spieler, die gespeicherte bekommst du wieder, wenn sie frei ist). Auf der Minikarte gelb als „Deine Basis“, die anderen mit dem Namen des Besitzers.
+  Fische einsetzen nur in der eigenen Basis; Luft tanken kann man an jeder. In jeder Basis sieht man das Aquarium ihres Besitzers.
 - **Fang-Leiste:** Alles, was du fängst (Fische *und* besiegte Endbosse), liegt in Slots über den Waffen. Mit **4–9** oder **Q** nimmst du es in die Hand (1–3 = zurück zur Waffe).
   In der Basis setzt du es mit **E** (oder Klick) ins Aquarium. Jeder Slot zeigt, wie viel € pro Sekunde er im Aquarium macht.
 - **Aquarium:** Fische darin verdienen jede Minute 8 % ihres Werts (Tiefseefische viel mehr, goldene 5×) – aber **nur während du wirklich spielst**: offline gibt es nichts, und nach 60 s ohne Bewegen/Umschauen (AFK) pausiert das Aquarium.

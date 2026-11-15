@@ -90,9 +90,11 @@ function buildBase(root, W, B) {
   // beacon on top + a faint light beam up to the surface so you can find it
   const beacon = add(new THREE.SphereGeometry(0.4, 12, 8), glowM(0x5ef2e0, 4), 0, 4.6, -3.5);
   const beam = add(new THREE.CylinderGeometry(0.6, 1.6, 48, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0x5ef2e0, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), 0, 28, -3.5);
-  const sign = makeTag('🐠 BASIS · Aquarium', '#5ef2e0'); sign.scale.multiplyScalar(2.2); sign.position.set(0, 7.2, 0); g.add(sign);
+  let sign = null;
+  const setOwner = (text, mine) => { if (sign) { g.remove(sign); sign.material.map.dispose(); sign.material.dispose(); } sign = makeTag(text, mine ? '#ffe066' : '#5ef2e0'); sign.scale.multiplyScalar(2.2); sign.position.set(0, 7.2, 0); g.add(sign); };
+  setOwner('Freie Basis', false);
   let t = 0;
-  return { group: g, tank, tankR: 2.6, tankH: [0.9, 4.4], update(dt) { t += dt; beacon.material.emissiveIntensity = 2.5 + Math.sin(t * 3) * 1.5; beam.material.opacity = 0.05 + Math.sin(t * 3) * 0.02; } };
+  return { group: g, tank, tankR: 2.6, tankH: [0.9, 4.4], setOwner, update(dt) { t += dt; beacon.material.emissiveIntensity = 2.5 + Math.sin(t * 3) * 1.5; beam.material.opacity = 0.05 + Math.sin(t * 3) * 0.02; } };
 }
 
 export function buildEnvironment(scene, W) {

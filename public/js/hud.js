@@ -118,7 +118,7 @@ export class Hud {
         : '<div class="empty">Leer. Nimm einen Fang in die Hand (Tasten 4–9 oder Q) und drück hier E – oder klick oben auf „Ins Aquarium“. Jeder Fisch verdient pro Sekunde Geld, Endbosse am meisten!</div>');
       const nextCap = AQUARIUM.sizes[x.aqLvl + 1];
       fish += '</div>' + (nextCap ? item(`▲ Größeres Aquarium`, `${cap} → ${nextCap} Plätze`, AQUARIUM.prices[x.aqLvl + 1], '', 'aqup', 0, '#3fa9f5') : item('Riesen-Aquarium!', 'Mehr Plätze gibt es nicht', null, 'Max'));
-    } else fish += '<div class="empty">Fische ins Aquarium setzen kannst du in einer der <b>6 Unterwasser-Basen</b>: Etage 1, 50 m tief, rund um den Rand verteilt – auf der Minikarte als <b>Basis</b>. Alle teilen sich dein Aquarium. Dort kannst du auch Luft tanken.</div>';
+    } else fish += '<div class="empty">Fische ins Aquarium setzen kannst du in <b>deiner eigenen Unterwasser-Basis</b>: Etage 1, 50 m tief am Rand – auf der Minikarte gelb als <b>Deine Basis</b>. Jeder Spieler hat seine eigene. Dort kannst du auch Luft tanken.</div>';
     fish += '</div>';
     $('shopFish').innerHTML = fish;
     $('shopWeapons').innerHTML = SHOP_WEAPONS.map((it, i) => {

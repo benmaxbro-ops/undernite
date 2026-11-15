@@ -2,7 +2,7 @@
 // Plays a scripted diver: hunt fish -> sell at boat -> buy gear -> fight boss -> dive too deep -> respawn.
 import WebSocket from 'ws';
 import { FISH, BOSSES, SURFACE, EXP_BOAT, World } from './public/js/shared.js';
-let base = null;   // underwater base position (from the world seed)
+let base = null, world = null;   // own underwater base position (every diver has one of the 6)
 
 const ws = new WebSocket('ws://localhost:' + (process.env.PORT || 8080));
 const send = (o) => ws.send(JSON.stringify(o));
@@ -22,9 +22,10 @@ function aimAt(t) {
 ws.on('message', (raw) => {
   const m = JSON.parse(raw);
   if (m.t === 'welcome') { send({ t: 'set', name: 'Testtaucher', suit: 'triton', mode: 'exp' }); setTimeout(() => send({ t: 'start' }), 200); }
-  if (m.t === 'start') { log('start mode', m.mode); ok.start = m.mode === 'exp'; base = new World(m.seed, 'exp').base.c; log('base at', base.x.toFixed(1), (SURFACE - base.y) + ' m deep'); }
+  if (m.t === 'start') { log('start mode', m.mode); ok.start = m.mode === 'exp'; world = new World(m.seed, 'exp'); }
   if (m.t !== 's' || !m.you) return;
   const y = m.you, x = y.x; stepT++;
+  if (!base && world && x.base != null) { base = world.bases[x.base].c; log('own base', x.base, 'at', base.x.toFixed(1), base.z.toFixed(1), (SURFACE - base.y) + ' m deep'); }
   for (const e of m.ye) {
     seen[e[0]] = (seen[e[0]] || 0) + 1;
     if (e[0] === 'fish') { caught++; if (caught <= 3) log('caught', FISH[e[1]].name, e[3], '$'); }

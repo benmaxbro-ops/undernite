@@ -661,7 +661,7 @@ try { saves = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8')); } catch { saves = 
 let saveTimer = null;
 const saveKey = (name) => name.toLowerCase();
 function storeProgress(p) {
-  saves[saveKey(p.name)] = { money: p.money, tank: p.tank, lung: p.lung, lamp: p.lamp, bag: p.bag, aq: p.aq, aqLvl: p.aqLvl, last: Date.now(),
+  saves[saveKey(p.name)] = { money: p.money, tank: p.tank, lung: p.lung, lamp: p.lamp, bag: p.bag, aq: p.aq, aqLvl: p.aqLvl, base: p.baseIdx, last: Date.now(),
     weapons: p.weapons.map(w => w ? { id: w.id, rar: w.rar } : null) };
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
@@ -673,7 +673,16 @@ function storeProgress(p) {
 const depthOf = (o) => SURFACE - o.y;
 const nearBoat = (p, r = 16, d = 6) => dist2d(p, EXP_BOAT.x, EXP_BOAT.z) < r && depthOf(p) < d;
 // the underwater base with the aquarium and an air station
-const nearBase = (p, r = 16) => !!G.world.bases && G.world.bases.some(b => dist(p, b.c) < r);
+const nearBase = (p, r = 16) => !!G.world.bases && G.world.bases.some(b => dist(p, b.c) < r);   // any base: air station
+const nearOwnBase = (p, r = 16) => !!G.world.bases && p.baseIdx != null && dist(p, G.world.bases[p.baseIdx].c) < r;
+const baseOwner = (i) => [...G.players.values()].find(q => q.baseIdx === i);
+// every diver gets an own base (their saved one if it is free, otherwise the first free one)
+function pickBase(p, want) {
+  const n = G.world.bases.length, taken = new Set([...G.players.values()].filter(q => q !== p).map(q => q.baseIdx));
+  if (Number.isInteger(want) && want >= 0 && want < n && !taken.has(want)) return want;
+  for (let i = 0; i < n; i++) if (!taken.has(i)) return i;
+  return G.players.size % n;   // more than 6 divers: then two share one
+}
 // wake up in the water next to the ship (it is 24 m long along z, 7 m wide)
 const boatSpawn = () => { const s = rnd() < 0.5 ? -1 : 1; return { x: EXP_BOAT.x + s * (6 + rnd() * 2), y: SURFACE - 2.5, z: EXP_BOAT.z + (rnd() - 0.5) * 12, yaw: s > 0 ? 1.57 : -1.57 }; };
 
@@ -689,6 +698,7 @@ function expJoin(c) {
   p.aq = fishList(s?.aq).filter(e => e.v == null); p.aqLvl = clamp(s?.aqLvl || 0, 0, AQUARIUM.sizes.length - 1); p.aqAcc = 0;
   // the aquarium only earns while you really play (no offline money, no AFK money)
   p.actT = G.time; p.act = null; p.afk = false;
+  p.baseIdx = pickBase(p, s?.base);
   if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? { id: w.id, rar: w.rar, ammo: WEAPONS[w.id].mag } : null);
   if (!p.weapons.some(Boolean)) p.weapons[0] = { id: 'pistol', rar: 0, ammo: WEAPONS.pistol.mag };
   p.slot = Math.max(0, p.weapons.findIndex(Boolean));
@@ -871,7 +881,7 @@ function expFishAction(p, m) {
 }
 function expBuy(p, m) {
   const atBase = ['aq', 'aqsell', 'aqup'].includes(m.k);   // aquarium things happen in the base, everything else at the ship
-  if (!p.alive || !(atBase ? nearBase(p, 20) : nearBoat(p, 22, 10))) { p.ye.push(['shop', atBase ? 'Du musst an der Basis sein!' : 'Du musst am Boot sein!']); return; }
+  if (!p.alive || !(atBase ? nearOwnBase(p, 20) : nearBoat(p, 22, 10))) { p.ye.push(['shop', atBase ? (nearBase(p, 20) ? 'Das ist nicht deine Basis – dein Aquarium ist in deiner eigenen!' : 'Du musst an deiner Basis sein!') : 'Du musst am Boot sein!']); return; }
   if (expFishAction(p, m)) return;
   let price, label, apply;
   if (m.k === 'aqup' && AQUARIUM.sizes[p.aqLvl + 1]) {
@@ -933,9 +943,13 @@ function tickExp(dt) {
     const atBoat = nearBoat(p);
     if (atBoat && !p.atBoat && p.bag.length) p.ye.push(['bagHint', p.bag.length, p.bag.reduce((a, e) => a + fishValue(e), 0)]);
     p.atBoat = atBoat;
-    const atBase = nearBase(p);
+    const atBase = nearOwnBase(p);
     if (atBase && !p.atBase) p.ye.push(['baseHint', p.bag.length]);
     p.atBase = atBase;
+    // someone else's base: say whose it is (air is refilled there too)
+    const other = !atBase && nearBase(p) ? G.world.bases.findIndex(b => dist(p, b.c) < 16) : -1;
+    if (other >= 0 && other !== p.atOther) { const o = baseOwner(other); p.ye.push(['warn', o ? `Basis von ${o.name} – hier kannst du nur Luft tanken` : 'Freie Basis – hier kannst du nur Luft tanken']); }
+    p.atOther = other;
   }
   // aquarium income – only while you actually play: after AFK_TIME seconds without
   // swimming, looking around or shooting it pauses (no money for standing around AFK)
@@ -1013,6 +1027,8 @@ function snapshot() {
       c.sub || 0, c.maxhp ? Math.max(0, Math.ceil(c.hp / c.maxhp * 100)) : 100, c.gold ? 1 : 0]),
     v: [...G.vehicles.values()].map(v => [v.id, VEHICLE_IDS.indexOf(v.type), r2(v.x), r2(v.y), r2(v.z), r2(v.yaw), r2(v.pitch), Math.ceil(v.hp), v.driver]),
     e: G.events,
+    // expedition: who owns which base + their aquarium (so everybody sees the fish in the other bases)
+    b: G.mode === 'exp' ? [...G.players.values()].filter(p => p.baseIdx != null).map(p => [p.baseIdx, p.id, p.name, p.aq.map(catchToNet)]) : undefined,
   };
   const cs = JSON.stringify(common);
   for (const c of clients.values()) {
@@ -1025,7 +1041,7 @@ function snapshot() {
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)) };
       if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, e) => a + fishValue(e), 0), air: r2(p.air),
         tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)),
-        bagL: p.bag.map(catchToNet), aq: p.aq.map(catchToNet), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 100) / 100, afk: p.afk ? 1 : 0 };
+        bagL: p.bag.map(catchToNet), aq: p.aq.map(catchToNet), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 100) / 100, afk: p.afk ? 1 : 0, base: p.baseIdx };
       ye = p.ye; p.ye = [];
     }
     send(c.ws, `{"t":"s","c":${cs},"you":${JSON.stringify(you)},"ye":${JSON.stringify(ye)}}`);

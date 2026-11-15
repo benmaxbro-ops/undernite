@@ -74,7 +74,12 @@ function ensureWorld(seed, wmode = 'br') {
 }
 // ---------- expedition shop ----------
 const nearBoat = () => Math.hypot(me.x - EXP_BOAT.x, me.z - EXP_BOAT.z) < 20 && SURFACE - me.y < 9;
-const nearBase = () => !!W.bases && W.bases.some(b => Math.hypot(me.x - b.c.x, me.y - b.c.y, me.z - b.c.z) < 16);
+// your own base (the server gives every diver one of the 6); foreign bases only refill air
+const myBase = () => W && W.bases && you && you.x && you.x.base != null ? W.bases[you.x.base] : null;
+const nearBase = () => { const b = myBase(); return !!b && Math.hypot(me.x - b.c.x, me.y - b.c.y, me.z - b.c.z) < 16; };
+const otherBaseOwner = () => { if (!W || !W.bases) return null; const i = W.bases.findIndex(b => Math.hypot(me.x - b.c.x, me.y - b.c.y, me.z - b.c.z) < 16);
+  if (i < 0 || (you && you.x && i === you.x.base)) return null; const o = (baseInfo || []).find(b => b[0] === i); return o ? o[2] : 'niemand'; };
+let baseInfo = null;   // [[base index, owner id, owner name, aquarium], ...] from the server
 function openShop(kind) { hud.openShop(you, kind); firing = false; if (document.pointerLockElement) document.exitPointerLock(); }
 function closeShop() { hud.closeShop(); lock(); }
 hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeShop(); send({ t: 'quit' }); });
@@ -117,7 +122,7 @@ function target(e, a, o) { e.tx = a[o]; e.ty = a[o + 1]; e.tz = a[o + 2]; e.tyaw
 function onSnap(m) {
   if (phase !== 'play') return;
   const c = m.c; frameNo++;
-  zone = c.z; aliveN = c.n;
+  zone = c.z; aliveN = c.n; baseInfo = c.b || null;
   const wasAlive = you && you.alive;
   you = m.you;
   for (const a of c.p) { const e = players.get(a[0]) || spawnPlayer(a[0]); e.seen = frameNo; target(e, a, 1); e.hp = a[6]; e.fl = a[8]; e.w = e.weapon = a[9]; e.veh = a[10]; }
@@ -264,29 +269,31 @@ function controlMe(dt) {
   if (atTop && !me.surfaced && me.vy > 0.5) { env.bubble(me.x, SURFACE - 0.4, me.z, 28, 1.4, 1.5); sfx.noise(0.45, 1100, 0.7, 0.35, 'lowpass', 250); }
   me.surfaced = atTop;
 }
-// ---------- aquarium in the underwater base: your fish swim in the round glass tank ----------
-// (one shared aquarium: the fish swim in the tank of whichever base is closest to the camera)
-const aqView = { base: null, fish: [], key: '', world: null };
+// ---------- aquariums in the underwater bases: every base shows its owner's fish ----------
+const aqViews = new Map(); let aqWorld = null;
 function updateAquarium(dt) {
   if (mode !== 'exp' || !env || !env.bases || !env.bases.length || !you || !you.x) return;
-  if (aqView.world !== env) { aqView.world = env; aqView.base = null; aqView.fish = []; aqView.key = ''; }   // new world
-  let bi = 0, bd = 1e9;
-  W.bases.forEach((b, i) => { const d = Math.hypot(camera.position.x - b.c.x, camera.position.y - b.c.y, camera.position.z - b.c.z); if (d < bd) { bd = d; bi = i; } });
-  const B = env.bases[bi];
-  if (aqView.base !== B) { aqView.base = B; for (const f of aqView.fish) B.tank.add(f.mesh); }   // move the fish over to the nearest base
-  const key = JSON.stringify(you.x.aq);
-  if (key !== aqView.key) {   // the fish in the tank changed: rebuild them
-    aqView.key = key;
-    for (const f of aqView.fish) f.mesh.removeFromParent();
-    aqView.fish = you.x.aq.map((net) => {
+  if (aqWorld !== env) { aqWorld = env; aqViews.clear(); }   // new world
+  env.bases.forEach((B, i) => updateTank(B, i, dt));
+}
+function updateTank(B, i, dt) {
+  const o = (baseInfo || []).find(b => b[0] === i), list = o ? o[3] : [];
+  let v = aqViews.get(i); if (!v) { v = { key: '', fish: [], label: '' }; aqViews.set(i, v); }
+  const mine = !!o && o[1] === myId, label = !o ? 'Freie Basis' : mine ? '🐠 DEINE BASIS' : '🐠 Basis von ' + o[2];
+  if (label !== v.label) { v.label = label; B.setOwner(label, mine); }
+  const key = JSON.stringify(list);
+  if (key !== v.key) {   // the fish in the tank changed: rebuild them
+    v.key = key;
+    for (const f of v.fish) f.mesh.removeFromParent();
+    v.fish = list.map((net) => {
       const c = catchFromNet(net), mesh = makeTrophy(c, c.b != null ? 1.6 + c.b * 0.2 : 0.45 + FISH[c.s].size * 0.45); B.tank.add(mesh);
       const a = Math.random() * 6.28, r = Math.random() * B.tankR;
       return { mesh, x: Math.cos(a) * r, y: B.tankH[0] + Math.random() * (B.tankH[1] - B.tankH[0]), z: Math.sin(a) * r, tx: 0, ty: 2, tz: 0, yaw: 0, t: 0 };
     });
   }
   // only animate when you are close enough to see it
-  if (bd > 80) return;
-  for (const f of aqView.fish) {
+  if (Math.hypot(camera.position.x - B.group.position.x, camera.position.y - B.group.position.y, camera.position.z - B.group.position.z) > 80) return;
+  for (const f of v.fish) {
     if ((f.t -= dt) <= 0) {
       f.t = 2 + Math.random() * 3; const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * B.tankR;
       f.tx = Math.cos(a) * r; f.tz = Math.sin(a) * r; f.ty = B.tankH[0] + Math.random() * (B.tankH[1] - B.tankH[0]);
@@ -297,6 +304,12 @@ function updateAquarium(dt) {
     f.mesh.position.set(f.x, f.y, f.z);
     f.mesh.userData.update(dt, { yaw: f.yaw, pitch: Math.asin(Math.max(-0.5, Math.min(0.5, dy / d))) * 0.5, state: 0 });
   }
+}
+// minimap names: boat, "Deine Basis" for yours, the owner's name for the others
+function expPois() {
+  const l = [{ n: 'Boot', x: EXP_BOAT.x, z: EXP_BOAT.z }];
+  W.bases.forEach((b, i) => { const o = (baseInfo || []).find(q => q[0] === i); if (you && you.x && you.x.base === i) l.push({ n: 'Deine Basis', x: b.c.x, z: b.c.z }); else if (o) l.push({ n: o[2], x: b.c.x, z: b.c.z }); });
+  return l;
 }
 // put the fish/boss in your hand into the aquarium
 function placeHeld() {
@@ -348,6 +361,7 @@ function computePrompt() {
   if (!you || !you.alive) return null;
   if (you.grab) return ['F', 'Befreien – mehrfach drücken!'];
   if (mode === 'exp' && held >= 0 && !hud.shopOpen && nearBase()) { const c = catchFromNet(you.x.bagL[held]); return ['E', `${catchName(c)} ins Aquarium setzen (+${catchRate(c).toLocaleString('de-DE', { maximumFractionDigits: 2 })} €/s)`]; }
+  if (mode === 'exp' && !hud.shopOpen && !nearBoat() && !nearBase() && otherBaseOwner()) return ['–', `Basis von ${otherBaseOwner()} · nur Luft tanken`];
   if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
@@ -462,7 +476,7 @@ function frame(now) {
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap
       let bb = null, bd = 70;
-      marks = [{ x: EXP_BOAT.x, z: EXP_BOAT.z, c: '#ffc94d', s: 4 }, ...W.bases.map(b => ({ x: b.c.x, z: b.c.z, c: '#5ef2e0', s: 4 }))];
+      marks = [{ x: EXP_BOAT.x, z: EXP_BOAT.z, c: '#ffc94d', s: 4 }, ...W.bases.map((b, i) => ({ x: b.c.x, z: b.c.z, c: you && you.x && you.x.base === i ? '#ffe066' : '#5ef2e0', s: you && you.x && you.x.base === i ? 5 : 3.5 }))];
       for (const c of creatures.values()) if (c.type === 'boss') {
         marks.push({ x: c.x, z: c.z, c: '#ff4d4d', s: 3.5 });
         const d = Math.hypot(c.x - fx.x, c.y - fx.y, c.z - fx.z); if (d < bd) { bd = d; bb = c; }
@@ -481,7 +495,7 @@ function frame(now) {
       hemi.groundColor.setHex(0x12303c).lerp(LAVA_GROUND, lava).lerp(PRIM_GROUND, prim);
       hemi.intensity = Math.max(hemi.intensity, 0.9 * lava + 0.45 * prim);
     } else { hemi.intensity = 1.25; sun.intensity = 1.35; hemi.color.setHex(0xb5e8ff); hemi.groundColor.setHex(0x12303c); }
-    hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, marks);
+    hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), mode === 'exp' ? expPois() : W.pois, marks);
     if (mode === 'exp' && you && !you.alive && deadInfo) hud.spec(`<b>Ohnmächtig!</b>Erwischt von ${esc(deadInfo.by)}${deadInfo.lost ? ` · ${deadInfo.lost} Fische verloren` : ''} · aufwachen in ${Math.ceil(you.x?.rt || 0)} s`);
     else if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }
     else if (!you) { const s = players.get(specId); hud.spec(`Zuschauer${s ? ` · ${esc(s.name)}` : ''}`); }
