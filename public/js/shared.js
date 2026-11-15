@@ -99,22 +99,29 @@ export const FISH = [
 export const GOLD_CHANCE = 0.04, GOLD_MUL = 5;
 // Money a caught fish is worth. Bag/aquarium entries are { s: species index, g: 1 if golden }.
 // (Very old saves only kept the value: { v: euros }.)
-export const fishValue = (e) => e.v ?? FISH[e.s].value * (e.g ? GOLD_MUL : 1);
-// Aquarium: fish living there earn RATE x their value every minute.
+// Caught things ("Fang"): a fish { s: species, g: golden } or a boss { b: boss index }.
+export const fishValue = (e) => e.v ?? (e.b != null ? BOSSES[e.b].reward : FISH[e.s].value * (e.g ? GOLD_MUL : 1));
+// Aquarium: everything living there earns money every second.
 export const AQUARIUM = {
-  rate: 0.08,                                   // 8 % of the fish value per minute
+  rate: 0.08 / 60,                              // a fish earns 8 % of its value per minute
   sizes: [3, 6, 10, 15, 20],                    // places per upgrade level
   prices: [0, 500, 2000, 6000, 15000],          // price of each upgrade level
   offlineMax: 2 * 3600,                         // earns at most 2 hours while you are away
 };
-export const aqIncome = (aq) => aq.reduce((a, e) => a + fishValue(e), 0) * AQUARIUM.rate;   // € per minute
-// One boss per floor. dmg is per bite.
+// € per second of one caught thing in the aquarium (bosses have their own, much higher number)
+export const catchRate = (e) => e.v != null ? 0 : e.b != null ? BOSSES[e.b].aq : fishValue(e) * AQUARIUM.rate;
+export const aqIncome = (aq) => aq.reduce((a, e) => a + catchRate(e), 0);   // € per second
+export const catchName = (e) => e.v != null ? 'Alter Fang' : e.b != null ? '☠ ' + BOSSES[e.b].name : (e.g ? '⭐ Goldener ' : '') + FISH[e.s].name;
+// network form: fish [s, g], boss [-2, b], very old catch [-1, euros]
+export const catchToNet = (e) => e.v != null ? [-1, e.v] : e.b != null ? [-2, e.b] : [e.s, e.g ? 1 : 0];
+export const catchFromNet = (a) => a[0] === -1 ? { v: a[1] } : a[0] === -2 ? { b: a[1] } : { s: a[0], g: a[1] };
+// One boss per floor. dmg is per bite. aq = € per second in the aquarium (harder boss = more money).
 export const BOSSES = [
-  { name: 'Riffkönig',      hp: 450,  dmg: 20, reward: 300,   model: 'shark', scale: 2.2, col: 0xffc94d, r: 3.0, speed: 10 },
-  { name: 'Krakenmutter',   hp: 950,  dmg: 20, reward: 800,   model: 'octo',  scale: 3.2, col: 0x9a2fd6, r: 3.6, speed: 9 },
-  { name: 'Laternenschlund', hp: 1700, dmg: 20, reward: 2000, model: 'fish',  scale: 6,   col: 0x2a1d1a, glow: 0xfff07a, shape: 3, r: 4.0, speed: 9 },
-  { name: 'Knochenhai',     hp: 2700, dmg: 20, reward: 5000,  model: 'shark', scale: 3.2, col: 0x3b4450, r: 4.2, speed: 12 },
-  { name: 'Leviathan',      hp: 4200, dmg: 20, reward: 12000, model: 'fish',  scale: 7,   col: 0x10202a, glow: 0x5ef2e0, shape: 2, r: 4.5, speed: 11 },
+  { name: 'Riffkönig',      hp: 450,  dmg: 20, reward: 300,   aq: 5,   model: 'shark', scale: 2.2, col: 0xffc94d, r: 3.0, speed: 10 },
+  { name: 'Krakenmutter',   hp: 950,  dmg: 20, reward: 800,   aq: 12,  model: 'octo',  scale: 3.2, col: 0x9a2fd6, r: 3.6, speed: 9 },
+  { name: 'Laternenschlund', hp: 1700, dmg: 20, reward: 2000, aq: 30,  model: 'fish',  scale: 6,   col: 0x2a1d1a, glow: 0xfff07a, shape: 3, r: 4.0, speed: 9 },
+  { name: 'Knochenhai',     hp: 2700, dmg: 20, reward: 5000,  aq: 70,  model: 'shark', scale: 3.2, col: 0x3b4450, r: 4.2, speed: 12 },
+  { name: 'Leviathan',      hp: 4200, dmg: 20, reward: 12000, aq: 150, model: 'fish',  scale: 7,   col: 0x10202a, glow: 0x5ef2e0, shape: 2, r: 4.5, speed: 11 },
 ];
 export const BOSS_RESPAWN = 120;
 // Air tanks: cap = air units, maxDepth = safe depth (below it the pressure hurts).
@@ -297,11 +304,12 @@ export class World {
     if (exp) {
       let br = 240;
       for (let r = 196; r <= 286; r += 0.5) if (SURFACE - this.heightAt(-r, 0) <= 53) { br = r; break; }
-      const c = { x: -br + 1.5, y: SURFACE - 50, z: 0 };   // right at the cliff edge, the abyss on the inner side
-      this.base = { c, dome: { x: c.x, y: c.y, z: c.z - 3.5 }, tank: { x: c.x, y: c.y, z: c.z + 4.5 } };
-      const near = (o) => (o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 14 * 14 && Math.abs(o.y - c.y) < 14;
+      // 16 m out from the cliff edge, over the abyss on stilts (closer it would stick in the rock wall)
+      const c = { x: -br + 16, y: SURFACE - 50, z: 0 };
+      this.base = { c, dome: { x: c.x, y: c.y, z: c.z - 3.5 }, tank: { x: c.x, y: c.y, z: c.z + 5 } };
+      const near = (o) => (o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 16 * 16 && Math.abs(o.y - c.y) < 16;
       this.rocks = this.rocks.filter(o => !near(o)); this.cols = this.cols.filter(o => !near(o));   // clear the building site
-      this.cols.push({ x: c.x, y: c.y + 1.2, z: c.z - 3.5, r: 4.6 }, { x: c.x, y: c.y + 2, z: c.z + 4.5, r: 3.1 }, { x: c.x, y: c.y + 2, z: c.z + 4.5 - 2, r: 2.2 });
+      this.cols.push({ x: c.x, y: c.y + 1.2, z: c.z - 3.5, r: 4.6 }, { x: c.x, y: c.y + 1.6, z: c.z + 5, r: 3.7 }, { x: c.x, y: c.y + 3.6, z: c.z + 5, r: 3.7 });
     }
 
     // collider hash

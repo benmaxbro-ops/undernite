@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -684,13 +684,13 @@ function expJoin(c) {
   p.tank = clamp(s?.tank || 0, 0, TANKS.length - 1); p.lung = clamp(s?.lung || 0, 0, LUNGS.length - 1);
   p.lamp = clamp(s?.lamp || 0, 0, LAMPS.length - 1);
   // caught fish: { s: species, g: golden } (very old saves stored only the value)
-  const fishList = (l) => Array.isArray(l) ? l.map(e => typeof e === 'number' ? { v: e } : e).filter(e => e && (e.v != null || FISH[e.s])) : [];
+  const fishList = (l) => Array.isArray(l) ? l.map(e => typeof e === 'number' ? { v: e } : e).filter(e => e && (e.v != null || (e.b != null ? BOSSES[e.b] : FISH[e.s]))) : [];
   p.bag = fishList(s?.bag);
   p.aq = fishList(s?.aq).filter(e => e.v == null); p.aqLvl = clamp(s?.aqLvl || 0, 0, AQUARIUM.sizes.length - 1); p.aqAcc = 0;
   // the aquarium kept earning while you were away (up to 2 hours)
   if (s?.last && p.aq.length) {
     const away = Math.min(AQUARIUM.offlineMax, Math.max(0, (Date.now() - s.last) / 1000));
-    const earned = Math.floor(aqIncome(p.aq) * away / 60);
+    const earned = Math.floor(aqIncome(p.aq) * away);
     if (earned > 0) { p.money += earned; p.ye.push(['aqoffline', earned, Math.round(away / 60)]); }
   }
   if (s?.weapons) p.weapons = s.weapons.map(w => w && WEAPONS[w.id] ? { id: w.id, rar: w.rar, ammo: WEAPONS[w.id].mag } : null);
@@ -839,7 +839,8 @@ function expCreatureHurt(c, src) {
     for (const id of c.dmgBy) {
       const p = G.players.get(id);
       if (!p) continue;
-      p.money += B.reward; p.ye.push(['boss', c.sub, B.reward]); storeProgress(p);
+      // the money + the boss itself as a trophy for the aquarium
+      p.money += B.reward; p.bag.push({ b: c.sub }); p.ye.push(['boss', c.sub, B.reward]); storeProgress(p);
     }
   }
 }
@@ -864,7 +865,7 @@ function expFishAction(p, m) {
     if (p.bag[i].v != null) { p.ye.push(['shop', 'Dieser alte Fang kann nur verkauft werden.']); return true; }
     if (p.aq.length >= AQUARIUM.sizes[p.aqLvl]) { p.ye.push(['shop', 'Dein Aquarium ist voll – vergrößere es oder verkaufe einen Fisch daraus.']); return true; }
     const f = p.bag.splice(i, 1)[0]; p.aq.push(f);
-    p.ye.push(['aqin', f.s, f.g]);
+    p.ye.push(['aqin', catchToNet(f)]);
   } else if (m.k === 'aqsell' && p.aq[i]) {
     const value = fishValue(p.aq[i]); p.money += value; p.aq.splice(i, 1); p.ye.push(['sold', 1, value]);
   } else return false;
@@ -942,7 +943,7 @@ function tickExp(dt) {
   // aquarium income (also while dead or swimming far away)
   for (const p of G.players.values()) {
     if (!p.aq || !p.aq.length) continue;
-    p.aqAcc += aqIncome(p.aq) / 60 * dt;
+    p.aqAcc += aqIncome(p.aq) * dt;
     if (p.aqAcc >= 1) { const a = Math.floor(p.aqAcc); p.aqAcc -= a; p.money += a; if ((p.aqSaveT = (p.aqSaveT || 0) + a) > 50) { p.aqSaveT = 0; storeProgress(p); } }
   }
   // creatures + respawning
@@ -1024,7 +1025,7 @@ function snapshot() {
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)) };
       if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, e) => a + fishValue(e), 0), air: r2(p.air),
         tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)),
-        bagL: p.bag.map(e => e.v != null ? [-1, e.v] : [e.s, e.g]), aq: p.aq.map(e => [e.s, e.g]), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 10) / 10 };
+        bagL: p.bag.map(catchToNet), aq: p.aq.map(catchToNet), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 100) / 100 };
       ye = p.ye; p.ye = [];
     }
     send(c.ws, `{"t":"s","c":${cs},"you":${JSON.stringify(you)},"ye":${JSON.stringify(ye)}}`);

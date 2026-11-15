@@ -1,7 +1,7 @@
 // Undernite - procedural models. Everything is built from primitives so the
 // game ships without any binary assets. Forward is -z for all models.
 import * as THREE from 'three';
-import { SUITS, RARITY } from './shared.js';
+import { SUITS, RARITY, FISH, BOSSES } from './shared.js';
 import { makeRealFish, makeRealShark, makeRealOcto, makeRealBoss } from './creatures.js';
 import { makeShip } from './ship.js';
 import { buildRealDiver } from './diver.js';
@@ -109,7 +109,7 @@ export function makePlayerModel(suit, id, name) {
   const parts = suit === 'goliath' ? buildMech(accent) : buildRealDiver(suit, accent);
   const inner = parts.g; inner.rotation.order = 'YXZ'; root.add(inner);
   if (name) { const tag = makeTag(name); tag.position.y = suit === 'goliath' ? 3.0 : 1.5; root.add(tag); root.userData.tag = tag; }
-  let phase = Math.random() * 6, lastW = -2, tilt = 0;
+  let phase = Math.random() * 6, lastW = -2, tilt = 0, heldKey = '', heldMesh = null;
   root.userData.inner = inner;
   root.userData.update = (dt, s) => {
     inner.rotation.y = s.yaw;
@@ -127,6 +127,15 @@ export function makePlayerModel(suit, id, name) {
       if (parts.animate) parts.animate(dt, s, phase, 0.5 + amp * 1.6);
       else { parts.legs[0].rotation.x = Math.sin(phase) * amp; parts.legs[1].rotation.x = -Math.sin(phase) * amp; }
       if (s.weapon !== lastW && s.weapon >= 0) { lastW = s.weapon; parts.gunGlow.color.setHex(WCOL[s.weapon]); parts.gunGlow.emissive.setHex(WCOL[s.weapon]); }
+      // a fish or boss held in the hand instead of the weapon
+      const hk = s.held ? JSON.stringify(s.held) : '';
+      if (hk !== heldKey && parts.hand) {
+        heldKey = hk;
+        if (heldMesh) { parts.hand.remove(heldMesh); heldMesh = null; }
+        if (s.held) { heldMesh = makeTrophy(s.held, s.held.b != null ? 1.5 : 0.8); heldMesh.position.set(0.1, 0.05, s.held.b != null ? -0.85 : -0.55); parts.hand.add(heldMesh); }
+        parts.gun.visible = !s.held;
+      }
+      if (heldMesh) heldMesh.userData.update(dt, { yaw: Math.PI / 2, pitch: 0, state: 1 });
     }
   };
   return root;
@@ -199,6 +208,16 @@ export function makeBoss(B) {
   return root;
 }
 export function makeBoat() { return makeShip(); }
+// A caught fish ({s, g}) or boss ({b}) as a small model about len metres long (for the hand and the aquarium).
+export function makeTrophy(e, len) {
+  const inner = e.b != null ? makeRealBoss(BOSSES[e.b]) : makeRealFish(FISH[e.s], !!e.g);
+  const root = new THREE.Group(); root.add(inner);
+  inner.userData.update(0, { yaw: 0, pitch: 0, state: 0 });
+  const size = new THREE.Box3().setFromObject(inner).getSize(new THREE.Vector3());
+  root.scale.setScalar(len / Math.max(0.01, size.x, size.y, size.z));
+  root.userData.update = (dt, st) => inner.userData.update(dt, st);
+  return root;
+}
 
 // ---------- loot ----------
 export function makeCrate() {

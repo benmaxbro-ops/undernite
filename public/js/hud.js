@@ -1,5 +1,6 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, FISH, GOLD_MUL, AQUARIUM } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue } from './shared.js';
+const perSec = (v) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
 const $ = (id) => document.getElementById(id);
@@ -103,20 +104,18 @@ export class Hud {
     gear += NLA ? item(`▲ ${NLA.name}`, `leuchtet ${NLA.range} m · Akku ${NLA.battery} s`, NLA.price, '', 'lamp', 0, '#3fa9f5') : item('Hellste Lampe!', 'Mehr geht nicht', null, 'Max');
     $('shopGear').innerHTML = gear;
     // ----- your catch + aquarium -----
-    const fname = (f) => f[0] < 0 ? 'Alter Fang' : (f[1] ? '⭐ Goldener ' : '') + FISH[f[0]].name;
-    const fval = (f) => f[0] < 0 ? f[1] : FISH[f[0]].value * (f[1] ? GOLD_MUL : 1);
+    const fname = (f) => catchName(catchFromNet(f)), fval = (f) => fishValue(catchFromNet(f)), frate = (f) => catchRate(catchFromNet(f));
     const cap = AQUARIUM.sizes[x.aqLvl], full = x.aq.length >= cap;
-    const perSec = (perMin) => (perMin / 60).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
     const bagV = x.bagL.reduce((a, f) => a + fval(f), 0);
     let fish = `<div><h3>Dein Fang · ${x.bagL.length} Fische`
       + (base ? '' : `<button class="smallBtn" data-k="sellall" data-i="0" ${x.bagL.length ? '' : 'disabled'}>Alles verkaufen ${money(bagV)}</button>`) + '</h3><div class="fishList">';
-    fish += x.bagL.length ? x.bagL.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· ${base ? '+' + perSec(fval(f) * AQUARIUM.rate) + ' im Aquarium' : money(fval(f))}</small></span>`
-      + (base ? `<button class="aqb" data-k="aq" data-i="${i}" ${full || f[0] < 0 ? 'disabled' : ''}>Ins Aquarium</button>` : `<button data-k="sell" data-i="${i}">Verkaufen +${money(fval(f))}</button>`) + '</div>').join('')
+    fish += x.bagL.length ? x.bagL.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· ${base ? '+' + perSec(frate(f)) + ' im Aquarium' : money(fval(f))}</small></span>`
+      + (base ? `<button class="aqb" data-k="aq" data-i="${i}" ${full || f[0] === -1 ? 'disabled' : ''}>Ins Aquarium</button>` : `<button data-k="sell" data-i="${i}">Verkaufen +${money(fval(f))}</button>`) + '</div>').join('')
       : '<div class="empty">Noch nichts gefangen – ab ins Wasser!</div>';
     fish += `</div></div><div><h3>Aquarium · ${x.aq.length}/${cap} · +${perSec(x.aqRate)}</h3>`;
     if (base) {
-      fish += '<div class="fishList">' + (x.aq.length ? x.aq.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· +${perSec(fval(f) * AQUARIUM.rate)}</small></span><button data-k="aqsell" data-i="${i}">Verkaufen +${money(fval(f))}</button></div>`).join('')
-        : '<div class="empty">Leer. Setz Fische hinein – sie verdienen jede Sekunde Geld, je tiefer sie herkommen, desto mehr.</div>');
+      fish += '<div class="fishList">' + (x.aq.length ? x.aq.map((f, i) => `<div class="frow"><span>${fname(f)} <small>· +${perSec(frate(f))}</small></span><button data-k="aqsell" data-i="${i}">Verkaufen +${money(fval(f))}</button></div>`).join('')
+        : '<div class="empty">Leer. Nimm einen Fang in die Hand (Tasten 4–9 oder Q) und drück hier E – oder klick oben auf „Ins Aquarium“. Jeder Fisch verdient pro Sekunde Geld, Endbosse am meisten!</div>');
       const nextCap = AQUARIUM.sizes[x.aqLvl + 1];
       fish += '</div>' + (nextCap ? item(`▲ Größeres Aquarium`, `${cap} → ${nextCap} Plätze`, AQUARIUM.prices[x.aqLvl + 1], '', 'aqup', 0, '#3fa9f5') : item('Riesen-Aquarium!', 'Mehr Plätze gibt es nicht', null, 'Max'));
     } else fish += '<div class="empty">Fische ins Aquarium setzen kannst du in der <b>Unterwasser-Basis</b>: Etage 1, 50 m tief, links (Westen) – auf der Minikarte als <b>Basis</b>. Dort kannst du auch Luft tanken.</div>';
@@ -140,6 +139,23 @@ export class Hud {
     $('endTitle').innerHTML = mine && mine.place === 1 ? 'SIEG<span>!</span>' : 'AUFGE<span>TAUCHT</span>';
     $('endPlace').textContent = mine ? `PLATZ ${mine.place} VON ${m.total} · ${mine.k} KILLS` : `SIEGER: ${m.rank[0] ? m.rank[0].n : '–'}`;
     $('rank').innerHTML = m.rank.slice(0, 8).map(r => `<div class="${r.id === myId ? 'me' : ''}"><span class="num">${r.place}.</span><span>${esc(r.n)} <small>${SUITS[r.suit].name}${r.bot ? ' · Bot' : ''}</small></span><span class="num">${r.k} Kills</span></div>`).join('');
+  }
+
+  // ----- catch bar: caught fish and bosses you can take in your hand (keys 4-9, Q) -----
+  catchBar(bag, held) {
+    const key = JSON.stringify(bag) + '|' + held;
+    if (key === this.catchKey) return; this.catchKey = key;
+    const start = held >= 6 ? held - 5 : 0, el = $('catchBar');
+    let h = '';
+    for (let k = 0; k < 6; k++) {
+      const i = start + k, f = bag[i];
+      if (!f) { h += `<div class="cslot empty"><div>${k + 4}</div><div class="n">–</div><div>&nbsp;</div></div>`; continue; }
+      const e = catchFromNet(f), boss = e.b != null;
+      h += `<div class="cslot${i === held ? ' on' : ''}${boss ? ' boss' : e.g ? ' gold' : ''}"><div>${k + 4}${boss ? ' ☠' : e.g ? ' ⭐' : ''}</div>`
+        + `<div class="n">${esc(boss ? BOSSES[e.b].name : catchName(e).replace('⭐ Goldener ', ''))}</div><div class="r">+${perSec(catchRate(e)).replace(' €/s', '/s')}</div></div>`;
+    }
+    if (bag.length > start + 6) h += `<div id="catchMore">+${bag.length - start - 6} mehr [Q]</div>`;
+    el.innerHTML = h;
   }
 
   // ----- in game -----
@@ -168,9 +184,12 @@ export class Hud {
     }
     this.set('alive', 'text', String(s.alive));
     this.set('depth', 'text', `TIEFE ${Math.round(s.depth)} m`);
+    $('catchBar').classList.toggle('on', this.mode === 'exp' && !!(y && y.x && y.x.bagL.length));
     if (this.mode === 'exp' && y && y.x) {
+      this.catchBar(y.x.bagL, s.held ?? -1);
+      $('slots').classList.toggle('off', (s.held ?? -1) >= 0);   // weapon put away while holding a catch
       const x = y.x, T = TANKS[x.tank], f = floorAt(s.depth), deep = s.depth > T.maxDepth;
-      this.set('alive', 'text', money(x.money) + (x.aqRate > 0 ? ` (+${(x.aqRate / 60).toLocaleString('de-DE', { maximumFractionDigits: 2 })}/s)` : ''));
+      this.set('alive', 'text', money(x.money) + (x.aqRate > 0 ? ` (+${perSec(x.aqRate)})` : ''));
       this.set('kills', 'text', x.bag ? `${x.bag} · ${money(x.bagV)}` : '0');
       this.set('airFill', 'width', Math.max(0, x.air / T.cap * 100) + '%');
       const secs = s.depth < 2.6 ? '' : ` · ~${Math.floor(x.air / (airUse(s.depth) * LUNGS[x.lung].mul))} s`;

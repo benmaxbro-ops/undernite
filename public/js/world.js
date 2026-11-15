@@ -55,10 +55,10 @@ function buildBase(root, W) {
   const glowM = (c, i = 2.5) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i });
   const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
   // platform + stilts down to the slope
-  add(new THREE.CylinderGeometry(9, 9, 0.6, 32), metal, 0, -0.3, 0);
-  add(new THREE.TorusGeometry(9, 0.18, 8, 48), steel, 0, 0, 0).rotation.x = Math.PI / 2;
+  add(new THREE.CylinderGeometry(10, 10, 0.6, 32), metal, 0, -0.3, 0);
+  add(new THREE.TorusGeometry(10, 0.18, 8, 48), steel, 0, 0, 0).rotation.x = Math.PI / 2;
   for (let i = 0; i < 8; i++) {
-    const a = i / 8 * Math.PI * 2, x = Math.cos(a) * 7.5, z = Math.sin(a) * 7.5;
+    const a = i / 8 * Math.PI * 2, x = Math.cos(a) * 8.5, z = Math.sin(a) * 8.5;
     const ground = W.heightAt(c.x + x, c.z + z) - c.y, len = Math.max(0.5, -ground + 1);
     if (ground > -0.5) continue;   // that side rests on the cliff
     add(new THREE.CylinderGeometry(0.35, 0.45, len, 10), steel, x, -len / 2, z);
@@ -76,22 +76,22 @@ function buildBase(root, W) {
   const hatch = add(new THREE.TorusGeometry(1.1, 0.16, 8, 24), steel, -7.1, 1.1, -3.5); hatch.rotation.y = Math.PI / 2;
   add(new THREE.CircleGeometry(1.0, 20), glowM(0x5ef2e0, 0.8), -7.12, 1.1, -3.5).rotation.y = -Math.PI / 2;
   // round aquarium: glass cylinder with water, sand, plants, rings
-  const tank = new THREE.Group(); tank.position.set(0, 0, 4.5); g.add(tank);
-  const tw = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 4, 32, 1, true), glassM); tw.position.y = 2; tank.add(tw);
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, 3.8, 32), new THREE.MeshStandardMaterial({ color: 0x40c8f0, transparent: true, opacity: 0.16, depthWrite: false })); water.position.y = 2; tank.add(water);
-  for (const y of [0.05, 4]) { const r = new THREE.Mesh(new THREE.TorusGeometry(2.95, 0.16, 8, 40), metal); r.rotation.x = Math.PI / 2; r.position.y = y; tank.add(r); }
-  const sand = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, 0.3, 32), new THREE.MeshStandardMaterial({ color: 0xe8d6a0, roughness: 1 })); sand.position.y = 0.15; tank.add(sand);
+  const tank = new THREE.Group(); tank.position.set(0, 0, 5); g.add(tank);   // big enough for bosses
+  const tw = new THREE.Mesh(new THREE.CylinderGeometry(3.7, 3.7, 5.2, 36, 1, true), glassM); tw.position.y = 2.6; tank.add(tw);
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 5, 36), new THREE.MeshStandardMaterial({ color: 0x40c8f0, transparent: true, opacity: 0.16, depthWrite: false })); water.position.y = 2.6; tank.add(water);
+  for (const y of [0.05, 5.2]) { const r = new THREE.Mesh(new THREE.TorusGeometry(3.75, 0.16, 8, 40), metal); r.rotation.x = Math.PI / 2; r.position.y = y; tank.add(r); }
+  const sand = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 0.3, 32), new THREE.MeshStandardMaterial({ color: 0xe8d6a0, roughness: 1 })); sand.position.y = 0.15; tank.add(sand);
   for (let i = 0; i < 9; i++) {
-    const a = i / 9 * Math.PI * 2, r = 1.2 + (i % 3) * 0.5, h = 0.8 + (i % 4) * 0.35;
+    const a = i / 9 * Math.PI * 2, r = 1.8 + (i % 3) * 0.6, h = 0.8 + (i % 4) * 0.35;
     const pl2 = new THREE.Mesh(new THREE.ConeGeometry(0.12, h, 5), new THREE.MeshStandardMaterial({ color: i % 2 ? 0x2f8f4a : 0x3fae5a })); pl2.position.set(Math.cos(a) * r, 0.3 + h / 2, Math.sin(a) * r); tank.add(pl2);
   }
-  const tl = new THREE.PointLight(0x9fe8ff, 12, 9); tl.position.y = 3.5; tank.add(tl);
+  const tl = new THREE.PointLight(0x9fe8ff, 16, 11); tl.position.y = 4.6; tank.add(tl);
   // beacon on top + a faint light beam up to the surface so you can find it
   const beacon = add(new THREE.SphereGeometry(0.4, 12, 8), glowM(0x5ef2e0, 4), 0, 4.6, -3.5);
   const beam = add(new THREE.CylinderGeometry(0.6, 1.6, 48, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0x5ef2e0, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), 0, 28, -3.5);
-  const sign = makeTag('🐠 BASIS · Aquarium', '#5ef2e0'); sign.scale.multiplyScalar(2.2); sign.position.set(0, 6.4, 0); g.add(sign);
+  const sign = makeTag('🐠 BASIS · Aquarium', '#5ef2e0'); sign.scale.multiplyScalar(2.2); sign.position.set(0, 7.2, 0); g.add(sign);
   let t = 0;
-  return { group: g, tank, tankR: 2.5, tankH: [0.6, 3.6], update(dt) { t += dt; beacon.material.emissiveIntensity = 2.5 + Math.sin(t * 3) * 1.5; beam.material.opacity = 0.05 + Math.sin(t * 3) * 0.02; } };
+  return { group: g, tank, tankR: 2.6, tankH: [0.9, 4.4], update(dt) { t += dt; beacon.material.emissiveIntensity = 2.5 + Math.sin(t * 3) * 1.5; beam.material.opacity = 0.05 + Math.sin(t * 3) * 0.02; } };
 }
 
 export function buildEnvironment(scene, W) {

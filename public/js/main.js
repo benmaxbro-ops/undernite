@@ -1,9 +1,9 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate } from './shared.js';
 import { buildEnvironment } from './world.js';
-import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeFish, makeBoss } from './models.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeFish, makeBoss, makeTrophy } from './models.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 
@@ -36,6 +36,7 @@ let mode = 'br', phase = 'connecting', myId = 0, mySuit = 'triton', you = null, 
 const meta = new Map(), players = new Map(), creatures = new Map(), vehicles = new Map(), pickups = new Map(), projs = new Map();
 let crates = [];
 const me = { x: 0, y: 60, z: 0, vx: 0, vy: 0, vz: 0, hyaw: 0, hpitch: 0, energy: 100, boost: false, exhaust: false };
+let held = -1;   // expedition: index of the caught fish/boss in your hand (-1 = weapon)
 let camYaw = 0, camPitch = -0.35, camDist = 5, firing = false, nextFire = 0, specId = 0, shockUntil = 0, shake = 0, deadInfo = null, promptT = 0, sendT = 0;
 let vehSince = 0, headUp = 0;
 // expedition flashlight: on/off with L, battery in seconds, recharges at the surface
@@ -169,17 +170,17 @@ function onPrivate(e) {
     case 'grab': hud.banner('Ein Oktopus hat dich gepackt – F hämmern!', 3); break;
     case 'shock': shockUntil = time + 0.8; hud.shock(); sfx.shock(); break;
     case 'got': sfx.pickup(); hud.feed(e[1] === 'w' ? `Aufgenommen: <b style="color:${RARITY[e[3]].color}">${WEAPONS[e[2]].name}</b> · ${RARITY[e[3]].name}` : e[1] === 'med' ? 'Reparaturkit: <b>+50 Leben</b>' : 'Schildzelle: <b>+50 Schild</b>', true); break;
-    case 'dead': deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop(); break;
+    case 'dead': held = -1; deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop(); break;
     case 'spawn': torch.on = false; torch.bat = LAMPS[torch.lvl].battery; me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
     case 'fish': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`${e[2] ? '⭐ <b style="color:#ffd34d">Goldener</b> ' : 'Gefangen: '}<b>${S.name}</b> · +${e[3]} €`, true); break; }
     case 'sold': hud.banner(`${e[1]} Fische verkauft: +${e[2].toLocaleString('de-DE')} €`, 3); sfx.ping(); break;
     case 'bought': hud.shopMsg(`Gekauft: ${e[1]}`, true); hud.feed(`Gekauft: <b>${esc(e[1])}</b>`, true); sfx.crate(); break;
     case 'shop': hud.shopMsg(e[1]); hud.banner(e[1], 2); break;
     case 'bagHint': hud.banner(`${e[1]} Fische dabei (${e[2].toLocaleString('de-DE')} €) – drück E zum Verkaufen!`, 4); break;
-    case 'baseHint': hud.banner(e[1] ? `Unterwasser-Basis – drück E, um Fische ins Aquarium zu setzen! Luft wird aufgefüllt.` : 'Unterwasser-Basis – hier wird deine Luft aufgefüllt.', 4); sfx.ping(); break;
-    case 'aqin': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`Ins Aquarium: <b>${e[2] ? '⭐ Goldener ' : ''}${S.name}</b>`, true); break; }
+    case 'baseHint': hud.banner(e[1] ? 'Basis: Fang in die Hand (4–9) + E = ins Aquarium!' : 'Basis: Hier wird deine Luft aufgefüllt.', 4); sfx.ping(); break;
+    case 'aqin': { const c = catchFromNet(e[1]); sfx.pickup(); hud.feed(`Ins Aquarium: <b>${catchName(c)}</b> · +${catchRate(c).toLocaleString('de-DE', { maximumFractionDigits: 2 })} €/s`, true); break; }
     case 'aqoffline': hud.banner(`Während du weg warst, hat dein Aquarium ${e[1].toLocaleString('de-DE')} € verdient!`, 5); sfx.ping(); break;
-    case 'boss': hud.banner(`${BOSSES[e[1]].name} besiegt! +${e[2].toLocaleString('de-DE')} €`, 4); sfx.ping(); break;
+    case 'boss': hud.banner(`${BOSSES[e[1]].name} besiegt! +${e[2].toLocaleString('de-DE')} € – und er ist jetzt in deiner Fang-Leiste (${BOSSES[e[1]].aq} €/s im Aquarium)!`, 5); sfx.ping(); break;
   }
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -197,7 +198,19 @@ addEventListener('keydown', (e) => {
     else { torch.on = !torch.on; sfx.hitmark(false); }
     return;
   }
-  if (mode === 'exp' && e.code === 'KeyE') { if (hud.shopOpen) closeShop(); else if (nearBoat()) openShop('boat'); else if (nearBase()) openShop('base'); return; }
+  if (mode === 'exp' && e.code === 'KeyE') {
+    if (hud.shopOpen) closeShop();
+    else if (held >= 0 && nearBase()) placeHeld();
+    else if (nearBoat()) openShop('boat'); else if (nearBase()) openShop('base');
+    return;
+  }
+  // catch bar: 4-9 take a fish/boss in the hand (same key again = back to the weapon), Q = next one
+  if (mode === 'exp' && /^Digit[4-9]$/.test(e.code)) {
+    const i = (held >= 6 ? held - 5 : 0) + (+e.code.slice(5) - 4);
+    held = held === i || !you.x.bagL[i] ? -1 : i; firing = false; return;
+  }
+  if (mode === 'exp' && e.code === 'KeyQ') { const n = you.x.bagL.length; held = held + 1 < n ? held + 1 : -1; firing = false; return; }
+  if (/^Digit[1-3]$/.test(e.code)) held = -1;
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i]) send({ t: 'slot', i }); }
   else if (e.code === 'KeyR') send({ t: 'r' });
   else if (e.code === 'KeyE') send({ t: 'e' });
@@ -210,7 +223,7 @@ document.addEventListener('mousemove', (e) => {
   camYaw -= e.movementX * 0.0022; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - e.movementY * 0.0022));
 });
 const lock = () => { sfx.init(); if (phase === 'play' && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); };
-canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !== canvas) { lock(); return; } if (e.button === 0) firing = true; });
+canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !== canvas) { lock(); return; } if (e.button !== 0) return; if (held >= 0) { if (nearBase()) placeHeld(); return; } firing = true; });
 document.getElementById('pause').addEventListener('click', lock);
 addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; });
 addEventListener('wheel', (e) => {
@@ -259,8 +272,8 @@ function updateAquarium(dt) {
   if (key !== aqView.key) {   // the fish in the tank changed: rebuild them
     aqView.key = key;
     for (const f of aqView.fish) B.tank.remove(f.mesh);
-    aqView.fish = you.x.aq.map(([s, g]) => {
-      const S = FISH[s], mesh = makeFish(S, g); mesh.scale.setScalar(0.32 / S.size); B.tank.add(mesh);
+    aqView.fish = you.x.aq.map((net) => {
+      const c = catchFromNet(net), mesh = makeTrophy(c, c.b != null ? 1.6 + c.b * 0.2 : 0.45 + FISH[c.s].size * 0.45); B.tank.add(mesh);
       const a = Math.random() * 6.28, r = Math.random() * B.tankR;
       return { mesh, x: Math.cos(a) * r, y: B.tankH[0] + Math.random() * (B.tankH[1] - B.tankH[0]), z: Math.sin(a) * r, tx: 0, ty: 2, tz: 0, yaw: 0, t: 0 };
     });
@@ -279,6 +292,11 @@ function updateAquarium(dt) {
     f.mesh.position.set(f.x, f.y, f.z);
     f.mesh.userData.update(dt, { yaw: f.yaw, pitch: Math.asin(Math.max(-0.5, Math.min(0.5, dy / d))) * 0.5, state: 0 });
   }
+}
+// put the fish/boss in your hand into the aquarium
+function placeHeld() {
+  if (held < 0 || !you.x.bagL[held]) return;
+  send({ t: 'buy', k: 'aq', i: held }); held = -1;
 }
 function updateTorch(dt, depth) {
   const lvl = you.x.lamp || 0, L = LAMPS[lvl];
@@ -311,7 +329,7 @@ function aimDir() {
   return [ax / l, ay / l, az / l];
 }
 function tryFire(now) {
-  if (!firing) return;
+  if (!firing || held >= 0) return;
   const v = you.veh ? vehicles.get(you.veh) : null;
   let rate, w = null;
   if (v && v.type === 'sub') rate = WEAPONS.subtorp.rate;
@@ -324,6 +342,7 @@ function tryFire(now) {
 function computePrompt() {
   if (!you || !you.alive) return null;
   if (you.grab) return ['F', 'Befreien – mehrfach drücken!'];
+  if (mode === 'exp' && held >= 0 && !hud.shopOpen && nearBase()) { const c = catchFromNet(you.x.bagL[held]); return ['E', `${catchName(c)} ins Aquarium setzen (+${catchRate(c).toLocaleString('de-DE', { maximumFractionDigits: 2 })} €/s)`]; }
   if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
@@ -346,6 +365,7 @@ function updateEntities(dt) {
       e.speed += (Math.hypot(e.x - ox, e.y - oy, e.z - oz) / dt - e.speed) * 0.2;
     }
     e.surf = SURFACE - e.y < 1.3;   // at the surface the diver floats upright
+    e.held = e.id === myId && held >= 0 && you && you.x ? catchFromNet(you.x.bagL[held]) : null;
     const veh = e.veh ? vehicles.get(e.veh) : null;
     e.mesh.visible = !(veh && veh.type === 'sub');
     e.mesh.position.set(e.x, e.y, e.z);
@@ -430,9 +450,9 @@ function frame(now) {
     const fx = alive ? me : camera.position;
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
     promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }
-    if (mode === 'exp' && you && you.x) { updateTorch(dt, SURFACE - fx.y); updateAquarium(dt); }
+    if (mode === 'exp' && you && you.x) { if (held >= you.x.bagL.length || !you.alive) held = -1; updateTorch(dt, SURFACE - fx.y); updateAquarium(dt); }
     hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y, suit: mySuit, outside, time, dt,
-      lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null });
+      lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null, held });
     let marks = [];
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap

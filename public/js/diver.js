@@ -137,7 +137,7 @@ export function buildRealDiver(suit, accent) {
   g.scale.setScalar({ manta: 0.92, triton: 1, bulwark: 1.12 }[suit] ?? 1);
 
   return {
-    g, gunGlow, mech: false, legs: [],
+    g, gunGlow, gun, hand: rightHand, mech: false, legs: [],
     // flutter kick: legs move up and down from the hip, knees and fins follow with a delay
     animate(dt, s, phase, amp) {
       for (let i = 0; i < 2; i++) {

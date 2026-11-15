@@ -45,7 +45,7 @@ ws.on('message', (raw) => {
       pos = { x: base.x + 7, y: base.y + 1, z: base.z }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
       if (stepT === 3) { send({ t: 'buy', k: 'sellall' }); }   // selling at the base must be refused
       if (stepT === 6) { send({ t: 'buy', k: 'aq', i: 0 }); send({ t: 'buy', k: 'aq', i: 0 }); }
-      if (stepT === 39) { log('aquarium', JSON.stringify(x.aq), 'income', x.aqRate, '€/min, air', ok.airHunt, '->', x.air, 'at 50 m'); ok.aquarium = x.aq.length === 2 && x.aqRate > 0 && x.bag > 0; ok.airStation = x.air > ok.airHunt; }   // without the station the air would drop at 50 m
+      if (stepT === 39) { log('aquarium', JSON.stringify(x.aq), 'income', x.aqRate, '€/s, air', ok.airHunt, '->', x.air, 'at 50 m'); ok.aquarium = x.aq.length === 2 && x.aqRate > 0 && x.bag > 0; ok.airStation = x.air > ok.airHunt; }   // without the station the air would drop at 50 m
     } else {
       // then at the boat: sell the rest
       pos = { x: EXP_BOAT.x + 7, y: SURFACE - 2, z: EXP_BOAT.z }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
@@ -60,7 +60,16 @@ ws.on('message', (raw) => {
     const b = boss.find(c => c[8] === 0);
     if (b) { if (stepT % 4 === 0) aimAt(b); if (stepT % 40 === 0) log('boss hp', b[9] + '%', 'my hp', y.hp); }
     if (y.hp < 100 && !ok.bossHit) { ok.bossHit = true; log('boss bit me, hp', y.hp); }
-    if (stepT > 260) { step = 'deep'; stepT = 0; }
+    if (!ok.bossTrophy && x.bagL.some(f => f[0] === -2)) { ok.bossTrophy = true; log('boss trophy in the bag', JSON.stringify(x.bagL.filter(f => f[0] === -2))); }
+    if (stepT > 260 || ok.bossTrophy) { step = 'trophy'; stepT = 0; }
+  } else if (step === 'trophy') {
+    // bring the beaten boss to the base and put it into the aquarium
+    pos = { x: base.x + 7, y: base.y + 1, z: base.z }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
+    const bi = x.bagL.findIndex(f => f[0] === -2);
+    if (stepT === 5) { if (bi >= 0) send({ t: 'buy', k: 'aqsell', i: 0 }); }   // make room: take one fish out (sold)
+    if (stepT === 10 && bi >= 0) { ok.rateBefore = x.aqRate; send({ t: 'buy', k: 'aq', i: bi }); }
+    if (stepT === 20) { log('aquarium now', JSON.stringify(x.aq), 'income', x.aqRate, '€/s'); ok.bossInAq = x.aq.some(f => f[0] === -2) && x.aqRate > (ok.rateBefore || 0) + 4; }
+    if (stepT > 22) { step = 'deep'; stepT = 0; }
   } else if (step === 'deep') {
     // far too deep for the tank: pressure + air should knock us out
     pos = { x: 5, y: SURFACE - 340, z: 5 }; send({ t: 'm', ...pos, yaw: 0, pitch: 0 });
