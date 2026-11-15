@@ -10,7 +10,10 @@ const TAU = Math.PI * 2;
 // perCoral = neue Korallen pro alter Koralle, lettuce = Plattenkorallen pro Riff-Koralle,
 // schoolsPerReef = Fischschwärme um jedes Riff, fishPerSchool = Fische pro Schwarm, glow = wie stark die Riffkorallen leuchten
 // mound = Korallen pro Meter Hügel-Radius, moundGlow = wie stark die Korallen-Berge leuchten
-export const REEF = { stones: 260, perCoral: 1, lettuce: 1, schoolsPerReef: 6, extraSchools: 4, fishPerSchool: 45, glow: 0.22, fishGlow: 0.35, mound: 2.2, moundGlow: 0.28 };
+// colorful = Anteil bunter Korallen auf den Hügeln (0 = alle warmgelb, 1 = alle bunt)
+export const REEF = { stones: 320, perCoral: 1, lettuce: 1, schoolsPerReef: 8, extraSchools: 4, fishPerSchool: 60, glow: 0.22, fishGlow: 0.4, mound: 3.4, moundMax: 44, moundGlow: 0.28, colorful: 0.6 };
+// bunte Korallenfarben für den Bewuchs auf den Hügeln
+const BRIGHT = [0xff5d8f, 0xff9a3c, 0xc86bff, 0xffd84d, 0x35e0c8, 0xff6b5e, 0x7fb2ff, 0xff7ad9, 0x8fe86a, 0xffb0a0];
 // Riff-Farben: warm und leicht trüb (Gelb, Bernstein, Creme, Ocker) – so leuchten die Korallen-Berge
 const PAL = [0xe8c070, 0xd8a850, 0xf0d898, 0xc89048, 0xe0b878, 0xb8a070, 0xf2e2b0, 0xd0a060];
 const WARM_GLOW = 0xffc46a;   // Lichtfarbe der leuchtenden Riffkorallen
@@ -64,8 +67,8 @@ function pillarGeo() {       // Säulenkoralle: mehrere dicke, knubbelige Säule
   for (let i = 0; i < 5; i++) {
     const r = 0.07 + R() * 0.06, h = 0.5 + R() * 1.1, a = R() * TAU, d = i ? 0.08 + R() * 0.18 : 0;
     const p = new THREE.Vector3(Math.cos(a) * d, 0, Math.sin(a) * d), dir = new THREE.Vector3((R() - 0.5) * 0.25, 1, (R() - 0.5) * 0.25);
-    parts.push({ geo: new THREE.CylinderGeometry(r * 0.9, r, h, 10, 4).translate(0, h / 2, 0), m: place(p, dir, new THREE.Vector3(1, 1, 1)), shade: (x, y) => 0.55 + Math.min(0.45, y * 0.3) });
-    parts.push({ geo: new THREE.SphereGeometry(r * 0.92, 10, 6), m: place(p.clone().addScaledVector(dir.clone().normalize(), h), dir, new THREE.Vector3(1, 1, 1)), shade: () => 1 });
+    parts.push({ geo: new THREE.CylinderGeometry(r * 0.9, r, h, 7, 1, true).translate(0, h / 2, 0), m: place(p, dir, new THREE.Vector3(1, 1, 1)), shade: (x, y) => 0.55 + Math.min(0.45, y * 0.3) });
+    parts.push({ geo: new THREE.SphereGeometry(r * 0.92, 7, 4), m: place(p.clone().addScaledVector(dir.clone().normalize(), h), dir, new THREE.Vector3(1, 1, 1)), shade: () => 1 });
   }
   return merge(parts);
 }
@@ -76,7 +79,7 @@ function whipGeo() {         // Peitschenkoralle: lange, dünne, leicht gebogene
     let p = new THREE.Vector3(Math.cos(a) * 0.05, 0, Math.sin(a) * 0.05);
     for (let k = 0; k < segs; k++) {
       const dir = new THREE.Vector3(Math.cos(a) * lean * (k / segs) * 1.5, 1, Math.sin(a) * lean * (k / segs) * 1.5).normalize(), len = h / segs, r = 0.025 * (1 - k / segs * 0.7);
-      parts.push({ geo: new THREE.CylinderGeometry(r * 0.75, r, len, 6).translate(0, len / 2, 0), m: place(p, dir, new THREE.Vector3(1, 1, 1)), shade: () => 0.5 + k / segs * 0.6 });
+      parts.push({ geo: new THREE.CylinderGeometry(r * 0.75, r, len, 4, 1, true).translate(0, len / 2, 0), m: place(p, dir, new THREE.Vector3(1, 1, 1)), shade: () => 0.5 + k / segs * 0.6 });
       p = p.clone().addScaledVector(dir, len);
     }
   }
@@ -233,14 +236,15 @@ export function buildReef(root, W, decorate, uTime) {
     im.instanceColor.needsUpdate = true; root.add(im);
     // dicht bewachsen: Platten-, Hirn-, Tisch-Korallen und Röhrenschwämme auf der oberen Hälfte jedes Hügels
     mounds.forEach((m, i) => {
-      const R = seeded(i * 6151 + 11), n = Math.min(30, Math.round(m.r * REEF.mound)), big = 0.7 + m.r * 0.12;   // auf großen Hügeln größere Korallen
+      const R = seeded(i * 6151 + 11), n = Math.min(REEF.moundMax, Math.round(m.r * REEF.mound)), big = 0.7 + m.r * 0.12;   // auf großen Hügeln größere Korallen
       for (let k = 0; k < n; k++) {
         // Richtung auf dem Hügel (lokal, vor der Drehung), dann genau die Oberfläche in dieser Richtung nehmen
         const a = R() * TAU, up = 0.25 + R() * 0.75, h = Math.sqrt(1 - up * up), dx = Math.cos(a) * h, dz = Math.sin(a) * h, n = moundN(dx, up, dz) * 0.97;
         const cr = Math.cos(m.rot), sr = Math.sin(m.rot), lx = dx * n * m.r * m.sx, lz = dz * n * m.r * m.sz;
         const x = m.x + lx * cr + lz * sr, y = m.y + up * n * m.r * m.sy, z = m.z - lx * sr + lz * cr;
         const t = [6, 6, 6, 1, 2, 4, 3, 7, 8, 9, 7, 6][(R() * 12) | 0];
-        spots[t].push({ x, y, z, s: (0.6 + R() * 0.8) * big, rot: R() * TAU, tilt: (1 - up) * 0.8 * (R() < 0.5 ? -1 : 1), col: PAL[(R() * PAL.length) | 0], light: 0.9 + R() * 0.3 });
+        const col = R() < REEF.colorful ? BRIGHT[(R() * BRIGHT.length) | 0] : PAL[(R() * PAL.length) | 0];
+        spots[t].push({ x, y, z, s: (0.6 + R() * 0.8) * big, rot: R() * TAU, tilt: (1 - up) * 0.8 * (R() < 0.5 ? -1 : 1), col, light: 0.9 + R() * 0.3 });
       }
     });
   }
@@ -330,7 +334,12 @@ export function buildReef(root, W, decorate, uTime) {
   const anchors = [];
   (W.reefSites || []).forEach((s, i) => {   // um jedes Riff mehrere Schwärme
     const R = seeded(i * 131 + 9);
-    for (let k = 0; k < REEF.schoolsPerReef; k++) { const a = R() * TAU, d = R() * 22, x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d; anchors.push({ x, y: W.heightAt(x, z), z }); }
+    for (let k = 0; k < REEF.schoolsPerReef; k++) {
+      const a = R() * TAU, d = R() * 30, x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d;
+      let y = W.heightAt(x, z);
+      for (const m of W.reefMounds || []) if (Math.hypot(m.x - x, m.z - z) < m.r + 14) y = Math.max(y, m.y + m.r * m.sy);   // über die Berge
+      anchors.push({ x, y, z });
+    }
   });
   for (const c of W.coral) { if (anchors.length >= (W.reefSites || []).length * REEF.schoolsPerReef + REEF.extraSchools) break; if (anchors.every(a => Math.hypot(a.x - c.x, a.z - c.z) > 30)) anchors.push(c); }
   const N = anchors.length * REEF.fishPerSchool;
@@ -355,7 +364,7 @@ export function buildReef(root, W, decorate, uTime) {
     const R = seeded(si * 31 + 7), tint = new THREE.Color(tints[si % tints.length]);
     const school = { ax: a.x, ay: a.y + 3 + R() * 3, az: a.z, rad: 6 + R() * 6, w: 0.08 + R() * 0.06, ph: R() * TAU };
     for (let i = 0; i < REEF.fishPerSchool; i++) {
-      members.push({ school, ox: (R() - 0.5) * 4, oy: (R() - 0.5) * 1.6, oz: (R() - 0.5) * 4, ph: R() * TAU, s: 0.8 + R() * 0.5 });
+      members.push({ school, ox: (R() - 0.5) * 6, oy: (R() - 0.5) * 2.4, oz: (R() - 0.5) * 6, ph: R() * TAU, s: 1.3 + R() * 0.8 });   // etwas größer, damit man sie sieht
       fish.setColorAt(members.length - 1, tint);
     }
   });
