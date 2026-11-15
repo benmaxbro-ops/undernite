@@ -12,6 +12,9 @@ const TAU = Math.PI * 2;
 // mound = Korallen pro Meter Hügel-Radius, moundGlow = wie stark die Korallen-Berge leuchten
 // colorful = Anteil bunter Korallen auf den Hügeln (0 = alle warmgelb, 1 = alle bunt)
 export const REEF = { stones: 320, perCoral: 1, lettuce: 1, schoolsPerReef: 8, extraSchools: 4, fishPerSchool: 60, glow: 0.22, fishGlow: 0.4, mound: 3.4, moundMax: 44, moundGlow: 0.28, colorful: 0.6 };
+// Grafikqualität (aus den Einstellungen): 1 = alles, kleiner = weniger Korallen, Fische und Steine
+let QUAL = 1;
+export function setReefQuality(q) { QUAL = q; }
 // bunte Korallenfarben für den Bewuchs auf den Hügeln
 const BRIGHT = [0xff5d8f, 0xff9a3c, 0xc86bff, 0xffd84d, 0x35e0c8, 0xff6b5e, 0x7fb2ff, 0xff7ad9, 0x8fe86a, 0xffb0a0];
 // Riff-Farben: warm und leicht trüb (Gelb, Bernstein, Creme, Ocker) – so leuchten die Korallen-Berge
@@ -236,7 +239,7 @@ export function buildReef(root, W, decorate, uTime) {
     im.instanceColor.needsUpdate = true; root.add(im);
     // dicht bewachsen: Platten-, Hirn-, Tisch-Korallen und Röhrenschwämme auf der oberen Hälfte jedes Hügels
     mounds.forEach((m, i) => {
-      const R = seeded(i * 6151 + 11), n = Math.min(REEF.moundMax, Math.round(m.r * REEF.mound)), big = 0.7 + m.r * 0.12;   // auf großen Hügeln größere Korallen
+      const R = seeded(i * 6151 + 11), n = Math.round(Math.min(REEF.moundMax, m.r * REEF.mound) * QUAL), big = 0.7 + m.r * 0.12;   // auf großen Hügeln größere Korallen
       for (let k = 0; k < n; k++) {
         // Richtung auf dem Hügel (lokal, vor der Drehung), dann genau die Oberfläche in dieser Richtung nehmen
         const a = R() * TAU, up = 0.25 + R() * 0.75, h = Math.sqrt(1 - up * up), dx = Math.cos(a) * h, dz = Math.sin(a) * h, n = moundN(dx, up, dz) * 0.97;
@@ -255,7 +258,7 @@ export function buildReef(root, W, decorate, uTime) {
     const list = [];
     (W.reefSites || []).forEach((s, si) => {
       const R = seeded(si * 7331 + 1);
-      for (let k = 0; k < REEF.stones; k++) {
+      for (let k = 0; k < REEF.stones * QUAL; k++) {
         const a = R() * TAU, d = Math.sqrt(R()) * 30, x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d, slab = R() < 0.3;
         const r = slab ? 0.6 + R() * 1.2 : 0.15 + R() * R() * 1.1;
         // Felsplatten: flach und schräg gestellt → Nischen und Spalten
@@ -285,7 +288,7 @@ export function buildReef(root, W, decorate, uTime) {
   const BASE_KIND = [1, 0, 3], BASE_SCALE = [0.65, 0.8, 0.9];
   W.coral.forEach((c, i) => spots[BASE_KIND[c.type]].push({ x: c.x, y: c.y - 0.05, z: c.z, s: c.s * BASE_SCALE[c.type], rot: c.rot, tilt: 0, col: PAL[i % PAL.length], light: 1 }));
   W.coral.forEach((c, i) => {
-    const R = seeded(i * 7919 + 13), n = Math.floor(REEF.perCoral) + (R() < REEF.perCoral % 1 ? 1 : 0);
+    const R = seeded(i * 7919 + 13), pc = REEF.perCoral * QUAL, n = Math.floor(pc) + (R() < pc % 1 ? 1 : 0);
     for (let k = 0; k < n; k++) {
       const t = (R() * 6) | 0, a = R() * TAU, d = 0.8 + R() * 2.4;
       const x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d, y = W.heightAt(x, z) - 0.05;
@@ -342,7 +345,7 @@ export function buildReef(root, W, decorate, uTime) {
     }
   });
   for (const c of W.coral) { if (anchors.length >= (W.reefSites || []).length * REEF.schoolsPerReef + REEF.extraSchools) break; if (anchors.every(a => Math.hypot(a.x - c.x, a.z - c.z) > 30)) anchors.push(c); }
-  const N = anchors.length * REEF.fishPerSchool;
+  const N = anchors.length * Math.round(REEF.fishPerSchool * QUAL);
   const fishMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.45, side: THREE.DoubleSide });
   fishMat.onBeforeCompile = (sh) => {      // Schwanz schlägt hin und her
     sh.uniforms.uTime = uTime;
@@ -363,7 +366,7 @@ export function buildReef(root, W, decorate, uTime) {
   anchors.forEach((a, si) => {
     const R = seeded(si * 31 + 7), tint = new THREE.Color(tints[si % tints.length]);
     const school = { ax: a.x, ay: a.y + 3 + R() * 3, az: a.z, rad: 6 + R() * 6, w: 0.08 + R() * 0.06, ph: R() * TAU };
-    for (let i = 0; i < REEF.fishPerSchool; i++) {
+    for (let i = 0; i < Math.round(REEF.fishPerSchool * QUAL); i++) {
       members.push({ school, ox: (R() - 0.5) * 6, oy: (R() - 0.5) * 2.4, oz: (R() - 0.5) * 6, ph: R() * TAU, s: 1.3 + R() * 0.8 });   // etwas größer, damit man sie sieht
       fish.setColorAt(members.length - 1, tint);
     }

@@ -86,6 +86,20 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 @keyframes dirf{0%{opacity:.95}100%{opacity:0}}
 #spec{position:absolute;bottom:120px;left:50%;transform:translateX(-50%);padding:10px 20px;text-align:center;font-size:15px} #spec b{font-size:22px;color:var(--gold);display:block}
 #depth{font-size:12px;color:var(--mute);margin-top:8px;letter-spacing:.08em}
+/* Einstellungen */
+.setBtn{pointer-events:auto;cursor:pointer;display:block;margin:12px auto 0;padding:9px 16px;border:1px solid var(--line);border-radius:8px;background:rgba(4,22,34,.8);color:var(--ink);font:600 14px var(--display);letter-spacing:.06em}
+.setBtn:hover{border-color:var(--glow)}
+#settings{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(1,8,14,.7);pointer-events:auto}
+#settings.hidden{display:none}
+.setBox{width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:20px}
+.setBox h2{margin:0 0 12px}
+.setRow{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid rgba(94,242,224,.12);flex-wrap:wrap}
+.setRow span{flex:1;min-width:170px} .setRow input[type=range]{flex:1;min-width:140px} .setRow b{min-width:56px;text-align:right}
+.setRow input{accent-color:var(--glow)}
+.setRow select{background:#0a2433;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit}
+.setNote{color:var(--mute);font-size:12px;margin:-4px 0 6px}
+.setFoot{display:flex;gap:10px;margin-top:16px;align-items:center} .setFoot .setBtn{margin:0} .setFoot button.go{margin-top:0;flex:1}
+#fpsBox{position:fixed;left:12px;top:12px;padding:4px 8px;font-size:13px;z-index:40}
 #pause{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,12,20,.45);font:600 24px var(--display);letter-spacing:.08em;cursor:pointer}
 
 /* ---------- lobby ---------- */
@@ -177,7 +191,17 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
   <div id="slots"></div>
 </div>
 
-<div id="pause" class="hidden">KLICKEN ZUM TAUCHEN</div>
+<div id="pause" class="hidden"><div>KLICKEN ZUM TAUCHEN<button class="setBtn" id="setBtnPause">⚙ Einstellungen</button></div></div>
+
+<!-- Einstellungen (Inhalt baut settings.js) -->
+<div id="settings" class="hidden">
+  <div class="panel setBox">
+    <h2>Einstellungen</h2>
+    <div id="setRows"></div>
+    <div class="setFoot"><button class="setBtn" id="setReset">Zurücksetzen</button><button class="go" id="setClose">FERTIG</button></div>
+  </div>
+</div>
+<div id="fpsBox" class="panel num hidden"></div>
 
 <div id="lobby">
   <h1>UNDER<span>NITE</span></h1>
@@ -197,6 +221,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
       <ul id="plist"></ul>
       <label class="rng" id="botsRow">Bots <input type="range" id="bots" min="0" max="23" value="11"><b class="num" id="botsN">11</b></label>
       <button class="go" id="go">ABTAUCHEN</button>
+      <button class="setBtn" id="setBtnLobby">⚙ Einstellungen</button>
       <div class="hint" id="lan"></div>
     </div>
   </div>

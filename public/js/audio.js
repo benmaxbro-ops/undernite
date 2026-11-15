@@ -35,7 +35,9 @@ const CHARGE = [0.004, 0.003, 0.008, 0.01, 0.03, 0.03, 0.006, 0.015];
 const SHOT_FILES = ['shot_pistol', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic'];
 const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd'];
 export class Sfx {
-  constructor() { this.ctx = null; this.depth = 30; }
+  constructor() { this.ctx = null; this.depth = 30; this.vol = 0.8; }
+  // Lautstärke aus den Einstellungen (0 … 1)
+  setVolume(v) { this.vol = v; if (this.master) this.master.gain.value = 0.78 * v; }
   setDepth(d) { this.depth = d; }   // main.js sagt jedes Bild, wie tief man ist (für die Gasblasen-Physik)
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
@@ -45,7 +47,7 @@ export class Sfx {
     // Kompressor am Ende: macht laute Spitzen gleichmäßiger, so kann alles lauter sein, ohne zu übersteuern
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = 0.002; comp.release.value = 0.18;
     comp.connect(ctx.destination);
-    this.master = ctx.createGain(); this.master.gain.value = 0.62; this.master.connect(comp);
+    this.master = ctx.createGain(); this.master.gain.value = 0.78 * this.vol; this.master.connect(comp);
     this.world = ctx.createGain(); this.world.connect(this.master);   // alles außer den eigenen Schüssen (wird beim Schuss kurz leiser)
     // noise buffer shared by all noise based sounds
     const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);

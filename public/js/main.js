@@ -7,6 +7,8 @@ import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, 
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
+import { settings, onSettings, openSettings, closeSettings, QUALITY } from './settings.js';
+import { setReefQuality } from './reef.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -251,6 +253,7 @@ function onEvent(e) {
 // ---------- Finisher ----------
 const fins = [];      // alle Finisher, die gerade laufen
 let myFin = null;     // mein eigener (dann steuert die Animation meinen Taucher und die Kamera)
+let fpsN = 0, fpsT = 0;
 let lastGrunt = 0, sonarT = 2, bleedT = 0, bleedPuff = 0;   // bleedT = so lange blutest du noch   // sonarT = Sekunden bis zum nächsten Sonar-Ping im U-Boot
 const finCtx = {
   dyn, sfx, get env() { return env; },
@@ -346,12 +349,16 @@ addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; firing = false; });
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas) return;
-  const sens = 0.0022 * camera.fov / FOV;   // mit Zoom (kleines Sichtfeld) entsprechend langsamer
-  camYaw -= e.movementX * sens; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - e.movementY * sens));
+  const sens = 0.0022 * settings.sens * camera.fov / FOV;   // Mausempfindlichkeit aus den Einstellungen; mit Zoom entsprechend langsamer
+  camYaw -= e.movementX * sens; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - e.movementY * sens * (settings.invertY ? -1 : 1)));
 });
 const lock = () => { sfx.init(); if (phase === 'play' && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); };
 canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !== canvas) { lock(); return; } if (e.button === 2) { scoping = true; return; } if (e.button !== 0) return; if (held >= 0) { if (nearBase()) placeHeld(); return; } firing = true; });
 document.getElementById('pause').addEventListener('click', lock);
+// Einstellungen: aus der Lobby und aus dem Pause-Bildschirm (Esc) erreichbar
+for (const id of ['setBtnLobby', 'setBtnPause']) document.getElementById(id).addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
+addEventListener('keydown', (e) => { if (e.code === 'Escape') closeSettings(); });
+
 addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) scoping = false; });
 addEventListener('wheel', (e) => {
   if (phase !== 'play' || !you || !you.alive) return;
@@ -629,8 +636,16 @@ function updateEntities(dt) {
 // Je weniger Leben man hat, desto mehr wackelt es (SWAY_MIN bei vollem Leben, SWAY_MAX kurz vor dem Tod).
 // Rechte Maustaste halten = zielen. Waffen mit Zielfernrohr (scope: true) zoomen stark auf SCOPE_FOV,
 // alle anderen holt man vors Auge und schaut über Kimme und Korn (ADS_FOV = leichter Zoom).
-const FOV = 72, SCOPE_FOV = 16, ADS_FOV = 50, SWAY_MIN = 0.0015, SWAY_MAX = 0.018;
+let FOV = 72; const SCOPE_FOV = 16, ADS_FOV = 50, SWAY_MIN = 0.0015, SWAY_MAX = 0.018;
 let scoping = false, aim = 0, scoped = 0, swayT = 0, swayX = 0, swayY = 0;
+// Einstellungen anwenden (hier, weil FOV erst ab dieser Stelle existiert)
+onSettings((s) => {
+  sfx.setVolume(s.volume);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY[s.quality].pr)); resize();
+  setReefQuality(QUALITY[s.quality].reef);   // gilt ab der nächsten Welt (nächste Runde)
+  FOV = s.fov;
+  document.getElementById('fpsBox').classList.toggle('hidden', !s.fps);
+});
 const BREATH_VOL = 0.8;     // Lautstärke der Atemgeräusche
 const BREATH_SPRINT = 2.8; // so viel schneller atmet man beim Sprinten
 function updateScope(dt) {
@@ -843,6 +858,8 @@ function frame(now) {
   } else lobbyCamera();
   if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);
   renderer.render(scene, camera);
+  // FPS-Anzeige (Bilder pro Sekunde), zweimal pro Sekunde aktualisiert
+  if (settings.fps) { fpsN++; fpsT += dt; if (fpsT >= 0.5) { document.getElementById('fpsBox').textContent = Math.round(fpsN / fpsT) + ' FPS'; fpsN = 0; fpsT = 0; } }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
