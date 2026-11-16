@@ -46,7 +46,7 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [ ] **Bodycam-Look:** Bild am Rand gewölbt (Fischauge), dunkler runder Rand wie eine Taucherbrille, rot-blaue Farbsäume
 - [ ] **Rückstoß wie im Video:** Waffe und Kamera reißen zusammen hoch, aber das Wasser bremst. Gasblase statt Patronenhülse.
 - [ ] **Flüssiger schwimmen:** weniger stockig und eckig, weichere Bewegungen
-- [ ] **Hände sehen:** beim Schwimmen ab und zu die Hände vorne, wie beim Brustschwimmen
+- [x] **Hände sehen:** beim Schwimmen die Hände vorne, wie beim Brustschwimmen
 - [ ] **Waffe wegstecken** können
 - [ ] **Große Waffen mit beiden Händen halten:** eine Hand vorne, eine hinten, mehr in der Mitte vom Bildschirm
 - [ ] **Battle Royale viel heller:** der Boden soll leuchten, damit man sieht, wo unten ist. Riffe größer und spannender.
@@ -77,7 +77,8 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 
 - [x] **Stabwaffen:** Dreizack, Elektro-Speer, Kampfstab (Beute oder Startwaffe)
 - [x] **Waffen schöner und realistischer:** taktische Farben (Graphit, Stahl, Gummi), Metall spiegelt die Umgebung (Farben in GUN_LOOK, models.js)
-- [ ] **Brustschwimmen** mit Händen in der Ego-Sicht
+- [x] **Brustschwimmen** mit Händen in der Ego-Sicht (Werte: SWIM in main.js, Bewegung: SWIM_KEYS in models.js)
+- [ ] **Sonar-Radar statt Minikarte:** grüner Strahl dreht sich langsam, Gelände und Spieler leuchten kurz auf, wenn er drüberstreicht
 
 ## Fairness: Ligen
 

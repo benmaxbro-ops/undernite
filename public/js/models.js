@@ -805,6 +805,60 @@ export function makeReloadHand(suit) {
   return g;
 }
 
+// ---------- Brustschwimmen in der Ego-Sicht ----------
+// Zwei Arme vor der Kamera (Kamera-Koordinaten: x rechts, y oben, −z nach vorne). Jeder Arm: Schulter (außerhalb des Bildes)
+// → Ellbogen → Handgelenk → flache Hand mit geschlossenen Fingern. poseSwim(p) setzt alles für den Zeitpunkt p (0…1) im Zug.
+// Schlüssel-Momente für die RECHTE Hand (die linke ist gespiegelt): [Zeitpunkt, Position, Drehung (kippen, drehen, rollen)]
+//   Gleiten: Hände vorne zusammen · Auseinander: nach außen drücken · Ziehen: unter die Brust · Zurück: unter dem Kinn zusammen
+export const SWIM_KEYS = [
+  [0.0,  [0.05, -0.1, -0.48],  [-0.15, 0.1, -0.35]],   // Gleiten
+  [0.3,  [0.3, -0.12, -0.42],  [-0.1, -0.4, -1.1]],    // Auseinander (Handfläche nach außen)
+  [0.55, [0.17, -0.26, -0.34], [0.6, -0.2, -1.3]],     // Ziehen (Handfläche nach hinten)
+  [0.78, [0.06, -0.19, -0.3],  [0.2, 0.3, -1.45]],     // unter dem Kinn, Handflächen zueinander
+  [1.0,  [0.05, -0.1, -0.48],  [-0.15, 0.1, -0.35]],   // wieder Gleiten
+];
+export function makeSwimArms(suit) {
+  const g = new THREE.Group(), col = SUIT_COL[suit] || 0x1fd6b4, big = suit === 'bulwark' || suit === 'hammerhai' ? 1.25 : suit === 'manta' || suit === 'barrakuda' ? 0.9 : 1;
+  const glove = new THREE.MeshStandardMaterial({ color: 0x353d45, emissive: 0x141a20, emissiveIntensity: 0.65, roughness: 0.55, bumpMap: neoprene(), bumpScale: 0.8 });
+  const sleeve = new THREE.MeshStandardMaterial({ color: 0x1c2126, emissive: 0x0c1014, emissiveIntensity: 0.7, roughness: 0.8, bumpMap: neoprene(), bumpScale: 1.2 });
+  const acc = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4, roughness: 0.45 });
+  const D = new THREE.Vector3(), E = new THREE.Euler(), sides = [];
+  const seg = (m, a, b, r) => { D.copy(b).sub(a); const l = D.length() || 0.001; m.scale.set(r, r, l); m.position.copy(a).addScaledVector(D, 0.5); m.quaternion.setFromUnitVectors(Z_AXIS, D.normalize()); };
+  for (const s of [1, -1]) {
+    const hand = new THREE.Group(); hand.scale.setScalar(1.35); g.add(hand);   // in Ego-Spielen sind die Hände etwas größer, sonst sieht man sie kaum
+    // flache Hand: Handfläche, vier gestreckte Finger (leicht gebogen), Daumen seitlich – Finger zeigen nach −z, Handfläche nach unten
+    add(hand, RBOX, glove, 0, 0, 0.01).scale.set(0.075, 0.024, 0.085);
+    for (let i = 0; i < 4; i++) { const x = (-0.027 + i * 0.018) * s, len = [0.07, 0.08, 0.076, 0.062][i]; finger(hand, glove, [[x, 0, -0.03], [x * 1.02, -0.003, -0.03 - len * 0.55], [x * 1.04, -0.008, -0.03 - len]], i === 3 ? 0.0078 : 0.009); }
+    finger(hand, glove, [[-0.035 * s, -0.004, 0.02], [-0.05 * s, -0.006, -0.006], [-0.056 * s, -0.008, -0.03]], 0.0105);
+    const cuff = new THREE.Mesh(FINGER, acc), fore = new THREE.Mesh(FINGER, sleeve), upper = new THREE.Mesh(FINGER, sleeve), elbowB = new THREE.Mesh(KNUCKLE, sleeve);
+    g.add(cuff, fore, upper, elbowB);
+    sides.push({ s, hand, cuff, fore, upper, elbowB, wrist: new THREE.Vector3(), elbow: new THREE.Vector3(), shoulder: new THREE.Vector3(0.24 * s, -0.46, 0.12), back: new THREE.Vector3() });
+  }
+  const P = new THREE.Vector3(), Q = new THREE.Vector3(), R = new THREE.Vector3(), R2 = new THREE.Vector3();
+  const smooth = (x) => x * x * (3 - 2 * x);
+  // p = Zeitpunkt im Zug (0…1)
+  g.userData.pose = (p) => {
+    p = ((p % 1) + 1) % 1;
+    let i = 0; while (i < SWIM_KEYS.length - 2 && p > SWIM_KEYS[i + 1][0]) i++;
+    const [t0, p0, r0] = SWIM_KEYS[i], [t1, p1, r1] = SWIM_KEYS[i + 1], k = smooth((p - t0) / (t1 - t0));
+    P.set(...p0).lerp(Q.set(...p1), k); R.set(...r0).lerp(R2.set(...r1), k);
+    for (const S of sides) {
+      const s = S.s;
+      S.hand.position.set(P.x * s, P.y, P.z);
+      S.hand.rotation.copy(E.set(R.x, R.y * s, R.z * s, 'YXZ'));
+      S.wrist.set(0, 0, 0.06).applyEuler(S.hand.rotation).add(S.hand.position);                         // Handgelenk hinter der Hand
+      S.back.copy(S.wrist).sub(S.shoulder);
+      S.elbow.copy(S.shoulder).addScaledVector(S.back, 0.5).add(R2.set(0.09 * s, -0.08, 0.04));          // Ellbogen nach außen-unten geknickt
+      seg(S.cuff, S.wrist, R2.copy(S.elbow).sub(S.wrist).setLength(0.045).add(S.wrist), 0.03 * big);
+      seg(S.fore, R2.copy(S.elbow).sub(S.wrist).setLength(0.045).add(S.wrist), S.elbow, 0.034 * big);
+      seg(S.upper, S.elbow, S.shoulder, 0.042 * big);
+      S.elbowB.position.copy(S.elbow); S.elbowB.scale.setScalar(0.038 * big);
+    }
+  };
+  g.userData.pose(0);
+  return g;
+}
+
 // ---------- Nachladen: Magazin wechseln ----------
 // Die zweite Hand zieht das alte Magazin raus, steckt es hinten in den Rucksack (dort füllt es der Kompressor wieder),
 // holt das vollste Magazin raus, schiebt es ein und klopft es fest. Die Abschnitte (0 = Anfang, 1 = fertig):

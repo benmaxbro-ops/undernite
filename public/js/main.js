@@ -6,7 +6,7 @@ import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREAT
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
 import { buildEnvironment } from './world.js';
-import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy, makeGunEnv } from './models.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy, makeGunEnv, makeSwimArms } from './models.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
@@ -105,7 +105,10 @@ function makeFlash() {
   const c = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), m); c.position.z = -0.015; g.add(c);
   return g;
 }
-const view = { g: new THREE.Group(), gun: null, arms: null, rHand: null, rl: 0, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, tilt: 0, rsnd: 0, inX: 0, inY: 0 };
+const view = { g: new THREE.Group(), gun: null, arms: null, rHand: null, rl: 0, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, tilt: 0, rsnd: 0, inX: 0, inY: 0, swim: 0 };
+// Brustschwimmen (Ego-Sicht): minSpeed = ab diesem Tempo (m/s), rate = Züge pro Sekunde im Stand + rateSpeed pro m/s,
+// blendIn/blendOut = wie schnell die Arme kommen bzw. die Waffe wieder hochkommt
+const SWIM = { minSpeed: 2.5, rate: 0.35, rateSpeed: 0.035, blendIn: 3, blendOut: 10 };
 // Waffe vor der Kamera (Bodycam): hip = wo sie ohne Zielen sitzt [rechts, oben, nach innen gedreht] je Waffenart.
 // Pistole beidhändig unten in der Mitte, Gewehre etwas rechts, Werfer rechts.
 // inertia = wie stark sie beim Drehen nachschwingt, inertiaMax = höchstens so weit, inertiaBack = wie schnell sie zurückkommt
@@ -806,6 +809,7 @@ function tryFire(now) {
   shoot(v, w);
 }
 function shoot(v, w) {
+  view.lastShotT = performance.now();   // nach einem Schuss nicht gleich wieder Brustschwimmen
   const d = aimDir().map(x => +x.toFixed(4));
   send(aimAt ? { t: 'f', d, a: aimAt } : { t: 'f', d });
   if (w && WEAPONS[w[0]].melee) { view.kick = 1; view.kickPow = 1; sfx.noise(0.18, 700, 1, 0.35, 'bandpass', 1800); return; }   // Stoß: Waffe fährt nach vorne, Wusch
@@ -984,6 +988,19 @@ function updateViewModel(dt) {
   // Druckanzeige = wie voll das Magazin in der Waffe ist
   const def = w ? modDef(w[0], w[4]) : null;
   view.charge = def ? (reloading ? Math.max(0, done - RELOAD_STEPS.insert) / (1 - RELOAD_STEPS.insert) : w[2] / def.mag) : 0;
+  // Brustschwimmen: in der Ego-Sicht, beim Schwimmen ohne zu schießen/zielen/nachladen → Waffe runter, Arme ziehen
+  const spd = Math.hypot(me.vx, me.vy, me.vz), mechNow = !!SUITS[mySuit].mech;
+  const wantSwim = fpOn && !!(you && you.alive) && !you.veh && !mechNow && held < 0 && !firing && aim < 0.1 && !(you.rl > 0) && !chargeShot && !cling
+    && spd > SWIM.minSpeed && performance.now() - (view.lastShotT || 0) > 700;
+  view.swim += ((wantSwim ? 1 : 0) - view.swim) * Math.min(1, dt * (wantSwim ? SWIM.blendIn : SWIM.blendOut));
+  if (!view.swimArms || view.swimSuit !== mySuit) { if (view.swimArms) camera.remove(view.swimArms); view.swimArms = makeSwimArms(mySuit); view.swimSuit = mySuit; camera.add(view.swimArms); }
+  view.swimArms.visible = view.swim > 0.02 && fpOn;
+  if (view.swimArms.visible) {
+    view.swimPh = (view.swimPh || 0) + dt * (SWIM.rate + spd * SWIM.rateSpeed);
+    view.swimArms.userData.pose(view.swimPh);
+    view.swimArms.position.set(0, -0.45 * (1 - view.swim), 0.1 * (1 - view.swim));   // Arme kommen von unten ins Bild
+  }
+  handLight.intensity = view.swimArms.visible ? (lamp.intensity > 0 ? VIEW.hands[0] : VIEW.hands[1]) : 0;   // Helmlampe beleuchtet die Arme
   // im Mech sitzt man in der Ego-Perspektive hinter der Glaskuppel
   cockpit.visible = fpOn && !!(you && you.alive) && !!SUITS[mySuit].mech;
   // Mech-Geräusche: Motor und Propeller je nach Tempo, Hydraulik bei jedem Schritt, Servos beim schnellen Drehen
@@ -996,7 +1013,7 @@ function updateViewModel(dt) {
     sfx.mechServo(Math.min(1, Math.abs(view.inX) * 25));
   }
   // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
-  view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil;   // Fernrohr oder weggesteckt: keine Waffe
+  view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil && view.swim < 0.9;   // Fernrohr oder weggesteckt: keine Waffe
   if (!view.g.visible) return;
   const widx = WEAPON_IDS.indexOf(w[0]);
   const modKey = (w[4] || []).join(",");
@@ -1032,7 +1049,7 @@ function updateViewModel(dt) {
   view.inY += (Math.max(-VIEW.inertiaMax, Math.min(VIEW.inertiaMax, -dPitch * VIEW.inertia)) - view.inY) * inT;
   const breathe = Math.sin(time * 1.5) * VIEW.breathe * (1 - ads * 0.7);            // ganz leichtes Atmen
   const hip = VIEW.hip[U.kind] || VIEW.hip.rifle;                                    // wo die Waffe ohne Zielen sitzt
-  view.g.position.set(hip[0] * (1 - ads), hip[1] * (1 - ads), 0);
+  view.g.position.set(hip[0] * (1 - ads), hip[1] * (1 - ads) - view.swim * 0.4, view.swim * 0.1);   // beim Brustschwimmen nach unten weg
   view.gun.position.set(
     sx - U.sightAt[0] * ads + Math.cos(view.bob) * sway - view.tilt * 0.08 + view.inX * 0.5,
     sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.02 + view.inY * 0.5 + breathe,
