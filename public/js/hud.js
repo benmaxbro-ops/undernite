@@ -1,5 +1,5 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, ULTIS } from './shared.js';
 const perSec = (v) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
@@ -456,6 +456,18 @@ export class Hud {
     $('gadName').textContent = ready ? G.name : `${G.name} ${Math.ceil(gd[1])} s`;
     $('gadFill').style.width = Math.round((1 - gd[1] / G.cool) * 100) + '%';
     $('gadBox').classList.toggle('ready', ready);
+  }
+  // Ulti-Leiste: ul = [Prozent geladen, Sekunden noch aktiv] oder null (kein Ulti / Expedition)
+  ulti(ul, suit) {
+    const key = ul ? ul[0] + ':' + ul[1] : '';
+    if (key === this.ultKey) return; this.ultKey = key;
+    $('ultBox').classList.toggle('hidden', !ul);
+    $('ultFx').style.opacity = ul && ul[1] > 0 && suit === 'manta' ? 1 : 0;   // Matrix-Zeitlupe: Bild wird fast farblos
+    if (!ul) return;
+    const U = ULTIS[suit], on = ul[1] > 0, ready = !on && ul[0] >= 100;
+    $('ultName').textContent = on ? `${U.name} ${Math.ceil(ul[1])} s` : ready ? `${U.name} bereit!` : `${U.name} ${ul[0]} %`;
+    $('ultFill').style.width = (on ? Math.round(ul[1] / U.time * 100) : ul[0]) + '%';
+    $('ultBox').classList.toggle('ready', ready); $('ultBox').classList.toggle('on', on);
   }
   shock() { const s = $('shockFx'); s.style.opacity = 1; setTimeout(() => { s.style.opacity = 0; }, 180); }
   spec(html) { const el = $('spec'); el.classList.toggle('hidden', !html); if (html && this.sKey !== html) { this.sKey = html; el.innerHTML = html; } }

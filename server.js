@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME, ULTI, ULTIS,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -209,6 +209,8 @@ function damage(p, amt, src, how, sx, sz) {
   if (!p.alive || amt <= 0) return;
   // Schild-Generator (Bollwerk): Schüsse von Gegnern prallen ab
   if (G.time < (p.bubbleT || 0) && src && src.id && src !== p && how !== 'zone') { ev('deflect', p.id); return; }
+  // Manta-Ulti (Matrix): weicht jeder Kugel aus – nur Zone, Hitze und Bluten treffen noch
+  if (p.suit === 'manta' && G.time < (p.ultT || 0) && src && src !== p && how !== 'zone' && how !== 'burn' && how !== 'bleed') { ev('dodge', p.id); return; }
   if (!p.bot && src && src.bot) amt *= 0.7;        // bots hit humans a little softer
   if (p.bot && (how === 'shark' || how === 'octo' || how === 'jelly')) amt *= 0.5;
   if (p.bot && src && src.bot) amt *= 0.1;   // keep bot-vs-bot fights from emptying the lobby too early
@@ -221,6 +223,8 @@ function damage(p, amt, src, how, sx, sz) {
   const shieldBroke = hadShield && p.shield <= 0;
   if (shieldBroke && !p.bot) p.ye.push(['shb']);   // dein eigenes Schild ist kaputt
   p.hp -= a;
+  // wer trifft, lädt seine Ulti schneller auf
+  if (src && src.id && src !== p && ULTIS[src.suit] && G.time >= (src.ultT || 0)) src.ult = Math.min(100, (src.ult || 0) + amt * ULTI.perDmg);
   if (!p.bot) p.ye.push(['hurt', Math.round(amt), r2(sx ?? p.x), r2(sz ?? p.z), how === 'zone' || how === 'bleed' || how === 'burn' ? 1 : 0]);
   if (src && src.id && !src.bot && src !== p) src.ye.push(['hm', Math.round(amt), p.hp <= 0 ? 1 : 0, +(Math.max(0, p.hp) / p.maxhp).toFixed(2), shieldBroke ? 1 : 0]);
   if (p.bot && src && src.id && src !== p && src.alive && (!src.bot || G.time >= p.peaceUntil) && (!p.target || rnd() < 0.5)) {
@@ -516,6 +520,13 @@ function useGadget(p, m) {
   }
   p.gadT = G.time + g.cool;
   ev('gad', p.id, p.gad, r2(at.x), r2(at.y), r2(at.z));   // alle sehen und hören es
+}
+// ---------- Ultis (Battle Royale, Taste 4) – Werte in ULTIS (shared.js) ----------
+function useUlti(p) {
+  const U = ULTIS[p.suit];
+  if (!U || (p.ult || 0) < 100 || p.veh || G.time < (p.ultT || 0)) return;
+  p.ult = 0; p.ultT = G.time + U.time;
+  ev('ult', p.id, SUIT_ORDER.indexOf(p.suit));   // alle sehen und hören es
 }
 function gadgetTick() {
   // Köder: Haie in der Nähe stürzen sich auf Gegner am Köder
@@ -1330,6 +1341,9 @@ function tick(dt) {
     ventHeat(p);
     coralCut(p, dt);
     if (p.ink > 0) p.ink -= dt;
+    // Ulti-Leiste füllt sich langsam von allein (nicht, während die Ulti läuft); Bots zünden sie, wenn sie kämpfen
+    if (p.alive && ULTIS[p.suit] && G.time >= (p.ultT || 0)) p.ult = Math.min(100, (p.ult || 0) + dt * 100 / ULTI.fill);
+    if (p.bot && p.alive && p.ult >= 100 && p.target) useUlti(p);
     if (dist2d(p, z.x, z.z) > z.r) { p.zoneAcc += dps * dt; if (p.zoneAcc >= 1) { const a = Math.floor(p.zoneAcc); p.zoneAcc -= a; damage(p, a, null, 'zone', z.x, z.z); } }
     if (p.alive) autoCollect(p);
   }
@@ -1376,7 +1390,8 @@ function snapshot() {
       you = { alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxhp, sh: Math.round(p.shield), slot: p.slot, kills: p.kills, place: p.place,
         w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo, (w.spare || []).map(s => Math.round(s * 100) / 100), w.mods || []] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)),
-        gd: p.gad >= 0 ? [p.gad, r2(Math.max(0, (p.gadT || 0) - G.time))] : null };   // Gadget: Nummer und wie lange es noch abkühlt
+        gd: p.gad >= 0 ? [p.gad, r2(Math.max(0, (p.gadT || 0) - G.time))] : null,   // Gadget: Nummer und wie lange es noch abkühlt
+        ul: ULTIS[p.suit] && G.mode !== 'exp' ? [Math.floor(p.ult || 0), r2(Math.max(0, (p.ultT || 0) - G.time))] : null };   // Ulti: Prozent geladen, Sekunden noch aktiv
       if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, e) => a + fishValue(e), 0), air: r2(p.air),
         tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)),
         bagL: p.bag.map(catchToNet), aq: p.aq.map(catchToNet), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 100) / 100, afk: p.afk ? 1 : 0, base: p.baseIdx };
@@ -1454,6 +1469,7 @@ wss.on('connection', (ws) => {
       // Einkaufen und Ausrüsten: in der Lobby – oder während der Runde, wenn man schon tot ist (oder nur zuschaut)
       case 'brbuy': if (G.phase === 'lobby' || !p || !p.alive) { brBuy(c, m.k); send(ws, lobbyMsg()); if (G.phase === 'lobby') broadcast(lobbyMsg()); } break;
       case 'load': if (G.phase === 'lobby' || !p || !p.alive) { setLoadout(c, m); send(ws, lobbyMsg()); if (G.phase === 'lobby') broadcast(lobbyMsg()); } break;
+      case 'ult': if (p && p.alive && G.mode !== 'exp') useUlti(p); break;
       case 'gad': if (p && p.alive && G.mode !== 'exp') { try { useGadget(p, m); } catch (err) { console.error('[gadget error]', err); } } break;
       case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':

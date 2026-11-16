@@ -147,6 +147,14 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
 #gadBox{position:absolute;right:24px;bottom:120px;display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:9px;background:rgba(4,22,34,.7);border:1px solid var(--line);font:600 14px var(--display);color:var(--ink)}
 #gadBox.hidden{display:none} #gadBox i{display:block;width:70px;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden} #gadBox u{display:block;height:100%;background:var(--glow)}
 #gadBox.ready{border-color:var(--glow);box-shadow:0 0 12px rgba(94,242,224,.35)}
+/* Ulti-Leiste (Taste 4) über dem Gadget; voll = sie leuchtet golden */
+#ultBox{position:absolute;right:24px;bottom:162px;display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:9px;background:rgba(4,22,34,.7);border:1px solid var(--line);font:600 14px var(--display);color:var(--ink)}
+#ultBox.hidden{display:none} #ultBox i{display:block;width:70px;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden} #ultBox u{display:block;height:100%;background:#ffc94d}
+#ultBox.ready{border-color:#ffc94d;box-shadow:0 0 14px rgba(255,201,77,.5);animation:ultPulse 1s ease-in-out infinite alternate}
+#ultBox.on u{background:#7dffb0}
+@keyframes ultPulse{to{box-shadow:0 0 22px rgba(255,201,77,.85)}}
+/* Matrix-Zeitlupe: Farben fast weg, grüner Schimmer am Rand */
+#ultFx{background:radial-gradient(ellipse at center,transparent 50%,rgba(60,255,140,.22) 100%);backdrop-filter:saturate(.3) contrast(1.15);opacity:0;transition:opacity .35s}
 #brShopBtn{position:absolute;top:16px;right:16px;cursor:pointer;padding:10px 18px;border:1px solid #ffd36b;border-radius:10px;background:rgba(40,30,8,.85);color:#ffd36b;font:700 16px var(--display);letter-spacing:.08em}
 #brShopBtn:hover{background:rgba(70,52,12,.95)}
 #deathFx{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:16}
@@ -192,8 +200,9 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
 <canvas id="c"></canvas>
 
 <div id="hud" class="hidden">
+  <div id="ultBox" class="hidden"><kbd>4</kbd><b id="ultName"></b><i><u id="ultFill"></u></i></div>
   <div id="gadBox" class="hidden"><kbd>Q</kbd><b id="gadName"></b><i><u id="gadFill"></u></i></div>
-  <div class="fs" id="zoneTint"></div><div class="fs" id="vign"></div><div class="fs" id="shockFx"></div><div class="fs" id="ink"></div>
+  <div class="fs" id="zoneTint"></div><div class="fs" id="vign"></div><div class="fs" id="shockFx"></div><div class="fs" id="ink"></div><div class="fs" id="ultFx"></div>
   <div id="dirs"></div>
   <div id="feed"></div>
   <div id="zoneTxt" class="panel num"></div>

@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf, modDef, DRAW_TIME } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf, modDef, DRAW_TIME, ULTIS, SUIT_ORDER } from './shared.js';
 // gekaufte Verbesserungen aus dem Perlen-Shop (kommen mit der Lobby-Nachricht). Wirken nur im Battle Royale.
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
@@ -276,6 +276,22 @@ function useGadget() {
   if (!you || !you.alive || !you.gd || you.gd[1] > 0) { if (you && you.gd && you.gd[1] > 0) hud.banner(`${GADGETS[you.gd[0]].name} lädt noch ${Math.ceil(you.gd[1])} s`, 1); return; }
   send({ t: 'gad', d: dirFrom(camYaw, camPitch).map(v => +v.toFixed(3)) });
 }
+// ---------- Ultis (Taste 4) – Werte in ULTIS (shared.js) ----------
+const ultOn = () => !!(you && you.alive && you.ul && you.ul[1] > 0);   // läuft deine Ulti gerade?
+function useUlti() {
+  if (!you || !you.alive || !you.ul) return;
+  const U = ULTIS[mySuit];
+  if (you.ul[1] > 0) return;
+  if (you.ul[0] < 100) { hud.banner(`${U.name} lädt noch (${you.ul[0]} %)`, 1); return; }
+  send({ t: 'ult' });
+}
+function onUlti(e) {
+  const pe = players.get(e[1]), suit = SUIT_ORDER[e[2]], U = ULTIS[suit]; if (!pe || !U) return;
+  const mine = e[1] === myId, vol = mine ? 1 : volAt(pe.x, pe.y, pe.z);
+  if (mine) hud.banner(`${U.name}!`, 1.4);
+  if (suit === 'manta') { sfx.tone(320, 55, 1.1, 0.55 * vol, 'sine'); sfx.noise(1.0, 600, 0.8, 0.3 * vol, 'lowpass', 120); }   // tiefes Wuuumm: die Zeit wird langsam
+  else { for (let i = 0; i < 3; i++) sfx.tone(1300, 1300, 0.07, 0.25 * vol, 'square', i * 0.12); }   // Piep-piep-piep: der Zielcomputer schaltet sich ein
+}
 const SHIELD_GEO = new THREE.SphereGeometry(1, 32, 18), DRONE_GEO = new THREE.SphereGeometry(0.16, 16, 12), DRONE_RING = new THREE.TorusGeometry(0.24, 0.035, 8, 24);
 function onGadget(e) {
   const [, id, gi, x, y, z] = e, g = GADGETS[gi], pe = players.get(id); if (!g) return;
@@ -421,6 +437,9 @@ function onEvent(e) {
     }
     case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); spawnCorpse(e[3]); break; }
     case 'gad': onGadget(e); break;
+    case 'ult': onUlti(e); break;
+    // Manta in Matrix-Zeitlupe weicht aus: die Kugel zischt vorbei
+    case 'dodge': { const pe = players.get(e[1]); if (pe) sfx.whoosh(0.6 * (e[1] === myId ? 1 : volAt(pe.x, pe.y, pe.z))); break; }
     // Stabwaffe: ['melee', Spieler, Waffe, getroffen, x, y, z] – Wusch, bei Treffer ein dumpfer Schlag und Blasen
     case 'melee': {
       const pe = players.get(e[1]); if (!pe) break;
@@ -601,6 +620,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') { firstPerson = !firstPerson; return; }   // Ego-Perspektive an/aus
   if (e.code === 'KeyC' && canCling()) { toggleCling(); return; }  // Deckung: am Riff festhalten / loslassen
   if (e.code === 'KeyQ' && mode !== 'exp') { useGadget(); return; } // Gadget
+  if (e.code === 'Digit4' && mode !== 'exp') { useUlti(); return; } // Ulti
   if (e.code === 'KeyG') { const t = finTarget(); if (t) send({ t: 'fin', id: t.id }); return; }   // Finisher
   if (e.code === 'KeyL') {
     if (mode === 'exp' && torch.bat <= 0) hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 2);
@@ -679,7 +699,7 @@ const flow = { f: 0, s: 0, u: 0, roll: 0 };
 // ---------- local player ----------
 function controlMe(dt) {
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
-  let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
+  let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1) * (mySuit === 'manta' && ultOn() ? ULTIS.manta.speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
   if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
   if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
@@ -1270,6 +1290,7 @@ function frame(now) {
     const sonar = time < gfx.sonarUntil ? GADGETS[gadgetOf('triton')].range : 0;
     const sense = mode !== 'exp' && you && you.alive ? Math.max(SUITS[mySuit].sense || 0, sonar) : 0;
     hud.gadget(mode !== 'exp' && you && you.alive ? you.gd : null);
+    hud.ulti(mode !== 'exp' && you && you.alive ? you.ul : null, mySuit);
     if (sense) for (const e of players.values()) if (e.id !== myId && e.mesh.visible && Math.hypot(e.x - me.x, e.y - me.y, e.z - me.z) < sense) marks.push({ x: e.x, z: e.z, c: '#ff4d4d', s: 3 });
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap

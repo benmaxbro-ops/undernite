@@ -136,6 +136,18 @@ export const GADGETS = [
     desc: 'Ein Stromstoß: Gegner bis 8 m sind 1,8 Sekunden gelähmt (langsam, können nicht schießen) und bekommen 10 Schaden.' },
 ];
 export const gadgetOf = (suit) => GADGETS.findIndex(g => g.suit === suit);   // Nummer des Gadgets dieses Tauchers (-1 = keins)
+
+// ---------- Ultis (Battle Royale, Taste 4) ----------
+// Die Ulti-Leiste füllt sich von allein (voll nach fill Sekunden) und schneller, wenn du Gegner triffst
+// (perDmg = so viel Prozent pro Schadenspunkt). Ist sie voll, drückst du 4.
+export const ULTI = { fill: 120, perDmg: 0.35 };
+// time = so viele Sekunden wirkt die Ulti. Taucher ohne Eintrag haben (noch) keine Ulti.
+export const ULTIS = {
+  manta:   { name: 'Matrix',      time: 5, speed: 1.35,
+             desc: 'Zeitlupe wie in Matrix: 5 Sekunden lang weichst du jeder Kugel aus und schwimmst schneller.' },
+  goliath: { name: 'Zielcomputer', time: 6,
+             desc: 'Der Mech-Computer zielt 6 Sekunden lang automatisch auf den nächsten Gegner, den du siehst.' },
+};
 // Waffen-Aufsätze (Ausrüstungs-Fenster, nur für die Startwaffe). Pro Platz (slot) passt einer drauf.
 // for = auf welche Waffen er passt. Gekauft wird er für jede Waffe einzeln.
 // Wirkung (malgenommen): mag = Magazin, reload = Nachladezeit, spread = Streuung, range = Reichweite, speed = Geschosstempo,
