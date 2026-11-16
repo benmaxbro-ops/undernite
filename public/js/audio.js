@@ -38,9 +38,9 @@ export const PLASMA = {
 // Je tiefer, desto höher der Wasserdruck → desto schneller schwingt die Blase (in der Tiefsee ein kurzes, hartes "Brrumm").
 export const bubblePeriod = (W, depth) => 2.11 * Math.cbrt(W) / Math.pow(Math.max(0, depth) + 10, 5 / 6);
 // Ladung (kg) je Waffe – nur für den Klang (Reihenfolge wie WEAPON_IDS)
-const CHARGE = [0.004, 0.003, 0.008, 0.01, 0.03, 0.03, 0.006, 0.015, 0.009, 0.002, 0.012, 0.012];
+const CHARGE = [0.004, 0.003, 0.008, 0.01, 0.03, 0.03, 0.006, 0.015, 0.009, 0.002, 0.012, 0.012, 0.004, 0.004, 0.004];
 // Schuss-Aufnahme je Waffe (Reihenfolge wie WEAPON_IDS)
-const SHOT_FILES = ['shot_pistol', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic', 'shot_harpoon', 'shot_needler', 'shot_torpedo', 'shot_plasma'];
+const SHOT_FILES = ['shot_pistol', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic', 'shot_harpoon', 'shot_needler', 'shot_torpedo', 'shot_plasma', 'shot_pistol', 'shot_pistol', 'shot_pistol'];
 const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd', 'knock_small', 'knock_big', 'burn_ah1', 'burn_ah2'];
 export class Sfx {
   constructor() { this.ctx = null; this.depth = 30; this.vol = 0.8; }

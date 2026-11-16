@@ -14,7 +14,7 @@ import { settings, onSettings, openSettings, closeSettings, QUALITY } from './se
 import { setReefQuality } from './reef.js';
 import { makeShock, makeBlast, SHOCK } from './shock.js';
 // so weit hinter der Mündung sitzen die Seitenkiemen je Waffe (Meter) – dort kommt beim Hitze-Ablassen der Druck raus
-const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6, 0.16, 0.24, 0.4, 0.32];
+const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6, 0.16, 0.24, 0.4, 0.32, 0.3, 0.3, 0.3];
 import { makeLensPass } from './lens.js';
 import { makeMechViewArms, makeCockpit } from './mech.js';
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
@@ -376,6 +376,19 @@ function onEvent(e) {
     }
     case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); break; }
     case 'gad': onGadget(e); break;
+    // Stabwaffe: ['melee', Spieler, Waffe, getroffen, x, y, z] – Wusch, bei Treffer ein dumpfer Schlag und Blasen
+    case 'melee': {
+      const pe = players.get(e[1]); if (!pe) break;
+      if (e[1] !== myId) sfx.noise(0.18, 700, 1, 0.3 * volAt(pe.x, pe.y, pe.z), 'bandpass', 1800);
+      if (e[3]) {
+        const v = e[1] === myId ? 1 : volAt(e[4], e[5], e[6]);
+        sfx.tone(140, 55, 0.18, 0.8 * v, 'sine'); sfx.noise(0.12, 900, 1, 0.5 * v, 'lowpass', 200);
+        env.bubble(e[4], e[5], e[6], 10, 0.4, 1.5);
+        if (WEAPON_IDS[e[2]] === 'espear') { sfx.zap(0.6, 0.7 * v); for (let i = 0; i < 4; i++) { const a = Math.random() * 6.28; addBeam(e[4], e[5], e[6], e[4] + Math.cos(a), e[5] + (Math.random() - 0.5), e[6] + Math.sin(a), 0.02); } }
+        if (e[1] === myId) shake = Math.max(shake, 0.15);
+      }
+      break;
+    }
     // Treffer mit Netz oder Magnet sieht man auch bei anderen: Netz = Blasenwolke, Magnet = violette Blitze
     case 'net': { const pe = players.get(e[1]); if (pe) env.bubble(pe.x, pe.y, pe.z, 16, 0.8, 0.5); break; }
     case 'emp': {
@@ -788,12 +801,13 @@ function tryFire(now) {
     sfx.charge(WEAPON_IDS.indexOf(w[0]), ct / 1000);
     return;
   }
-  if (w) w[2]--;
+  if (w && !WEAPONS[w[0]].melee) w[2]--;   // Stabwaffen haben keine Munition
   shoot(v, w);
 }
 function shoot(v, w) {
   const d = aimDir().map(x => +x.toFixed(4));
   send(aimAt ? { t: 'f', d, a: aimAt } : { t: 'f', d });
+  if (w && WEAPONS[w[0]].melee) { view.kick = 1; view.kickPow = 1; sfx.noise(0.18, 700, 1, 0.35, 'bandpass', 1800); return; }   // Stoß: Waffe fährt nach vorne, Wusch
   recoil(v ? WEAPONS.subtorp : modDef(w[0], w[4]));
 }
 function computePrompt() {
@@ -1021,7 +1035,7 @@ function updateViewModel(dt) {
   view.gun.position.set(
     sx - U.sightAt[0] * ads + Math.cos(view.bob) * sway - view.tilt * 0.08 + view.inX * 0.5,
     sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.02 + view.inY * 0.5 + breathe,
-    z - ads * 0.04 + K * 0.075);                                                    // Rückstoß: die Waffe fährt nach hinten
+    z - ads * 0.04 + (U.kind === 'pole' ? -K * 0.35 : K * 0.075));             // Rückstoß: die Waffe fährt nach hinten – Stabwaffe: Stoß nach vorne
   view.gun.rotation.set(K * 0.2 + view.tilt * 0.15 - view.inY * 1.2, view.tilt * 0.3 + view.inX * 1.4 + (hip[2] || 0) * (1 - ads),
     -view.tilt * 1.15 + K * (view.kickRoll || 0) + view.inX * 1.8);              // −z-Drehung = Boden nach links
   // der Schlitten / Spannhebel fährt bei jedem Schuss kurz zurück

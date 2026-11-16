@@ -39,7 +39,7 @@ export const SUITS = {
 };
 
 // Neue Waffen immer HINTEN anhängen (der Server schickt die Nummer in dieser Liste)
-export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp', 'plasma', 'sonic', 'revolver', 'spikemg', 'netgun', 'magrifle'];
+export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp', 'plasma', 'sonic', 'revolver', 'spikemg', 'netgun', 'magrifle', 'trident', 'espear', 'staff'];
 // range = how far (metres) a shot flies before it is gone. The starter pistol has the shortest.
 // hitscan: true = trifft sofort (kein Flug), schießt einen Wasserstrahl. beam = Dicke des Strahls in Metern.
 // scope: true = mit der rechten Maustaste durchs Zielfernrohr schauen (je weniger Leben, desto wackliger).
@@ -60,6 +60,11 @@ export const WEAPONS = {
   netgun:   { name: 'Netzwerfer',      dmg: 12, rate: 0.8, speed: 38,  mag: 3,  reload: 3.2, spread: 0.01,  range: 40, pellets: 1, splash: 0, net: 3 },
   // Magnet-Gewehr: bekommt jeder außer dem Goliath zu Rundenbeginn. Nur 2 Schuss (1 im Magazin + 1 Ersatz-Magnet), der Kompressor füllt nichts nach.
   magrifle: { name: 'Magnet-Gewehr',   dmg: 22, rate: 1.0, speed: 150, mag: 1,  reload: 3.4, spread: 0.003, range: 55, pellets: 1, splash: 0, hitscan: true, beam: 0.1, emp: 3.5, scope: true, spares: 1, noRefill: true },
+  // ----- Stabwaffen (Nahkampf): keine Munition, kein Nachladen, keine Hitze. Linksklick = Stoß nach vorne. -----
+  // range = Reichweite des Stoßes (Meter), arc = wie genau man zielen muss (0.8 = ca. 37° nach jeder Seite), push = wegstoßen, stun = lähmt (Sekunden)
+  trident: { name: 'Dreizack',     dmg: 38, rate: 1.4, speed: 30, mag: 1, reload: 0, spread: 0, range: 3.2, pellets: 1, splash: 0, melee: true, arc: 0.82 },
+  espear:  { name: 'Elektro-Speer', dmg: 24, rate: 1.1, speed: 30, mag: 1, reload: 0, spread: 0, range: 3.6, pellets: 1, splash: 0, melee: true, arc: 0.86, stun: 0.9 },
+  staff:   { name: 'Kampfstab',    dmg: 20, rate: 2.0, speed: 30, mag: 1, reload: 0, spread: 0, range: 2.7, pellets: 1, splash: 0, melee: true, arc: 0.72, push: 14 },
 };
 for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
 // Aufladen vor jedem Schuss (Sekunden): erst baut sich der Druck auf (die Kiemen gehen auf), dann geht der Schuss
@@ -75,7 +80,7 @@ for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight 
 //   holster = so viele Sekunden muss man die Waffe wegstecken, wenn der Schaden mindestens holsterAt × dmg war
 export const HEAT = { start: 1 / 3, minStart: 4, cool: 1, dmg: 20, pause: 0.8, daze: 4, holster: 2, holsterAt: 0.7 };
 export const heatStart = (mag) => Math.max(HEAT.minStart, Math.round(mag * HEAT.start));   // ab so viel Hitze (in Schüssen) tut es weh
-export const SHOT_CHARGE = { pistol: 0.1, needler: 0.08, scatter: 0.15, harpoon: 0.3, torpedo: 0.25, subtorp: 0, plasma: 0.08, sonic: 0.3, revolver: 0.12, spikemg: 0.03, netgun: 0.2, magrifle: 0.25 };
+export const SHOT_CHARGE = { pistol: 0.1, needler: 0.08, scatter: 0.15, harpoon: 0.3, torpedo: 0.25, subtorp: 0, plasma: 0.08, sonic: 0.3, revolver: 0.12, spikemg: 0.03, netgun: 0.2, magrifle: 0.25, trident: 0, espear: 0, staff: 0 };
 // Kompressor im Rucksack: Jede Waffe hat ein Magazin in der Waffe und "spares" Ersatzmagazine im Rucksack.
 // Der Kompressor füllt die Ersatzmagazine nacheinander wieder auf. fill = Sekunden, bis ein leeres Magazin wieder voll ist.
 // Beim Nachladen kommt das alte Magazin zurück in den Rucksack und wird dort wieder gefüllt.
@@ -83,7 +88,7 @@ export const SHOT_CHARGE = { pistol: 0.1, needler: 0.08, scatter: 0.15, harpoon:
 // Man kann also nicht durchgehend ballern, sondern muss mit der Munition haushalten.
 export const COMPRESSOR = {
   spares: 2,
-  fill: { pistol: 16, needler: 15, scatter: 17, harpoon: 15, torpedo: 13, subtorp: 1, plasma: 23, sonic: 17, revolver: 17, spikemg: 18, netgun: 17, magrifle: 18 },
+  fill: { pistol: 16, needler: 15, scatter: 17, harpoon: 15, torpedo: 13, subtorp: 1, plasma: 23, sonic: 17, revolver: 17, spikemg: 18, netgun: 17, magrifle: 18, trident: 1, espear: 1, staff: 1 },
 };
 
 // Finisher (nur Battle Royale): hat ein Gegner höchstens hp × 100 % Leben und ist nah genug (range in Metern),
@@ -175,6 +180,9 @@ export const BR_WEAPONS = [
   { wid: 'revolver', price: 550 },
   { wid: 'netgun',   price: 650 },
   { wid: 'spikemg',  price: 900 },
+  { wid: 'staff',    price: 350 },
+  { wid: 'trident',  price: 600 },
+  { wid: 'espear',   price: 800 },
 ];
 // Bonus in Prozent für einen Spieler (up = { reload: 2, ... }), 0 = nicht gekauft
 export const upBonus = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), l = (up && up[k]) | 0; return u && l > 0 ? u.bonus[Math.min(l, u.bonus.length) - 1] : 0; };

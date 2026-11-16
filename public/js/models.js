@@ -279,10 +279,11 @@ export function makePickup(kind, wid, rar) {
 
 // ---------- projectiles ----------
 const PGEO = [zCapsule(0.05, 0.5, 5), zCapsule(0.035, 0.7, 5), new THREE.SphereGeometry(0.08, 6, 5), zCyl(0.03, 0.03, 1.6, 5), zCapsule(0.16, 0.8, 8), zCapsule(0.2, 1.0, 8), zCapsule(0.07, 1.1, 6), new THREE.TorusGeometry(0.35, 0.06, 6, 16),
-  zCapsule(0.06, 0.5, 5), zCapsule(0.025, 0.45, 4), new THREE.IcosahedronGeometry(0.35, 1), zCapsule(0.06, 0.9, 6)];   // Revolver, Stachel-MG, Netz, Magnet
+  zCapsule(0.06, 0.5, 5), zCapsule(0.025, 0.45, 4), new THREE.IcosahedronGeometry(0.35, 1), zCapsule(0.06, 0.9, 6),
+  zCapsule(0.03, 0.3, 4), zCapsule(0.03, 0.3, 4), zCapsule(0.03, 0.3, 4)];   // Stabwaffen (fliegen nicht, nur Platzhalter)   // Revolver, Stachel-MG, Netz, Magnet
 // Alle Waffen schießen komprimiertes Wasser: jede Waffe hat ihr eigenes Blau (hell = klein, dunkel/kräftig = groß).
 //               Pistole   Nadler    Splitter  Harpune   Torpedo   Bordtorp. Plasma    Schall    Revolver  Stachel   Netz      Magnet
-const SHOT_COL = [0x9fe4ff, 0x6fd6ff, 0xbff0ff, 0xe8f8ff, 0x2f8cff, 0x2f8cff, 0x4dc3ff, 0x1f6bff, 0xcfefff, 0x8fe0ff, 0xd8ffe0, 0xc28bff];
+const SHOT_COL = [0x9fe4ff, 0x6fd6ff, 0xbff0ff, 0xe8f8ff, 0x2f8cff, 0x2f8cff, 0x4dc3ff, 0x1f6bff, 0xcfefff, 0x8fe0ff, 0xd8ffe0, 0xc28bff, 0xffffff, 0x5ef2e0, 0xffffff];
 const PMAT = SHOT_COL.map(c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 }));
 export function makeProjectile(widx) { return new THREE.Mesh(PGEO[widx] || PGEO[0], PMAT[widx] || PMAT[0]); }
 
@@ -303,6 +304,9 @@ const GUNS = [
   /* 9 Stachel-MG     */ { kind: 'rifle',  L: 0.36, H: 0.055, W: 0.045, barrel: 0.26, br: 0.01,  gills: 5, stock: 'full', magK: 1.35, spikes: true },
   /*10 Netzwerfer     */ { kind: 'tube',   L: 0.6,  R: 0.085, gills: 4, net: true },
   /*11 Magnet-Gewehr  */ { kind: 'rifle',  L: 0.42, H: 0.06,  W: 0.05,  barrel: 0.38, br: 0.014, gills: 4, stock: 'full', scope: true, magK: 1.0, coil: true },
+  /*12 Dreizack       */ { kind: 'pole',   L: 1.5,  R: 0.016, head: 'trident' },
+  /*13 Elektro-Speer  */ { kind: 'pole',   L: 1.6,  R: 0.015, head: 'spear' },
+  /*14 Kampfstab      */ { kind: 'pole',   L: 1.4,  R: 0.022, head: 'staff' },
 ];
 const GUN_WHITE = 0xf2f7fa, GUN_BLUE = 0x2fa8ff;
 const SIGHT_GLOW = 0x6dff8a;   // Farbe der Leuchtpunkte auf Kimme und Korn (grün wie echte Leuchtvisiere)
@@ -529,6 +533,32 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     gills(P.gills, front * 0.15, 0.03, H * 0.05, H * 0.75, W / 2 + 0.002);
     grip(-H / 2, W);
     muzzleAt = [0, bv, -(tip + 0.045)]; gripTop = -H / 2; gripW = W; support = [0, -H * 0.42, -(front + hg * 0.5)];
+  } else if (P.kind === 'pole') {
+    // Stabwaffe: langer Schaft, die rechte Hand hält ihn hinten (Ursprung), die linke weiter vorne
+    const { L, R } = P, back = 0.28, front = L - back, tipU = front;
+    tube(metal, -back, front, 0, R);                                                         // Schaft
+    for (let i = 0; i < 9; i++) tube(gripM, -0.06 + i * 0.016, -0.06 + i * 0.016 + 0.012, 0, R * 1.18);   // Griffwicklung hinten
+    for (let i = 0; i < 9; i++) tube(gripM, 0.32 + i * 0.016, 0.32 + i * 0.016 + 0.012, 0, R * 1.18);    // Griffwicklung vorne
+    ring(-back, 0, R * 1.3); ring(front - 0.02, 0, R * 1.25);                                  // blaue Ringe an den Enden
+    if (P.head === 'trident') {   // Dreizack: Querstück und drei Zinken mit Widerhaken
+      box(metal, front, front + 0.03, -0.016, 0.016, 0.19);
+      for (const x of [-0.08, 0, 0.08]) {
+        const len = x ? 0.28 : 0.34, z = part(GUN_CYL, metal, x, 0, -(front + 0.025 + len / 2)); z.scale.set(0.01, 0.01, len);
+        const tip = part(new THREE.ConeGeometry(1, 1, 12).rotateX(-Math.PI / 2), blue, x, 0, -(front + 0.025 + len + 0.025)); tip.scale.set(0.016, 0.016, 0.07);
+        const barb = part(GEO.box, metal, x + (x ? Math.sign(x) * 0.008 : 0.008), 0, -(front + 0.025 + len - 0.03)); barb.scale.set(0.004, 0.005, 0.03); barb.rotation.y = x ? Math.sign(x) * 0.5 : 0.5;
+      }
+      muzzleAt = [0, 0, -(front + 0.42)];
+    } else if (P.head === 'spear') {   // Elektro-Speer: Spulen, dann eine flache Klinge mit leuchtender Kante
+      const coilM = new THREE.MeshStandardMaterial({ color: 0x5ef2e0, emissive: 0x5ef2e0, emissiveIntensity: 1.8 });
+      for (let i = 0; i < 5; i++) { const c = add(g, GEO.torus, coilM, 0, 0, -(front - 0.12 + i * 0.022)); c.scale.setScalar(R * 1.6); }
+      const blade = part(KNUCKLE, metal, 0, 0, -(front + 0.17)); blade.scale.set(0.055, 0.011, 0.21);
+      const edge = part(KNUCKLE, coilM, 0, 0, -(front + 0.17)); edge.scale.set(0.058, 0.004, 0.214);
+      muzzleAt = [0, 0, -(front + 0.38)];
+    } else {   // Kampfstab: schwere Endstücke mit Gummi-Kappe
+      for (const u of [-back - 0.04, front]) { tube(metal, u, u + 0.06, 0, R * 1.5); tube(dark, u + (u < 0 ? -0.02 : 0.06), u + (u < 0 ? 0 : 0.08), 0, R * 1.35); }
+      muzzleAt = [0, 0, -(front + 0.08)];
+    }
+    rear = 0.12; gripTop = 0.034; gripW = 0.03; support = [0, -0.035, -0.36];
   } else {
     // Werferrohr
     const { L, R } = P, u0 = -L * 0.3, u1 = L * 0.7;
@@ -593,7 +623,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   g.userData.rear = rear;   // wie weit die Waffe hinter der Hand weitergeht (für die Ego-Perspektive)
   const muzzle = new THREE.Object3D(); muzzle.position.set(...muzzleAt); g.add(muzzle);
   // fpShift: Werferrohre sitzen in der Ego-Perspektive weiter vorne und weiter rechts (sonst schaut man ins Rohr)
-  const fpShift = P.kind === 'tube' ? [0.07, -0.035, -0.32] : [0, 0, 0];
+  const fpShift = P.kind === 'tube' ? [0.07, -0.035, -0.32] : P.kind === 'pole' ? [0.02, 0.02, 0.05] : [0, 0, 0];
   Object.assign(g.userData, { muzzle, gripTop, gripW, support, fpShift, mag, cock, sightAt, kind: P.kind });
   g.userData.setGills(0); g.userData.setCharge(1);
   // Besonderheiten der neuen Waffen

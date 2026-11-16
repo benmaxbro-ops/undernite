@@ -75,6 +75,10 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [ ] **Treffer-Sound:** wie eine Kugel, die richtig durchschlägt (im Internet recherchieren)
 - [ ] **Vorbeifliegende Kugeln:** deutliches „Schwusch“
 
+- [x] **Stabwaffen:** Dreizack, Elektro-Speer, Kampfstab (Beute oder Startwaffe)
+- [ ] **Waffen schöner und realistischer** (alle)
+- [ ] **Brustschwimmen** mit Händen in der Ego-Sicht
+
 ## Fairness: Ligen
 
 Gekaufte Upgrades machen **voll stark**. Damit das nicht unfair wird, kommen Spieler nach ihrem

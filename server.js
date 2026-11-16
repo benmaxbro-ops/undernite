@@ -59,7 +59,7 @@ const PHASES = [
   { wait: 30, shrink: 25, r: 70, dps: 5 }, { wait: 25, shrink: 20, r: 32, dps: 7 },
   { wait: 20, shrink: 20, r: 10, dps: 10 }, { wait: 10, shrink: 15, r: 0, dps: 14 },
 ];
-const LOOT_W = [['needler', 30], ['scatter', 22], ['harpoon', 22], ['torpedo', 12], ['pistol', 14], ['revolver', 8], ['spikemg', 8], ['netgun', 6]];   // das Magnet-Gewehr gibt es nicht als Beute (jeder außer Goliath hat es)
+const LOOT_W = [['needler', 30], ['scatter', 22], ['harpoon', 22], ['torpedo', 12], ['pistol', 14], ['revolver', 8], ['spikemg', 8], ['netgun', 6], ['staff', 6], ['trident', 5], ['espear', 4]];   // das Magnet-Gewehr gibt es nicht als Beute (jeder außer Goliath hat es)
 const W_SCORE = { pistol: 1, needler: 2.2, scatter: 2.0, harpoon: 2.2, torpedo: 2.6 };
 const W_PREF = { pistol: 16, needler: 18, scatter: 8, harpoon: 30, torpedo: 24 };
 
@@ -386,6 +386,7 @@ function fire(p, d, aim) {
   }
   const w = p.weapons[p.slot];
   if (!w || p.reload > 0 || G.time < p.nextFire - 0.06 || G.time < (p.holsterT || 0) || G.time < (p.stunT || 0)) return;   // weggesteckt (zu heiß) oder gelähmt: nicht schießen
+  if (WEAPONS[w.id].melee) return melee(p, w, d);   // Stabwaffe: Stoß statt Schuss
   if (w.ammo <= 0) { startReload(p); return; }
   const def = wdef(w), S = SUITS[p.suit];
   w.ammo--; p.nextFire = G.time + 1 / def.rate;
@@ -430,6 +431,31 @@ function ventHeat(p) {
       if (!p.bot) p.ye.push(['holster', HEAT.holster]);
     }
   }
+}
+// ---------- Stabwaffen: Stoß nach vorne ----------
+// Getroffen wird, wer höchstens range Meter (plus eigene Größe) entfernt ist und ungefähr vor einem liegt (arc).
+// Es zählt nur ein Treffer pro Stoß: der nächste. Kampfstab stößt weg, Elektro-Speer lähmt kurz.
+function melee(p, w, d) {
+  const def = WEAPONS[w.id], S = SUITS[p.suit], reach = def.range + S.r;
+  p.nextFire = G.time + 1 / def.rate;
+  let best = null, bd = 1e9, kind = 0;
+  const test = (x, y, z, r, obj, k) => {
+    const dx = x - p.x, dy = y - p.y, dz = z - p.z, dl = Math.hypot(dx, dy, dz) || 1;
+    if (dl - r > reach || (dx * d[0] + dy * d[1] + dz * d[2]) / dl < def.arc) return;
+    if (G.world.segmentHit(p.x, p.y, p.z, x, y, z) > 0 && dl > 1.5) return;   // Fels dazwischen
+    if (dl < bd) { bd = dl; best = obj; kind = k; }
+  };
+  for (const q of G.players.values()) if (q !== p && q.alive) test(q.x, q.y, q.z, SUITS[q.suit].r, q, 1);
+  for (const c of G.creatures) if (!c.dead) test(c.x, c.y, c.z, creatureR(c.type, c.sub), c, 3);
+  const dmg = def.dmg * RARITY[w.rar].mul * S.dmg;
+  if (best && kind === 1) {
+    damage(best, dmg, p, 'melee', p.x, p.z);
+    if (best.alive) {
+      if (def.push) pushAway(best, d[0] * def.push, d[1] * def.push + 2, d[2] * def.push);
+      if (def.stun) { best.stunT = Math.max(best.stunT || 0, G.time + def.stun); best.shockT = Math.max(best.shockT, G.time + def.stun); if (best.bot) best.reactT = Math.max(best.reactT, def.stun); else best.ye.push(['stun', def.stun]); }
+    }
+  } else if (best && kind === 3) damageCreature(best, dmg, p);
+  ev('melee', p.id, WEAPON_IDS.indexOf(w.id), best ? 1 : 0, best ? r2(best.x) : 0, best ? r2(best.y) : 0, best ? r2(best.z) : 0);
 }
 // ---------- Besondere Treffer der neuen Waffen ----------
 // Netz: langsam (net Sekunden). Magnet-Gewehr: ein Mech ist emp Sekunden komplett lahm (Schaltkreise überlastet),
