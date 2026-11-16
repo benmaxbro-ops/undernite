@@ -8,6 +8,9 @@ const LAVA_FOG = new THREE.Color(0x4a1206), PRIM_FOG = new THREE.Color(0x061a3a)
 import { makeBoat, makeTag } from './models.js';
 
 const TAU = Math.PI * 2;
+// Leuchtender Boden im Battle Royale (Tiefsee-Sand mit leuchtenden Algen), damit man sieht, wo unten ist.
+// FLOOR_GLOW = wie hell (0 = gar nicht, 1 = sehr hell), FLOOR_GLOW_COLOR = Farbe (Rot, Grün, Blau wie bei den Fischen).
+const FLOOR_GLOW = 0.45, FLOOR_GLOW_COLOR = 0x2fb8a8;
 const CAUSTIC = `
 float caustic(vec2 uv, float t){
   vec2 p = mod(uv*6.28318, 6.28318) - 250.0;
@@ -125,7 +128,9 @@ export function buildEnvironment(scene, W) {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const sandTex = sand(); sandTex.repeat.set(SIZE / 5, SIZE / 5);   // alle 5 m wiederholt sich das Sandmuster
-  const floor = new THREE.Mesh(geo, addCaustics(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, map: sandTex, bumpMap: sandTex, bumpScale: 1.5 }), uTime));
+  const floorMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, map: sandTex, bumpMap: sandTex, bumpScale: 1.5 });
+  if (!exp) { floorMat.emissive.setHex(FLOOR_GLOW_COLOR); floorMat.emissiveMap = sandTex; floorMat.emissiveIntensity = FLOOR_GLOW; }   // Battle Royale: Boden leuchtet
+  const floor = new THREE.Mesh(geo, addCaustics(floorMat, uTime));
   root.add(floor);
 
   // ----- rocks -----
