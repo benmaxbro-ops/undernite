@@ -41,6 +41,8 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
   sechs Phasen zusammen, der Letzte gewinnt. Dauer ca. 5 Minuten.
 - **Anzüge:** Manta (klein, schnell, 70 LP) · Triton (Allrounder, 100 LP) · Bollwerk (Panzeranzug, 150 LP) ·
   Goliath (Mech, 240 LP, +12 % Schaden, passt in kein Fahrzeug, Oktopusse können ihn nicht halten).
+- **Neue Taucher (Perlen-Shop, je 1500 🦪):** Sepia (Tintenflucht: bei wenig Leben blendet eine Tintenwolke die Gegner), Barrakuda (schnellster Sprinter),
+  Nautilus (Techniker: Kompressor 35 % schneller), Hammerhai (Elektrosinn: sieht Gegner bis 60 m auf der Minikarte).
 - **Waffen:** Bolzenpistole, Nadler, Splitterwerfer, Harpune, Torpedowerfer – jeweils in vier Seltenheitsstufen.
 - **Fahrzeuge:** U-Scooter (schnell, Fahrer ungeschützt) und Mini-U-Boot (450 Rumpfpunkte, Bordtorpedos).
 - **Raubtiere:** Haie wittern Verletzte aus großer Entfernung und greifen im Vorbeischwimmen an,

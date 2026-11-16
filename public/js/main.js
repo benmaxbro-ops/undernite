@@ -993,6 +993,9 @@ function frame(now) {
     hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y + depthOffset(), suit: mySuit, outside, time, dt,
       lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null, held });
     let marks = [];
+    // Hammerhai (Elektrosinn): Gegner in der Nähe erscheinen als rote Punkte auf der Minikarte
+    const sense = mode !== 'exp' && you && you.alive ? SUITS[mySuit].sense : 0;
+    if (sense) for (const e of players.values()) if (e.id !== myId && e.mesh.visible && Math.hypot(e.x - me.x, e.y - me.y, e.z - me.z) < sense) marks.push({ x: e.x, z: e.z, c: '#ff4d4d', s: 3 });
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap
       let bb = null, bd = 70;

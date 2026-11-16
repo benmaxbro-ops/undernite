@@ -1,5 +1,5 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned } from './shared.js';
 const perSec = (v) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
@@ -31,9 +31,10 @@ export class Hud {
     for (const id of SUIT_ORDER) {
       const S = SUITS[id], b = document.createElement('button');
       b.className = 'suit' + (id === cur ? ' on' : ''); b.dataset.id = id;
-      const st = (l, v) => `<div class="stat">${l}<i><u style="width:${Math.round(v * 100)}%"></u></i></div>`;
-      b.innerHTML = `<b>${S.name}</b><small>${S.desc}</small>${st('Tempo', S.speed / 13.5)}${st('Panzer', S.hp / 240)}${st('Wendig', 1 - (S.r - 0.6) / 1.6)}`;
+      const st = (l, v) => `<div class="stat">${l}<i><u style="width:${Math.round(Math.min(1, v) * 100)}%"></u></i></div>`;
+      b.innerHTML = `<b>${S.name}</b><small>${S.desc}</small>${st('Tempo', S.speed / 15)}${st('Panzer', S.hp / 240)}${st('Wendig', 1 - (S.r - 0.6) / 1.6)}`;
       b.addEventListener('click', () => {
+        if (b.classList.contains('locked')) { $('brShopBtn').click(); return; }   // gesperrt: Shop öffnen
         suits.querySelectorAll('.suit').forEach(x => x.classList.toggle('on', x === b));
         localStorage.setItem('un_suit', id); cb({ suit: id });
       });
@@ -65,11 +66,27 @@ export class Hud {
         + `<small>${u.what}: <b>${100 + cur} %</b>${cur ? ` (+${cur} %)` : ''}`
         + `${next != null ? ` → Stufe ${l + 1}: ${100 + next} % (noch +${next - cur} %)` : ' · Maximum erreicht'}</small>${btn}</div>`;
     }).join('');
-    for (const b of document.querySelectorAll('#brShopUps button[data-k]')) b.onclick = () => this.brSend && this.brSend(b.dataset.k);
+    // Taucher freischalten
+    const owned = me.suits || [];
+    $('brShopSuits').innerHTML = SUIT_ORDER.filter(id => SUITS[id].price).map(id => {
+      const S = SUITS[id], has = owned.includes(id);
+      const btn = has ? '<button disabled>Hast du</button>' : `<button data-k="suit:${id}" ${(me.pearls || 0) < S.price ? 'disabled' : ''}>🦪 ${S.price}</button>`;
+      return `<div class="item" style="--rar:#${S.col.toString(16).padStart(6, '0')}"><b>${S.name}</b><small>${S.desc} · ${S.hp} Leben</small>${btn}</div>`;
+    }).join('');
+    for (const b of document.querySelectorAll('#brShop button[data-k]')) b.onclick = () => this.brSend && this.brSend(b.dataset.k);
   }
   setLobby(m, myId) {
     this.brMe = m.players.find(p => p.id === myId);
     this.brShopDraw();
+    // Taucher-Auswahl: gesperrte zeigen Schloss und Preis, der ausgewählte (laut Server) ist markiert
+    const owned = this.brMe?.suits || [];
+    for (const b of document.querySelectorAll('#suits .suit')) {
+      const S = SUITS[b.dataset.id], lock = !suitOwned(owned, b.dataset.id);
+      b.classList.toggle('locked', lock);
+      b.querySelector('.lock')?.remove();
+      if (lock) b.insertAdjacentHTML('afterbegin', `<span class="lock">🔒 🦪 ${S.price}</span>`);
+      if (this.brMe) b.classList.toggle('on', b.dataset.id === this.brMe.suit);
+    }
     $('plist').innerHTML = m.players.map(p => `<li><span>${esc(p.name)}${p.id === myId ? ' <small>(du)</small>' : ''}</span><small>${p.pearls ? `🦪 ${p.pearls} · ` : ''}${SUITS[p.suit].name}</small></li>`).join('')
       + `<li><span><small>+ ${m.bots} Bots</small></span></li>`;
     if (document.activeElement !== $('bots')) { $('bots').value = m.bots; $('botsN').textContent = m.bots; }

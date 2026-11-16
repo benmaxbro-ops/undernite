@@ -22,14 +22,16 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
   - [ ] Waffe schneller ziehen
   - [ ] mehr Leben
 - [ ] **5. Waffen-Aufsätze:** Zielfernrohr, größeres Magazin, Mündungsaufsatz gegen Rückstoß, Laservisier …
-- [ ] **6. 8 Taucher:** Zu Manta, Triton, Bollwerk und Goliath kommen 4 neue, jeder mit einer Spezialfähigkeit:
-  - [ ] **Sepia:** Tarnung mit Tinte
-  - [ ] **Barrakuda:** Sprinter
-  - [ ] **Nautilus:** Techniker, Gadgets laden schneller
-  - [ ] **Hammerhai:** Sonar, sieht Gegner durch Wände
+- [x] **6. 8 Taucher:** Zu Manta, Triton, Bollwerk und Goliath kommen 4 neue, jeder mit einer Spezialfähigkeit:
+  - [x] **Sepia:** Tintenflucht
+  - [x] **Barrakuda:** Sprinter
+  - [x] **Nautilus:** Techniker, Kompressor schneller
+  - [x] **Hammerhai:** Elektrosinn, Gegner auf der Minikarte
 - [ ] **7. Gadgets:** Sonar-Boje, Tintenbombe, Haiköder, Schild-Generator, Seilharpune
 - [ ] **8. Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
 - [ ] **9. Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
+
+## Reihenfolge (Ben, 16.11.): 4 neue Taucher → Gadgets für alle 8 + Ausrüstungs-Fenster pro Taucher vor der Runde → Waffen-Aufsätze je Waffe + neue Waffen → Stabwaffen + schönere Waffen → Brustschwimmen
 
 ## Realistischer wie im Video „Bodycam“ (Wünsche vom 16.11.)
 

@@ -10,9 +10,14 @@ export const GRID_N = 256;       // height grid cells per edge
 export const CELL = SIZE / GRID_N;
 export const TICK_HZ = 20;
 
-export const SUIT_ORDER = ['manta', 'triton', 'bulwark', 'goliath'];
+// Neue Taucher immer HINTEN anhängen (Finisher schicken die Nummer in dieser Liste)
+export const SUIT_ORDER = ['manta', 'triton', 'bulwark', 'goliath', 'sepia', 'barrakuda', 'nautilus', 'hammerhai'];
 // dmg = Schaden mit Waffen (1 = normal). start = Startwaffe [Waffe, Seltenheit 0–3].
 // Je schwächer der Anzug, desto besser die Startwaffe – je stärker, desto schlechter schießt er.
+// build = Körperbau (slim = schlank, normal, heavy = Panzer), tank = Farbe der Flasche, col = Farbe der Anzug-Streifen
+// price = Perlen zum Freischalten im Shop (ohne price = von Anfang an frei), fin = welche Finisher-Animation er benutzt
+// fill = sein Kompressor braucht nur so viel Zeit (0.65 = 35 % schneller), sense = sieht Gegner bis so viele Meter auf der Minikarte
+// ink = stößt bei wenig Leben (unter ink × 100 %) automatisch Tinte aus (blendet Gegner in der Nähe), einmal alle inkCool Sekunden
 export const SUITS = {
   manta:   { name: 'Manta',    hp: 70,  speed: 13.5, boost: 1.7,  r: 0.7, scale: 0.85, cam: 4.2, dmg: 1.0,  start: ['needler', 1],
              desc: 'Schlank, klein, extrem wendig. Schwer zu treffen, hält wenig aus. Startet mit einem seltenen Nadler.' },
@@ -22,6 +27,15 @@ export const SUITS = {
              desc: 'Schwerer Panzeranzug. Langsam, aber zäh. Schießt etwas schwächer.' },
   goliath: { name: 'Goliath',  hp: 240, speed: 6.3,  boost: 1.45, r: 1.9, scale: 1.0,  cam: 8.5, dmg: 0.85, mech: true, start: ['pistol', 0],
              desc: 'Tiefsee-Mech. Riesig, träge, enorm stark – aber mit Waffen der schwächste Schütze. Passt in kein Fahrzeug, kein Oktopus hält ihn.' },
+  // ----- freischaltbar im Perlen-Shop -----
+  sepia:     { name: 'Sepia',     hp: 80,  speed: 12.5, boost: 1.75, r: 0.75, scale: 0.9,  cam: 4.4, dmg: 1.0,  start: ['scatter', 0], price: 1500, build: 'slim', tank: 0x3a2a4a, col: 0x9a4dff, fin: 'manta',
+               ink: 0.3, inkCool: 20, desc: 'Tintenflucht: Bei wenig Leben stößt sie automatisch eine Tintenwolke aus – Gegner in der Nähe sind kurz blind. Startet mit dem Splitterwerfer.' },
+  barrakuda: { name: 'Barrakuda', hp: 75,  speed: 15.0, boost: 1.95, r: 0.7,  scale: 0.88, cam: 4.3, dmg: 1.05, start: ['needler', 0], price: 1500, build: 'slim', tank: 0xb8c4cc, col: 0xe8e8e8, fin: 'manta',
+               desc: 'Sprinter: der schnellste Taucher mit dem stärksten Schub. Trifft etwas härter, hält aber am wenigsten aus.' },
+  nautilus:  { name: 'Nautilus',  hp: 105, speed: 10.8, boost: 1.55, r: 0.9,  scale: 1.0,  cam: 4.8, dmg: 1.0,  start: ['pistol', 2], price: 1500, build: 'normal', tank: 0xc87a3a, col: 0xffb347, fin: 'triton',
+               fill: 0.65, desc: 'Techniker: sein Kompressor füllt Magazine 35 % schneller. Startet mit einer sehr seltenen Pistole.' },
+  hammerhai: { name: 'Hammerhai', hp: 135, speed: 9.6,  boost: 1.5,  r: 1.05, scale: 1.15, cam: 5.3, dmg: 1.0,  start: ['harpoon', 0], price: 1500, build: 'heavy', tank: 0x56606a, col: 0x3fa9f5, fin: 'bulwark',
+               sense: 60, desc: 'Elektrosinn: spürt Gegner bis 60 m und sieht sie auf der Minikarte. Startet mit der Harpune.' },
 };
 
 export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp', 'plasma', 'sonic'];
@@ -66,7 +80,9 @@ export const COMPRESSOR = {
 
 // Finisher (nur Battle Royale): hat ein Gegner höchstens hp × 100 % Leben und ist nah genug (range in Metern),
 // kann man ihn mit G erledigen. Jede Klasse hat ihre eigene Animation (siehe finisher.js).
-export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 10, goliath: 9 } };   // Goliath ist riesig und greift weit
+export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 10, goliath: 9, sepia: 4, barrakuda: 4, nautilus: 14, hammerhai: 10 } };   // Goliath ist riesig und greift weit
+export const finStyle = (suit) => SUITS[suit]?.fin || suit;   // neue Taucher benutzen die Finisher-Animation eines alten
+export const suitOwned = (owned, suit) => !SUITS[suit]?.price || (owned || []).includes(suit);   // frei oder gekauft?
 
 // Perlen (nur Battle Royale): Belohnung am Rundenende, wird unter deinem Namen gespeichert (saves/battleroyale.json).
 // kill = pro Kill, minute = pro Minute überlebt, place = Bonus für Platz 1, 2 und 3.

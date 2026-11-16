@@ -7,7 +7,7 @@
 // Der Server hat den Gegner schon erledigt. Hier wird nur gezeigt, wie es passiert: dafür wird eine Kopie
 // des Gegners ("ghost") an seine Stelle gesetzt und animiert.
 import * as THREE from 'three';
-import { SUIT_ORDER, dirFrom } from './shared.js';
+import { SUIT_ORDER, dirFrom, finStyle } from './shared.js';
 import { makePlayerModel } from './models.js';
 import { schoolFishGeo } from './reef.js';
 
@@ -43,7 +43,7 @@ function makeMinigun() {
 // c = Hilfsmittel aus main.js: { dyn, env, sfx, posOf(id), muzzleOf(id), beam(...), shake(stärke), zone() }
 // e = ['fin', Angreifer, Opfer, Klasse Angreifer, Klasse Opfer, x, y, z, Blickrichtung Opfer]
 export function startFinisher(c, e) {
-  const attacker = e[1], type = SUIT_ORDER[e[3]], vSuit = SUIT_ORDER[e[4]];
+  const attacker = e[1], type = finStyle(SUIT_ORDER[e[3]]), vSuit = SUIT_ORDER[e[4]];   // neue Taucher: Animation eines alten
   const V = { x: e[5], y: e[6], z: e[7], yaw: e[8] };
   const A0 = { ...(c.posOf(attacker) || { x: V.x + 3, y: V.y, z: V.z }) };
   // Kopie des Gegners; ihre Materialien werden kopiert, damit sie durchsichtig werden kann, ohne andere Taucher zu ändern

@@ -24,7 +24,7 @@ const GEO = {
   zcyl: zCyl(1, 1, 1, 14), torus: new THREE.TorusGeometry(1, 0.08, 6, 20),
 };
 const WCOL = [0xffe066, 0x4de8ff, 0xff9838, 0xf2f6f8, 0xff4d4d, 0xff4d4d, 0xd86bff, 0x7dffb0];
-const SUIT_COL = { manta: 0x1fd6b4, triton: 0xf08a24, bulwark: 0x8a2f3a, goliath: 0x5a6a78 };
+const SUIT_COL = { manta: 0x1fd6b4, triton: 0xf08a24, bulwark: 0x8a2f3a, goliath: 0x5a6a78, sepia: 0x9a4dff, barrakuda: 0xe8e8e8, nautilus: 0xffb347, hammerhai: 0x3fa9f5 };
 
 function tri(a, b, c) {
   const g = new THREE.BufferGeometry();

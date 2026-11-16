@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { loft } from './creatures.js';
 import { neoprene } from './textures.js';
+import { SUITS } from './shared.js';
 
 const TAU = Math.PI * 2;
 const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05, ...o });
@@ -30,12 +31,12 @@ function hose(parent, points, m, r = 0.012) {
 // suit: 'manta' | 'triton' | 'bulwark'. accent: player colour (stripes, fin rails).
 export function buildRealDiver(suit, accent) {
   const g = new THREE.Group();
-  const heavy = suit === 'bulwark', slim = suit === 'manta';
+  const S = SUITS[suit] || {}, heavy = suit === 'bulwark' || S.build === 'heavy', slim = suit === 'manta' || S.build === 'slim';
   // Neopren: das Strickmuster kommt als "bump"-Textur, so sieht der Anzug nach Stoff aus statt nach Plastik
   const suitBlack = mat(0x121519, { roughness: 0.5, metalness: 0.08, bumpMap: neoprene(), bumpScale: 1.2 });
   const rubber = mat(0x0b0c0e, { roughness: 0.65 });
   const acc = mat(accent, { roughness: 0.45, emissive: accent, emissiveIntensity: 0.18 });
-  const tankCol = slim ? 0xc8ced4 : heavy ? 0x3e4a56 : 0xd9d24a;
+  const tankCol = S.tank ?? (slim ? 0xc8ced4 : heavy ? 0x3e4a56 : 0xd9d24a);   // neue Taucher: eigene Flaschenfarbe
   const tankM = mat(tankCol, { roughness: 0.3, metalness: slim ? 0.85 : 0.35 });
   const chrome = mat(0xd8dde2, { roughness: 0.2, metalness: 0.95 });
   const hoseM = mat(0x16181b, { roughness: 0.6 }), yellowHose = mat(0xe8c21a, { roughness: 0.5 });

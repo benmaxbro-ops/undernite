@@ -143,6 +143,7 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
 #brShop{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;background:rgba(2,12,20,.7);padding:20px;overflow:auto;z-index:20}
 #brShop.hidden{display:none} #brShopMoney{font:700 22px var(--display);color:#ffd36b;margin:6px 0 4px}
 #brShop .pips{color:#ffd36b;letter-spacing:.15em;margin-left:6px}
+.suit{position:relative} .suit.locked{opacity:.55;filter:grayscale(.6)} .suit .lock{position:absolute;top:8px;right:10px;font:700 12px var(--display);color:#ffd36b}
 #shop{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;background:rgba(2,12,20,.55);padding:20px;overflow:auto}
 .shopBox{width:min(860px,100%);padding:18px 22px;pointer-events:auto;margin:auto}
 .shopBox h2{margin:0;font:800 30px var(--display);letter-spacing:.12em} .shopBox h2 span{color:var(--glow)}
@@ -265,6 +266,8 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
     <h2>PERLEN<span>-SHOP</span></h2>
     <div id="brShopMoney" class="num"></div>
     <div class="hint">Verbesserungen gelten im Battle Royale. Perlen bekommst du am Ende jeder Runde.</div>
+    <h3>Neue Taucher</h3>
+    <div id="brShopSuits"></div>
     <h3>Verbesserungen</h3>
     <div id="brShopUps"></div>
     <div class="shopFoot"><button class="go" id="brShopClose">ZURÜCK</button></div>

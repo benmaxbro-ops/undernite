@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,7 @@ function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
   return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, urls: lanUrls(),
-    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name) })) };
+    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
 
@@ -210,6 +210,13 @@ function damage(p, amt, src, how, sx, sz) {
   if (src && src.id && !src.bot && src !== p) src.ye.push(['hm', Math.round(amt), p.hp <= 0 ? 1 : 0, +(Math.max(0, p.hp) / p.maxhp).toFixed(2), shieldBroke ? 1 : 0]);
   if (p.bot && src && src.id && src !== p && src.alive && (!src.bot || G.time >= p.peaceUntil) && (!p.target || rnd() < 0.5)) {
     if (src.bot) p.fightUntil = G.time + 5 + rnd() * 4; p.target = { k: 'p', ref: src }; p.reactT = Math.min(p.reactT, 0.25); }
+  // Sepia: Tintenflucht – bei wenig Leben automatisch eine Tintenwolke, Gegner in der Nähe sind kurz blind
+  const SP = SUITS[p.suit];
+  if (SP.ink && p.hp > 0 && p.hp < p.maxhp * SP.ink && G.time >= (p.inkCool || 0)) {
+    p.inkCool = G.time + SP.inkCool;
+    ev('ink', r2(p.x), r2(p.y), r2(p.z));
+    for (const q of G.players.values()) if (q !== p && q.alive && dist(p, q) < 9) { q.ink = Math.max(q.ink, 2.5); if (q.bot) { q.reactT = Math.max(q.reactT, 1.5); q.target = null; } }
+  }
   if (p.hp <= 0) { if (G.mode === 'exp') expDown(p, src, how); else kill(p, src, how); }
 }
 function damageVehicle(v, amt, src) {
@@ -325,7 +332,7 @@ function compress(p, dt) {
     if (!w) continue;
     bestSpare(w);
     let b = -1; for (let i = 0; i < w.spare.length; i++) if (w.spare[i] < 1 && (b < 0 || w.spare[i] > w.spare[b])) b = i;
-    if (b >= 0) w.spare[b] = Math.min(1, w.spare[b] + dt / ((COMPRESSOR.fill[w.id] || 8) * upMul(p.up, 'comp')));   // Turbo-Kompressor
+    if (b >= 0) w.spare[b] = Math.min(1, w.spare[b] + dt / ((COMPRESSOR.fill[w.id] || 8) * upMul(p.up, 'comp') * (SUITS[p.suit].fill || 1)));   // Turbo-Kompressor, Nautilus
   }
 }
 // Lag-Ausgleich: Im Browser sieht man alles ca. 0,1 s zu spät. Hat der Spieler genau auf ein Ziel gezielt
@@ -811,10 +818,17 @@ function addPearls(name, amt) {
   saveBr();
   return s.pearls;
 }
-// Verbesserung im Perlen-Shop kaufen (nur in der Lobby): nächste Stufe, wenn genug Perlen da sind
+const suitsOf = (name) => [...(brSaves[saveKey(name)]?.suits || [])];   // gekaufte Taucher
+// Im Perlen-Shop kaufen (nur in der Lobby): k = Verbesserung (nächste Stufe) oder 'suit:name' (Taucher freischalten)
 function brBuy(c, k) {
-  const u = BR_UPGRADES.find(x => x.k === k); if (!u) return;
   const s = brSaves[saveKey(c.name)] ||= { pearls: 0 };
+  if (typeof k === 'string' && k.startsWith('suit:')) {
+    const id = k.slice(5), S = SUITS[id];
+    if (!S || !S.price || (s.suits || []).includes(id) || (s.pearls || 0) < S.price) return;
+    s.pearls -= S.price; (s.suits ||= []).push(id); s.last = Date.now(); c.suit = id;   // gleich auswählen
+    saveBr(); return;
+  }
+  const u = BR_UPGRADES.find(x => x.k === k); if (!u) return;
   s.up ||= {};
   const lvl = s.up[k] | 0, price = u.price[lvl];
   if (price == null || (s.pearls || 0) < price) return;
@@ -1257,7 +1271,8 @@ wss.on('connection', (ws) => {
     switch (m.t) {
       case 'set':
         if (m.name !== undefined) c.name = cleanName(m.name);
-        if (SUITS[m.suit]) c.suit = m.suit;
+        if (SUITS[m.suit] && suitOwned(suitsOf(c.name), m.suit)) c.suit = m.suit;   // nur freie oder gekaufte Taucher
+        if (!suitOwned(suitsOf(c.name), c.suit)) c.suit = 'triton';                 // anderer Name: Taucher evtl. nicht gekauft
         if (Number.isFinite(m.bots)) G.bots = clamp(Math.round(m.bots), 0, 23);
         if ((m.mode === 'br' || m.mode === 'exp') && m.mode !== G.mode && G.phase === 'lobby') { G.mode = m.mode; G.world = new World(G.seed, G.mode); }
         if (G.phase === 'lobby') broadcast(lobbyMsg());
