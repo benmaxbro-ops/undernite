@@ -9,8 +9,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Danach
 
-- [ ] **Ulti für jede Klasse (Taste 4):**
-  - [ ] Triton, Bollwerk und die 4 neuen Taucher: noch ausdenken
 - [ ] **Arme und Hände weniger klobig** (nicht so zylindermäßig), Vorbild Call of Duty
 - [ ] **Grafik noch realistischer:** Tiefenschärfe + Bewegungsunschärfe, bessere Oberflächen, bessere Taucher-Modelle
 - [ ] **Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
