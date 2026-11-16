@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -141,6 +141,7 @@ function startMatch() {
   // participants
   for (const c of clients.values()) {
     const p = mkPlayer(c.id, c.name, c.suit, false); p.up = upsOf(c.name);
+    p.hp = p.maxhp = Math.round(p.maxhp * upMul(p.up, 'hp'));   // Zäher Anzug: mehr Leben
     // Ausrüstung aus dem Ausrüstungs-Fenster: Gadget (wenn gekauft und nicht abgelegt) und Startwaffe
     const L = loadOf(c.name)[c.suit] || {}, gi = gadgetOf(c.suit);
     p.gad = gi >= 0 && L.gad !== false && gadsOf(c.name).includes(GADGETS[gi].k) ? gi : -1; p.gadT = 0;
@@ -1466,7 +1467,7 @@ wss.on('connection', (ws) => {
       case 'f': if (p) { p.actT = G.time; fire(p, m.d, m.a); } break;
       case 'r': if (p && p.alive) startReload(p); break;
       case 'fin': if (p && p.alive) finisher(p, m.id); break;
-      case 'slot': if (p && p.alive && [0, 1, 2].includes(m.i) && p.weapons[m.i]) { p.slot = m.i; p.reload = 0; } break;
+      case 'slot': if (p && p.alive && [0, 1, 2].includes(m.i) && p.weapons[m.i] && m.i !== p.slot) { p.slot = m.i; p.reload = 0; p.nextFire = Math.max(p.nextFire, G.time + DRAW_TIME * upMul(p.up, 'draw') - 0.1); } break;   // Waffe ziehen braucht kurz Zeit
       case 'e': if (p) interact(p); break;
       case 'x': if (p && p.alive) struggle(p); break;
     }

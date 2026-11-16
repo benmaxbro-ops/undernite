@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf, modDef } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf, modDef, DRAW_TIME } from './shared.js';
 // gekaufte Verbesserungen aus dem Perlen-Shop (kommen mit der Lobby-Nachricht). Wirken nur im Battle Royale.
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
@@ -621,7 +621,7 @@ addEventListener('keydown', (e) => {
   if (mode === 'exp' && e.code === 'KeyQ') { const n = you.x.bagL.length; held = held + 1 < n ? held + 1 : -1; firing = false; return; }
   if (/^Digit[1-3]$/.test(e.code)) held = -1;
   if (e.code === 'KeyH' && mode !== 'exp') { setHolster(!holster.on); return; }   // Waffe wegstecken / rausholen
-  if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i]) send({ t: 'slot', i }); if (holster.on) setHolster(false); }
+  if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i] && i !== you.slot) { send({ t: 'slot', i }); holster.readyAt = performance.now() + DRAW_TIME * UP('draw') * 1000; } if (holster.on) setHolster(false); }   // Waffe ziehen braucht kurz Zeit
   else if (e.code === 'KeyR') send({ t: 'r' });
   else if (e.code === 'KeyE') send({ t: 'e' });
   else if (e.code === 'KeyF') { send({ t: 'x' }); env.bubble(me.x, me.y, me.z, 4, 1, 2); }
@@ -869,12 +869,12 @@ let aimAt = null;
 // auch wenn man die Maustaste schon losgelassen hat. Waffe gewechselt, Nachladen oder tot → Schuss fällt aus.
 let chargeShot = null, chargeStart = 0, chargeEnd = 0, holsterUntil = 0;
 // Waffe selbst wegstecken (Taste H): Hände frei, 8 % schneller schwimmen. Rausholen dauert HOLSTER.draw Sekunden.
-const HOLSTER = { draw: 0.45, speed: 1.08 };
+const HOLSTER = { speed: 1.08 };   // Rausholen dauert DRAW_TIME (shared.js), mit Schnellziehen kürzer
 const holster = { on: false, readyAt: 0 };
 function setHolster(on) {
   if (on === holster.on) return;
   holster.on = on; chargeShot = null;
-  if (on) { firing = false; sfx.stow(); } else { holster.readyAt = performance.now() + HOLSTER.draw * 1000; sfx.cockBack(); }
+  if (on) { firing = false; sfx.stow(); } else { holster.readyAt = performance.now() + DRAW_TIME * UP('draw') * 1000; sfx.cockBack(); }
 }
 function tryFire(now) {
   if (holster.on) { if (firing) { setHolster(false); firing = false; } return; }   // Klick holt die Waffe raus (schießt noch nicht)

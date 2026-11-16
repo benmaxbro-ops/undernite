@@ -72,7 +72,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Perlen 🦪:** Am Rundenende gibt es 50 pro Kill, 10 pro überlebter Minute und 300 / 150 / 75 für Platz 1–3.
   Sie werden unter deinem Namen gespeichert (`saves/battleroyale.json`), getrennt vom Expeditions-Geld.
 - **Perlen-Shop** (Knopf oben rechts in der Lobby): Verbesserungen mit je 3 Stufen – Schnellladen, Rückstoßdämpfer,
-  Ruhiges Visier, Profi-Flossen, Turbo-Kompressor. Gelten nur im Battle Royale.
+  Ruhiges Visier, Profi-Flossen, Turbo-Kompressor, Schnellziehen (Waffe wechseln/rausholen geht schneller), Zäher Anzug (bis +30 % Leben). Gelten nur im Battle Royale.
 
 ## Modus: Tiefsee-Expedition (v0.2)
 

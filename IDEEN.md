@@ -19,7 +19,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 - [ ] **Flüssiger schwimmen:** weniger stockig und eckig, weichere Bewegungen
 - [ ] **Arme und Hände weniger klobig** (nicht so zylindermäßig), Vorbild Call of Duty
 - [ ] **Grafik noch realistischer:** Tiefenschärfe + Bewegungsunschärfe, bessere Oberflächen, bessere Taucher-Modelle
-- [ ] **Verbesserungen im Shop:** Waffe schneller ziehen, mehr Leben
 - [ ] **Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
 - [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 

@@ -110,7 +110,11 @@ export const BR_UPGRADES = [
   { k: 'scope',  name: 'Ruhiges Visier',    what: 'Zielruhe',            bonus: [50, 120, 250], price: [120, 350, 800] },
   { k: 'swim',   name: 'Profi-Flossen',     what: 'Schwimmtempo',        bonus: [10, 20, 32],   price: [200, 500, 1100] },
   { k: 'comp',   name: 'Turbo-Kompressor',  what: 'Füllgeschwindigkeit', bonus: [30, 65, 110],  price: [150, 400, 900] },
+  { k: 'draw',   name: 'Schnellziehen',     what: 'Waffe ziehen',        bonus: [30, 60, 100],  price: [100, 300, 700] },
+  { k: 'hp',     name: 'Zäher Anzug',       what: 'Leben',               bonus: [10, 20, 30],   price: [250, 600, 1300] },
 ];
+// Waffe wechseln oder aus dem Holster holen dauert so viele Sekunden (ohne Schnellziehen)
+export const DRAW_TIME = 0.5;
 // Gadgets (Battle Royale, Taste Q): jeder Taucher hat sein eigenes. price = Perlen, cool = Sekunden bis man es wieder benutzen kann.
 // Neue Gadgets immer HINTEN anhängen (der Server schickt die Nummer in dieser Liste).
 export const GADGETS = [
@@ -186,9 +190,9 @@ export const BR_WEAPONS = [
 ];
 // Bonus in Prozent für einen Spieler (up = { reload: 2, ... }), 0 = nicht gekauft
 export const upBonus = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), l = (up && up[k]) | 0; return u && l > 0 ? u.bonus[Math.min(l, u.bonus.length) - 1] : 0; };
-// Umrechnung für das Spiel: Schwimmtempo wird mit (1 + Bonus) malgenommen,
+// Umrechnung für das Spiel: Schwimmtempo und Leben werden mit (1 + Bonus) malgenommen,
 // alles andere (Nachladezeit, Rückstoß, Wackeln, Füllzeit) durch (1 + Bonus) geteilt – es wird kleiner, also besser.
-export const upMul = (up, k) => { const b = 1 + upBonus(up, k) / 100; return k === 'swim' ? b : 1 / b; };
+export const upMul = (up, k) => { const b = 1 + upBonus(up, k) / 100; return k === 'swim' || k === 'hp' ? b : 1 / b; };   // Tempo und Leben: mehr; alles andere: weniger Zeit
 export const brReward = (kills, secs, place) => {
   const k = kills * BR_REWARD.kill, m = Math.floor(secs / 60) * BR_REWARD.minute, p = BR_REWARD.place[place - 1] || 0;
   return { k, m, p, sum: k + m + p };
