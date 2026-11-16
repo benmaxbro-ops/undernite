@@ -43,13 +43,13 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
 
 Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Bodycam!“). Alles umgesetzt für unter Wasser.
 
-- [ ] **Bodycam-Look:** Bild am Rand gewölbt (Fischauge), dunkler runder Rand wie eine Taucherbrille, rot-blaue Farbsäume
-- [ ] **Rückstoß wie im Video:** Waffe und Kamera reißen zusammen hoch, aber das Wasser bremst. Gasblase statt Patronenhülse.
+- [x] **Bodycam-Look:** Bild am Rand gewölbt (Fischauge), dunkler runder Rand wie eine Taucherbrille, rot-blaue Farbsäume
+- [ ] **Rückstoß wie im Video:** Waffe und Kamera reißen zusammen hoch, aber das Wasser bremst. Gasblase statt Patronenhülse. (teilweise: Nachschwingen ist drin)
 - [ ] **Flüssiger schwimmen:** weniger stockig und eckig, weichere Bewegungen
 - [x] **Hände sehen:** beim Schwimmen die Hände vorne, wie beim Brustschwimmen
-- [ ] **Waffe wegstecken** können
-- [ ] **Große Waffen mit beiden Händen halten:** eine Hand vorne, eine hinten, mehr in der Mitte vom Bildschirm
-- [ ] **Battle Royale viel heller:** der Boden soll leuchten, damit man sieht, wo unten ist. Riffe größer und spannender.
+- [ ] **Waffe wegstecken** können (bisher nur zwangsweise bei Überhitzung, nicht selbst per Taste)
+- [x] **Große Waffen mit beiden Händen halten:** eine Hand vorne, eine hinten, mehr in der Mitte vom Bildschirm
+- [x] **Battle Royale viel heller:** statt leuchtendem Boden leuchtende Riff-Adern über die ganze Karte (so wolltest du es)
 - [ ] **Getroffener Gegner:** sackt zusammen und sinkt, Waffe fällt langsam zum Boden, dunkle Wolke im Wasser
 - [ ] **Selbst sterben:** Bild wird langsam dunkler, dann ganz schwarz, dann ein „Du bist tot“-Bildschirm.
       Von da aus: neue Klasse (Taucher) aussuchen oder in den Shop gehen.
@@ -57,8 +57,8 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [x] **Deckung mit C** (nur Triton und Manta): am Riff-Hügel festhalten. Bollwerk und Goliath sinken mit C nur ab.
 - [ ] **Löcher im Riff**, in denen man stecken bleibt, reparieren
 - [ ] **Finisher** sauberer (Manta sieht komisch aus; beim Goliath geht der Mech kaputt)
-- [ ] **Schüsse von anderen**: dumpfer Schlag wie gegen eine Holztür, großes Kaliber dumpfer
-- [ ] **Nadler**: längere Lade-/Schockwellen-Zeit
+- [x] **Schüsse von anderen**: dumpfer Schlag wie gegen eine Holztür, großes Kaliber dumpfer
+- [x] **Nadler**: längere Lade-/Schockwellen-Zeit
 - [x] **Sichtbare Schockwelle** aus Mündung und Seitenkiemen (shock.js) – kommt jetzt beim Hitze-Ablassen
 - [x] **Hitze-System:** Hitze sammelt sich beim Schießen, kommt nach dem Aufhören auf einen Schlag raus (Schallwelle mit Wumms); zu viel → verbrennen, „Ah!“, benommen, Waffe 2 s wegstecken
 - [x] **Schüsse wie Schlag gegen Holztür** (echte CC0-Aufnahme, tiefer, mit Wasser-Echo, weit hörbar)
@@ -70,7 +70,7 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
   - [ ] Goliath: kurz automatisches Zielen (gleich viele Schüsse nötig, nur ohne Zielen)
   - [ ] Triton und Bollwerk: noch ausdenken
 - [ ] **Schuss-Richtungsanzeige:** kleiner Ring in der Mitte, ein Pfeil zeigt, woher geschossen wird
-- [ ] **Grafik so realistisch wie möglich:** 1. Bodycam-Linse, 2. Unterwasser-Licht (Farben verschwinden mit der Tiefe,
+- [ ] **Grafik so realistisch wie möglich:** ✔ 1. Bodycam-Linse, ✔ 2. Unterwasser-Licht (Farben verschwinden mit der Tiefe,
       Lichtstrahlen, Meeresschnee), 3. Tiefenschärfe + Bewegungsunschärfe, 4. bessere Oberflächen, 5. Bodycam-Animationen, 6. bessere Taucher
 - [ ] **Treffer-Sound:** wie eine Kugel, die richtig durchschlägt (im Internet recherchieren)
 - [ ] **Vorbeifliegende Kugeln:** deutliches „Schwusch“
