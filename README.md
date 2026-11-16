@@ -40,7 +40,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Runde:** Start in der Tiefsee (rund 400 m tief, ohne Lampe stockdunkel, die Oberfläche ist unerreichbar), Ausrüstung suchen, das *Schwarzwasser* (die Zone) zieht sich in
   sechs Phasen zusammen, der Letzte gewinnt. Dauer ca. 5 Minuten.
 - **Anzüge:** Manta (klein, schnell, 70 LP) · Triton (Allrounder, 100 LP) · Bollwerk (Panzeranzug, 150 LP) ·
-  Goliath (Mech, 240 LP, +12 % Schaden, passt in kein Fahrzeug, Oktopusse können ihn nicht halten).
+  Goliath (Mech wie ein Panzer-Tauchanzug mit Glaskuppel, in der Ego-Sicht sitzt man hinter dem Kuppelfenster, 240 LP, +12 % Schaden, passt in kein Fahrzeug, Oktopusse können ihn nicht halten).
 - **Neue Taucher (Perlen-Shop, je 1500 🦪):** Sepia (Tintenflucht: bei wenig Leben blendet eine Tintenwolke die Gegner), Barrakuda (schnellster Sprinter),
   Nautilus (Techniker: Kompressor 35 % schneller), Hammerhai (Elektrosinn: sieht Gegner bis 60 m auf der Minikarte).
 - **Gadgets (Perlen-Shop, Taste Q):** jeder Taucher hat eins – Manta Haiköder, Triton Sonar-Boje, Bollwerk Schild-Generator, Goliath Bodenstampfer,

@@ -493,6 +493,49 @@ export class Sfx {
     };
   }
   // Schiffsschraube des U-Boots: rhythmisches Wummern + Rauschen/Zischen. level 0…1 (aus … volle Fahrt)
+  // ---------- Goliath-Mech ----------
+  // Dauergeräusch im Mech: Elektromotor (tiefes Brummen mit Oberton), Propeller (Rauschen, das im Takt wummert)
+  // und ein leises Lüftersummen im Cockpit. on = man sitzt im Mech, speed = wie schnell er schwimmt (m/s)
+  mechLoop(on, speed = 0) {
+    const ctx = this.ctx; if (!ctx) return;
+    if (!this.mech) {
+      if (!on) return;
+      const g = ctx.createGain(); g.gain.value = 0; g.connect(this.uw);
+      const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 48;
+      const o2 = ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 96;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 2;
+      const og = ctx.createGain(); og.gain.value = 0.35; o1.connect(lp); o2.connect(lp); lp.connect(og).connect(g);
+      const n = ctx.createBufferSource(); n.buffer = this.noiseBuf; n.loop = true;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = 1.2;
+      const ng = ctx.createGain(); ng.gain.value = 0.25;
+      const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 6; lg.gain.value = 0.18; lfo.connect(lg).connect(ng.gain);   // Propeller-Wummern
+      n.connect(bp).connect(ng).connect(g);
+      const fan = ctx.createOscillator(); fan.type = 'sine'; fan.frequency.value = 1180; const fg = ctx.createGain(); fg.gain.value = 0.012; fan.connect(fg).connect(this.master);   // Lüfter im Cockpit
+      o1.start(); o2.start(); n.start(); lfo.start(); fan.start();
+      this.mech = { g, o1, o2, lp, lfo, bp, fg };
+    }
+    const m = this.mech, t = ctx.currentTime, k = Math.min(1, speed / 8);
+    m.g.gain.setTargetAtTime(on ? 0.22 + k * 0.4 : 0, t, 0.15);
+    m.fg.gain.setTargetAtTime(on ? 0.012 : 0, t, 0.2);
+    m.o1.frequency.setTargetAtTime(48 + k * 40, t, 0.3); m.o2.frequency.setTargetAtTime(96 + k * 80, t, 0.3);
+    m.lp.frequency.setTargetAtTime(260 + k * 500, t, 0.3); m.lfo.frequency.setTargetAtTime(6 + k * 14, t, 0.3); m.bp.frequency.setTargetAtTime(700 + k * 900, t, 0.3);
+  }
+  // Schritt / Gelenkbewegung: Hydraulik zischt, das Gelenk rastet mit einem dumpfen Klonk ein, ein Servo surrt kurz
+  mechStep(vol = 1) {
+    if (vol < 0.03) return;
+    this.cur = this.uw;
+    this.noise(0.22, 3200, 1.2, 0.22 * vol, 'highpass', 1800);                 // Hydraulik-Zischen
+    this.tone(85, 40, 0.22, 0.7 * vol, 'sine', 0.05);                         // Klonk
+    this.noise(0.08, 500, 1, 0.4 * vol, 'lowpass', 150, 0.05);
+    this.tone(620 + Math.random() * 120, 880, 0.18, 0.06 * vol, 'square');     // Servo
+    this.cur = null;
+  }
+  // schnelles Drehen im Mech: Servos surren (amt 0…1 = wie schnell man sich dreht)
+  mechServo(amt) {
+    if (amt < 0.15 || this.servoT > (this.ctx?.currentTime || 0)) return;
+    this.servoT = this.ctx.currentTime + 0.25;
+    this.cur = this.uw; this.tone(500 + amt * 500, 700 + amt * 600, 0.25, 0.05 + amt * 0.06, 'sawtooth'); this.cur = null;
+  }
   engine(level) {
     const ctx = this.ctx; if (!ctx) return;
     if (!this.eng) {

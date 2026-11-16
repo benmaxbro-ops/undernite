@@ -163,7 +163,7 @@ function closeShop() { hud.closeShop(); lock(); }
 hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeShop(); send({ t: 'quit' }); });
 function clearDyn() {
   for (const p of projs.values()) if (p.whine) p.whine.stop();
-  sfx.engine(0);
+  sfx.engine(0); sfx.mechLoop(false);
   dyn.clear(); shocks.length = 0; gfx.shields.clear(); gfx.drones.clear(); gfx.ropes.length = 0; gfx.grapple = null; gfx.sonarUntil = 0; players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
   you = null; zone = null; deadInfo = null; specId = 0;
 }
@@ -955,6 +955,15 @@ function updateViewModel(dt) {
   view.charge = def ? (reloading ? Math.max(0, done - RELOAD_STEPS.insert) / (1 - RELOAD_STEPS.insert) : w[2] / def.mag) : 0;
   // im Mech sitzt man in der Ego-Perspektive hinter der Glaskuppel
   cockpit.visible = fpOn && !!(you && you.alive) && !!SUITS[mySuit].mech;
+  // Mech-Geräusche: Motor und Propeller je nach Tempo, Hydraulik bei jedem Schritt, Servos beim schnellen Drehen
+  const inMech = phase === 'play' && !!(you && you.alive) && !!SUITS[mySuit].mech && mode !== 'exp';
+  const mspd = Math.hypot(me.vx, me.vy, me.vz);
+  sfx.mechLoop(inMech, mspd);
+  if (inMech) {
+    view.mstep = (view.mstep || 0) + dt * (0.6 + mspd * 0.35);
+    if (mspd > 1.2 && view.mstep > Math.PI) { view.mstep -= Math.PI; sfx.mechStep(0.7); }
+    sfx.mechServo(Math.min(1, Math.abs(view.inX) * 25));
+  }
   // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
   view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil;   // Fernrohr oder weggesteckt: keine Waffe
   if (!view.g.visible) return;
