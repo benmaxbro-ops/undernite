@@ -5,6 +5,7 @@ import { SUITS, RARITY, FISH, BOSSES } from './shared.js';
 import { makeRealFish, makeRealShark, makeRealOcto, makeRealBoss } from './creatures.js';
 import { makeShip } from './ship.js';
 import { buildRealDiver } from './diver.js';
+import { buildMech } from './mech.js';
 import { polymer, brushed, stipple, neoprene } from './textures.js';
 
 const TAU = Math.PI * 2;
@@ -76,32 +77,7 @@ function buildDiver(suit, accent) {
   g.scale.setScalar(S.scale);
   return { g, legs, gunGlow, mech: false };
 }
-function buildMech(accent) {
-  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-  body.scale.setScalar(0.75); body.position.y = 0.55;
-  const hull = std(0x8496a6, { roughness: 0.45 }), dark = std(0x35424e), acc = glow(accent, 0.7);
-  add(body, GEO.box, hull, 0, 0.2, 0).scale.set(2.0, 1.5, 1.5);
-  add(body, GEO.box, dark, 0, -0.9, 0).scale.set(1.4, 0.5, 1.0);
-  add(body, GEO.sph, glow(0x7df9ff, 1.2, { transparent: true, opacity: 0.85 }), 0, 0.45, -0.7).scale.setScalar(0.62);
-  add(body, GEO.box, dark, 0, 0.3, 0.95).scale.set(1.4, 1.2, 0.6);
-  add(body, GEO.box, acc, 0, 1.0, 0).scale.set(1.6, 0.08, 1.2);
-  for (const sx of [-1, 1]) { add(body, GEO.zcyl, glow(0x58d7ff, 2), sx * 0.4, -0.1, 1.3).scale.set(0.22, 0.22, 0.2); }
-  const arms = [], legs = [];
-  for (const sx of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(sx * 1.3, 0.75, 0); body.add(sh);
-    add(sh, GEO.sph, dark).scale.setScalar(0.5);
-    add(sh, GEO.cyl, hull, 0, -0.6, 0).scale.set(0.28, 1.0, 0.28);
-    add(sh, GEO.zcyl, dark, 0, -1.1, -0.5).scale.set(0.3, 0.3, 1.4);
-    add(sh, GEO.zcyl, acc, 0, -1.1, -1.22).scale.set(0.2, 0.2, 0.1);
-    arms.push(sh);
-    const hip = new THREE.Group(); hip.position.set(sx * 0.55, -1.1, 0); body.add(hip);
-    add(hip, GEO.box, hull, 0, -0.5, 0).scale.set(0.5, 1.0, 0.6);
-    add(hip, GEO.box, dark, 0, -1.45, 0.05).scale.set(0.42, 1.0, 0.5);
-    add(hip, GEO.box, hull, 0, -2.05, -0.15).scale.set(0.7, 0.25, 1.1);
-    legs.push(hip);
-  }
-  return { g, legs, arms, mech: true };
-}
+// Der Goliath-Mech steht jetzt in mech.js (buildMech)
 
 // Returns a group with userData.update(dt, {yaw, pitch, speed, t, weapon})
 export function makePlayerModel(suit, id, name) {
@@ -123,6 +99,7 @@ export function makePlayerModel(suit, id, name) {
       inner.rotation.x = s.pitch * 0.2;
       for (const a of parts.arms) a.rotation.x = s.pitch;
       parts.legs[0].rotation.x = Math.sin(phase * 0.6) * amp; parts.legs[1].rotation.x = -Math.sin(phase * 0.6) * amp;
+      if (parts.animate) parts.animate(dt, s.speed || 0, 0.25 + 0.15 * Math.sin(phase * 0.3));   // Propeller drehen, Zangen bewegen sich leicht
       // Goliath-Finisher: nach vorne greifen, hoch über den Kopf heben … und werfen!
       if (s.fin) {
         const p = s.fin.p, k = (a, b) => Math.max(0, Math.min(1, (p - a) / (b - a)));

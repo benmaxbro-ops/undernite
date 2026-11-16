@@ -16,6 +16,7 @@ import { makeShock, makeBlast, SHOCK } from './shock.js';
 // so weit hinter der Mündung sitzen die Seitenkiemen je Waffe (Meter) – dort kommt beim Hitze-Ablassen der Druck raus
 const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6];
 import { makeLensPass } from './lens.js';
+import { makeMechViewArms, makeCockpit } from './mech.js';
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -94,6 +95,8 @@ const beams = [], BEAM_TIME = 0.18;
 const flashLight = new THREE.PointLight(0x9fe4ff, 0, 5, 1.6); flashLight.position.set(0.15, -0.08, -0.6); camera.add(flashLight);
 // Streulicht der Helmlampe auf Hände und Waffe (sitzt oben am Helm, reicht nur bis zu den Händen)
 const handLight = new THREE.PointLight(0xe8f0ff, 0, 1.4, 2); handLight.position.set(0.05, 0.22, 0.05); camera.add(handLight);
+// Mech-Cockpit: Glaskuppel, Kragen, Armaturenbrett und warmes Licht innen (nur in der Ego-Sicht des Goliath)
+const cockpit = makeCockpit(); cockpit.visible = false; camera.add(cockpit);
 // Mündungsblitz: zwei gekreuzte leuchtende Scheiben und ein heller Kern (blau-weiß, wie ein Druckstoß aus Wasser)
 function makeFlash() {
   const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -950,14 +953,17 @@ function updateViewModel(dt) {
   // Druckanzeige = wie voll das Magazin in der Waffe ist
   const def = w ? WEAPONS[w[0]] : null;
   view.charge = def ? (reloading ? Math.max(0, done - RELOAD_STEPS.insert) / (1 - RELOAD_STEPS.insert) : w[2] / def.mag) : 0;
+  // im Mech sitzt man in der Ego-Perspektive hinter der Glaskuppel
+  cockpit.visible = fpOn && !!(you && you.alive) && !!SUITS[mySuit].mech;
   // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
   view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil;   // Fernrohr oder weggesteckt: keine Waffe
   if (!view.g.visible) return;
   const widx = WEAPON_IDS.indexOf(w[0]);
-  if (widx !== view.widx) {   // Waffe gewechselt: neues Modell bauen
-    view.widx = widx; view.g.clear();
+  if (widx !== view.widx || view.suit !== mySuit) {   // Waffe oder Taucher gewechselt: neues Modell bauen
+    view.widx = widx; view.suit = mySuit; view.g.clear();
     view.gun = makeWaterGun(widx, true); view.g.add(view.gun);
-    view.arms = makeViewArms(mySuit, view.gun.userData); view.gun.add(view.arms);   // Arm und Hände halten die Waffe
+    // Arm und Hände halten die Waffe – im Mech sind es Roboter-Greifarme
+    view.arms = SUITS[mySuit].mech ? makeMechViewArms(view.gun.userData) : makeViewArms(mySuit, view.gun.userData); view.gun.add(view.arms);
     view.rHand = makeReloadHand(mySuit); view.gun.add(view.rHand);                   // zweite Hand fürs Nachladen
   }
   const U = view.gun.userData;
@@ -1005,7 +1011,7 @@ function updateViewModel(dt) {
   if (!U.flash) { U.flash = makeFlash(); U.muzzle.add(U.flash); }
   U.flash.visible = fl > 0; U.flash.scale.setScalar(0.6 + fl * (view.kickPow || 1) * 0.5); U.flash.rotation.z = Math.random() * 6;
   flashLight.intensity = fl * 6;
-  handLight.intensity = view.g.visible ? (lamp.intensity > 0 ? VIEW.hands[0] : VIEW.hands[1]) : 0;
+  handLight.intensity = view.g.visible && !SUITS[mySuit].mech ? (lamp.intensity > 0 ? VIEW.hands[0] : VIEW.hands[1]) : 0;   // im Mech leuchtet das Cockpit-Licht
 }
 const V = new THREE.Vector3();
 function updateCamera(dt) {
