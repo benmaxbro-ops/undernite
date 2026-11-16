@@ -329,7 +329,7 @@ function profileGeo(key, pts, depth, holes = []) {
   return geo;
 }
 // fp = true: Version für die Ego-Perspektive (ohne Schaft – der steckt an der Schulter, außerhalb des Bildes)
-export function makeWaterGun(widx, fp = false) {
+export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsätze (nur Ego-Sicht)
   const P = GUNS[widx] || GUNS[0], K = 'g' + widx + ':';
   const g = new THREE.Group();
   // Materialien (jede Waffe eigene, weil Kiemen und Druckanzeige leuchten)
@@ -586,7 +586,43 @@ export function makeWaterGun(widx, fp = false) {
   const fpShift = P.kind === 'tube' ? [0.07, -0.035, -0.32] : [0, 0, 0];
   Object.assign(g.userData, { muzzle, gripTop, gripW, support, fpShift, mag, cock, sightAt, kind: P.kind });
   g.userData.setGills(0); g.userData.setCharge(1);
+  if (mods && mods.length) addGunMods(g, mods, metal, dark);
   return g;
+}
+// Aufsätze sichtbar an die Waffe bauen (Ego-Sicht). Positionen kommen aus der Waffe: Mündung, Visierlinie, Griff.
+function addGunMods(g, mods, metal, dark) {
+  const U = g.userData, mz = U.muzzle.position, top = U.sightAt[1], has = (k) => mods.includes(k);
+  const len = -mz.z;   // so lang ist die Waffe vom Griff bis zur Mündung
+  if (has('dot')) {   // Leuchtpunkt-Visier: kleines Gehäuse oben mit Glasfenster und grünem Punkt
+    const v = add(g, RBOX, dark, 0, top + 0.016, -len * 0.35); v.scale.set(0.028, 0.03, 0.045);
+    const lensM = new THREE.MeshStandardMaterial({ color: 0x88ccaa, transparent: true, opacity: 0.35, roughness: 0.05 });
+    add(g, GEO.box, lensM, 0, top + 0.02, -len * 0.35 - 0.024).scale.set(0.02, 0.018, 0.002);
+    add(g, GEO.sph, new THREE.MeshBasicMaterial({ color: SIGHT_GLOW }), 0, top + 0.02, -len * 0.35 - 0.026).scale.setScalar(0.0022);
+  }
+  if (has('scope')) {   // Zielfernrohr: Rohr mit Ringen oben
+    const sv = top + 0.03;
+    const t = add(g, GUN_CYL, metal, 0, sv, -len * 0.35); t.scale.set(0.015, 0.015, len * 0.55);
+    for (const z of [-len * 0.15, -len * 0.55]) { const r = add(g, GUN_CYL, dark, 0, sv, z); r.scale.set(0.019, 0.019, 0.012); }
+    add(g, GEO.box, dark, 0, top + 0.012, -len * 0.35).scale.set(0.008, 0.024, 0.02);
+  }
+  if (has('mag') || has('drum')) {   // größeres Magazin: unten länger bzw. eine runde Trommel
+    if (U.mag) { if (has('drum')) { const d = add(U.mag.g, GUN_CYL, metal, 0, -0.07, 0); d.scale.set(0.035, 0.035, 0.03); d.rotation.y = Math.PI / 2; } else U.mag.g.scale.y = 1.4; }
+  }
+  if (has('comp') || has('choke')) {   // Mündungsaufsatz: Zylinder mit Schlitzen vor der Mündung
+    const c = add(g, GUN_CYL, metal, mz.x, mz.y, mz.z - 0.02); c.scale.set(0.014, 0.014, 0.045);
+    for (let i = 0; i < 3; i++) add(g, GEO.box, dark, mz.x, mz.y + 0.012, mz.z - 0.008 - i * 0.012).scale.set(0.02, 0.004, 0.005);
+    U.muzzle.position.z -= 0.045;
+  }
+  if (has('boost')) {   // Druck-Verstärker: leuchtende Spulen um den Lauf
+    for (let i = 0; i < 3; i++) { const r = add(g, GEO.torus, new THREE.MeshStandardMaterial({ color: 0x2fa8ff, emissive: 0x2fa8ff, emissiveIntensity: 1.4 }), mz.x, mz.y, mz.z + 0.02 + i * 0.016); r.scale.setScalar(0.016); }
+  }
+  if (has('laser')) {   // Laservisier unter dem Lauf, mit rotem Strahl nach vorne
+    const y = mz.y - 0.03, z = mz.z * 0.55;
+    const b = add(g, RBOX, dark, 0, y, z); b.scale.set(0.02, 0.018, 0.05);
+    add(g, GEO.sph, new THREE.MeshBasicMaterial({ color: 0xff3030 }), 0, y, z - 0.026).scale.setScalar(0.004);
+    const beam = add(g, GEO.box, new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }), 0, y, z - 0.026 - 15);
+    beam.scale.set(0.0018, 0.0018, 30);
+  }
 }
 
 // ---------- Arme und Hände in der Ego-Perspektive ----------

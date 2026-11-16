@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf, modDef } from './shared.js';
 // gekaufte Verbesserungen aus dem Perlen-Shop (kommen mit der Lobby-Nachricht). Wirken nur im Battle Royale.
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
@@ -764,7 +764,7 @@ function tryFire(now) {
   const v = you.veh ? vehicles.get(you.veh) : null;
   let rate, w = null;
   if (v && v.type === 'sub') rate = WEAPONS.subtorp.rate;
-  else { w = you.w[you.slot]; if (!w || you.rl > 0 || w[2] <= 0) return; rate = WEAPONS[w[0]].rate; }
+  else { w = you.w[you.slot]; if (!w || you.rl > 0 || w[2] <= 0) return; rate = modDef(w[0], w[4]).rate; }
   if (now < nextFire) return;
   const ct = w ? (SHOT_CHARGE[w[0]] || 0) * 1000 : 0;
   nextFire = now + Math.max(1000 / rate, ct * 2);   // Aufladen + Druckwelle müssen vorbei sein
@@ -779,7 +779,7 @@ function tryFire(now) {
 function shoot(v, w) {
   const d = aimDir().map(x => +x.toFixed(4));
   send(aimAt ? { t: 'f', d, a: aimAt } : { t: 'f', d });
-  recoil(v ? WEAPONS.subtorp : WEAPONS[w[0]]);
+  recoil(v ? WEAPONS.subtorp : modDef(w[0], w[4]));
 }
 function computePrompt() {
   if (!you || !you.alive) return null;
@@ -891,7 +891,7 @@ const BREATH_VOL = 0.8;     // Lautstärke der Atemgeräusche
 const BREATH_SPRINT = 2.8; // so viel schneller atmet man beim Sprinten
 function updateScope(dt) {
   const w = you && you.alive && !you.veh && held < 0 ? you.w[you.slot] : null;
-  const def = w ? WEAPONS[w[0]] : null, isScope = !!(def && def.scope);
+  const def = w ? modDef(w[0], w[4]) : null, isScope = !!(def && def.scope);   // Werte mit Aufsätzen (Zielfernrohr-Aufsatz!)
   const can = scoping && def && !myFin && !(you.rl > 0);          // beim Nachladen kann man nicht zielen
   aim += ((can ? 1 : 0) - aim) * Math.min(1, dt * 12);
   scoped = isScope ? aim : 0;
@@ -902,7 +902,7 @@ function updateScope(dt) {
   hud.scopeKick(view.scopeKick);
   // Wackeln: zwei langsame Wellen übereinander, das sieht aus wie zitternde Hände. Es verschiebt das echte Zielen!
   const lifeLeft = you && you.mhp ? Math.max(0, Math.min(1, you.hp / you.mhp)) : 1;
-  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * aim * (isScope ? 1 : 0.45) * UP('scope') * (cling ? CLING.sway : 1);   // über Kimme und Korn wackelt es weniger; Ruhiges Visier
+  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * aim * (isScope ? 1 : 0.45) * UP('scope') * (cling ? CLING.sway : 1) * (def?.sway || 1);   // über Kimme und Korn wackelt es weniger; Ruhiges Visier, Visier-Aufsatz
   swayT += dt;
   // benommen (verbrannt): das Bild schwankt langsam, auch ohne zu zielen, und Zielen wackelt viel mehr
   daze.t = Math.max(0, daze.t - dt); daze.burn = Math.max(0, daze.burn - dt * 1.2);
@@ -916,7 +916,7 @@ function updateScope(dt) {
 let recoilBack = 0;
 const RECOIL = 0.0006, RECOIL_BACK = 0.75;
 function recoil(def) {
-  const k = Math.min(0.09, 0.006 + def.dmg * def.pellets * RECOIL) * UP('recoil');   // Rückstoßdämpfer
+  const k = Math.min(0.09, 0.006 + def.dmg * def.pellets * RECOIL) * UP('recoil') * (def.recoil || 1);   // Rückstoßdämpfer, Kompensator
   camPitch = Math.min(1.45, camPitch + k);
   camYaw += (Math.random() - 0.5) * k * 0.6;
   recoilBack += k * RECOIL_BACK;
@@ -952,7 +952,7 @@ function updateViewModel(dt) {
   const chg = chargeShot ? Math.min(1, (performance.now() - chargeStart) / Math.max(1, chargeEnd - chargeStart)) : 0;
   view.gills = Math.max(view.gills - dt * 4, view.kick * 0.7, chg);
   // Druckanzeige = wie voll das Magazin in der Waffe ist
-  const def = w ? WEAPONS[w[0]] : null;
+  const def = w ? modDef(w[0], w[4]) : null;
   view.charge = def ? (reloading ? Math.max(0, done - RELOAD_STEPS.insert) / (1 - RELOAD_STEPS.insert) : w[2] / def.mag) : 0;
   // im Mech sitzt man in der Ego-Perspektive hinter der Glaskuppel
   cockpit.visible = fpOn && !!(you && you.alive) && !!SUITS[mySuit].mech;
@@ -969,9 +969,10 @@ function updateViewModel(dt) {
   view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil;   // Fernrohr oder weggesteckt: keine Waffe
   if (!view.g.visible) return;
   const widx = WEAPON_IDS.indexOf(w[0]);
-  if (widx !== view.widx || view.suit !== mySuit) {   // Waffe oder Taucher gewechselt: neues Modell bauen
-    view.widx = widx; view.suit = mySuit; view.g.clear();
-    view.gun = makeWaterGun(widx, true); view.g.add(view.gun);
+  const modKey = (w[4] || []).join(",");
+  if (widx !== view.widx || view.suit !== mySuit || modKey !== view.modKey) {   // Waffe, Taucher oder Aufsätze gewechselt: neues Modell bauen
+    view.widx = widx; view.suit = mySuit; view.modKey = modKey; view.g.clear();
+    view.gun = makeWaterGun(widx, true, w[4]); view.g.add(view.gun);
     // Arm und Hände halten die Waffe – im Mech sind es Roboter-Greifarme
     view.arms = SUITS[mySuit].mech ? makeMechViewArms(view.gun.userData) : makeViewArms(mySuit, view.gun.userData); view.gun.add(view.arms);
     view.rHand = makeReloadHand(mySuit); view.gun.add(view.rHand);                   // zweite Hand fürs Nachladen

@@ -119,6 +119,43 @@ export const GADGETS = [
     desc: 'Ein Stromstoß: Gegner bis 8 m sind 1,8 Sekunden gelähmt (langsam, können nicht schießen) und bekommen 10 Schaden.' },
 ];
 export const gadgetOf = (suit) => GADGETS.findIndex(g => g.suit === suit);   // Nummer des Gadgets dieses Tauchers (-1 = keins)
+// Waffen-Aufsätze (Ausrüstungs-Fenster, nur für die Startwaffe). Pro Platz (slot) passt einer drauf.
+// for = auf welche Waffen er passt. Gekauft wird er für jede Waffe einzeln.
+// Wirkung (malgenommen): mag = Magazin, reload = Nachladezeit, spread = Streuung, range = Reichweite, speed = Geschosstempo,
+// recoil = Rückstoß, sway = Wackeln beim Zielen, scope = Zielfernrohr (rechte Maustaste), dmg = Schaden
+export const ATTACHMENTS = [
+  { k: 'dot',   slot: 'Visier',    name: 'Leuchtpunkt-Visier', price: 200, for: ['pistol', 'needler', 'scatter'], sway: 0.6,
+    desc: 'Grüner Leuchtpunkt statt Kimme und Korn: Zielen wackelt 40 % weniger.' },
+  { k: 'scope', slot: 'Visier',    name: 'Zielfernrohr 4×',    price: 450, for: ['needler', 'scatter'], scope: true, sway: 0.8,
+    desc: 'Mit der rechten Maustaste durchs Fernrohr zielen – für weite Schüsse.' },
+  { k: 'mag',   slot: 'Magazin',   name: 'Großes Magazin',     price: 300, for: ['pistol', 'needler', 'scatter', 'harpoon'], mag: 1.5, reload: 1.1,
+    desc: '50 % mehr Schuss pro Magazin, dafür dauert Nachladen 10 % länger.' },
+  { k: 'drum',  slot: 'Magazin',   name: 'Trommelmagazin',     price: 550, for: ['needler'], mag: 2, reload: 1.35,
+    desc: 'Doppelt so viele Schuss! Nachladen dauert 35 % länger.' },
+  { k: 'comp',  slot: 'Mündung',   name: 'Kompensator',        price: 250, for: ['pistol', 'needler', 'harpoon'], recoil: 0.6, spread: 0.8,
+    desc: 'Lenkt den Druck zur Seite ab: 40 % weniger Rückstoß, etwas genauer.' },
+  { k: 'choke', slot: 'Mündung',   name: 'Würgebohrung',       price: 300, for: ['scatter'], spread: 0.55, range: 1.2,
+    desc: 'Die Splitter bleiben enger zusammen und fliegen weiter.' },
+  { k: 'laser', slot: 'Unterlauf', name: 'Laservisier',        price: 300, for: ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo'], spread: 0.65,
+    desc: 'Ein roter Laser zeigt, wohin du triffst: 35 % weniger Streuung.' },
+  { k: 'boost', slot: 'Lauf',      name: 'Druck-Verstärker',   price: 400, for: ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo'], range: 1.3, speed: 1.2,
+    desc: 'Mehr Druck im Lauf: 30 % mehr Reichweite, schnellere Geschosse.' },
+];
+// Werte einer Waffe mit ihren Aufsätzen (mods = ['mag', 'laser', …]). Ohne Aufsätze = die normalen Werte.
+const MOD_CACHE = new Map();
+export function modDef(wid, mods) {
+  const base = WEAPONS[wid]; if (!mods || !mods.length) return base;
+  const key = wid + ':' + mods.join(','); if (MOD_CACHE.has(key)) return MOD_CACHE.get(key);
+  const d = { ...base, recoil: 1, sway: 1, mods: [...mods] };
+  for (const k of mods) {
+    const A = ATTACHMENTS.find(a => a.k === k); if (!A || !A.for.includes(wid)) continue;
+    if (A.mag) d.mag = Math.round(d.mag * A.mag); if (A.reload) d.reload *= A.reload; if (A.spread) d.spread *= A.spread;
+    if (A.range) d.range *= A.range; if (A.speed) d.speed *= A.speed; if (A.recoil) d.recoil *= A.recoil; if (A.sway) d.sway *= A.sway;
+    if (A.scope) d.scope = true; if (A.dmg) d.dmg *= A.dmg;
+  }
+  d.life = d.range / d.speed;
+  MOD_CACHE.set(key, d); return d;
+}
 // Startwaffen (Ausrüstungs-Fenster): einmal kaufen, dann bei jedem Taucher als Startwaffe wählbar (in normaler Seltenheit).
 // Ohne Auswahl startet jeder Taucher mit seiner eigenen Startwaffe (SUITS[…].start, oft seltener und damit stärker).
 export const BR_WEAPONS = [

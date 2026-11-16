@@ -21,7 +21,8 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
   - [x] besserer Kompressor (Turbo-Kompressor)
   - [ ] Waffe schneller ziehen
   - [ ] mehr Leben
-- [ ] **5. Waffen-Aufsätze:** Zielfernrohr, größeres Magazin, Mündungsaufsatz gegen Rückstoß, Laservisier …
+- [x] **5. Waffen-Aufsätze:** Leuchtpunkt-Visier, Zielfernrohr, großes Magazin, Trommelmagazin, Kompensator, Würgebohrung, Laservisier, Druck-Verstärker
+- [ ] **Neue Waffen:** Bolzen-Revolver, Netzwerfer, Stachel-MG, **Magnet-Gewehr** (legt den Mech für ein paar Sekunden lahm)
 - [x] **6. 8 Taucher:** Zu Manta, Triton, Bollwerk und Goliath kommen 4 neue, jeder mit einer Spezialfähigkeit:
   - [x] **Sepia:** Tintenflucht
   - [x] **Barrakuda:** Sprinter

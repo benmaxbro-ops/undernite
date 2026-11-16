@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,7 @@ function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
   return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, urls: lanUrls(),
-    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name), gads: gadsOf(c.name), weps: wepsOf(c.name), load: loadOf(c.name) })) };
+    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name), gads: gadsOf(c.name), weps: wepsOf(c.name), atts: attsOf(c.name), load: loadOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
 
@@ -144,7 +144,9 @@ function startMatch() {
     // Ausrüstung aus dem Ausrüstungs-Fenster: Gadget (wenn gekauft und nicht abgelegt) und Startwaffe
     const L = loadOf(c.name)[c.suit] || {}, gi = gadgetOf(c.suit);
     p.gad = gi >= 0 && L.gad !== false && gadsOf(c.name).includes(GADGETS[gi].k) ? gi : -1; p.gadT = 0;
-    if (L.wep && (L.wep === 'pistol' || wepsOf(c.name).includes(L.wep)) && WEAPONS[L.wep]) p.weapons[0] = newWeapon(L.wep, 0);
+    const [sw, sr] = SUITS[c.suit].start || ['pistol', 0];
+    const wid = L.wep && (L.wep === 'pistol' || wepsOf(c.name).includes(L.wep)) && WEAPONS[L.wep] ? L.wep : sw, rar = wid === sw && !L.wep ? sr : 0;
+    p.weapons[0] = newWeapon(wid, rar, null, null, ((L.mods || {})[wid] || []).filter(k => attsOf(c.name).includes(wid + ':' + k)));   // Startwaffe mit Aufsätzen
     G.players.set(p.id, p); c.playing = true;
   }
   G.baits = []; G.drones = [];
@@ -285,7 +287,9 @@ function damageCreature(c, amt, src) {
 }
 
 // ---------- weapons ----------
-const newWeapon = (id, rar, ammo = WEAPONS[id].mag, spare = null) => ({ id, rar, ammo, spare: spare ? [...spare] : Array(COMPRESSOR.spares).fill(1) });
+// mods = Aufsätze (nur an der Startwaffe aus dem Ausrüstungs-Fenster); wdef(w) = Werte der Waffe mit ihren Aufsätzen
+const newWeapon = (id, rar, ammo = null, spare = null, mods = []) => ({ id, rar, mods, ammo: ammo ?? modDef(id, mods).mag, spare: spare ? [...spare] : Array(COMPRESSOR.spares).fill(1) });
+const wdef = (w) => modDef(w.id, w.mods);
 // das vollste Ersatzmagazin im Rucksack (Index), -1 wenn es keins gibt
 function bestSpare(w) {
   if (!w.spare) w.spare = Array(COMPRESSOR.spares).fill(1);
@@ -296,7 +300,7 @@ function bestSpare(w) {
 function startReload(p) {
   const w = p.weapons[p.slot];
   if (!w || p.reload > 0) return;
-  const d = WEAPONS[w.id];
+  const d = wdef(w);
   if (w.ammo >= d.mag) return;
   const b = bestSpare(w);
   if (b < 0 || Math.floor(w.spare[b] * d.mag + 1e-6) <= w.ammo) {
@@ -309,7 +313,7 @@ function startReload(p) {
 function finishReload(p) {
   p.reload = 0;
   const w = p.weapons[p.slot]; if (!w) return;
-  const d = WEAPONS[w.id], b = bestSpare(w); if (b < 0) return;
+  const d = wdef(w), b = bestSpare(w); if (b < 0) return;
   const take = Math.floor(w.spare[b] * d.mag + 1e-6);
   w.spare[b] = w.ammo / d.mag;
   w.ammo = take;
@@ -348,8 +352,7 @@ function compress(p, dt) {
 // Lag-Ausgleich: Im Browser sieht man alles ca. 0,1 s zu spät. Hat der Spieler genau auf ein Ziel gezielt
 // (aim = [Art, id], 1 = Spieler, 3 = Kreatur), zählt ein Hitscan-Treffer bei diesem Ziel noch AIM_HELP Meter daneben.
 const AIM_HELP = 1.5;
-function spawnProj(p, wid, ox, oy, oz, d, mul, vehId, aim) {
-  const def = WEAPONS[wid];
+function spawnProj(p, wid, ox, oy, oz, d, mul, vehId, aim, def = WEAPONS[wid]) {   // def: Werte mit Aufsätzen
   let dx = d[0] + (rnd() * 2 - 1) * def.spread, dy = d[1] + (rnd() * 2 - 1) * def.spread, dz = d[2] + (rnd() * 2 - 1) * def.spread;
   const l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1; dx /= l; dy /= l; dz /= l;
   const pr = { id: nextId++, o: p.id, wid, x: ox, y: oy, z: oz, dx, dy, dz, sp: def.speed, life: def.life, dmg: def.dmg * mul, splash: def.splash, veh: vehId || 0 };
@@ -381,10 +384,10 @@ function fire(p, d, aim) {
   const w = p.weapons[p.slot];
   if (!w || p.reload > 0 || G.time < p.nextFire - 0.06 || G.time < (p.holsterT || 0) || G.time < (p.stunT || 0)) return;   // weggesteckt (zu heiß) oder gelähmt: nicht schießen
   if (w.ammo <= 0) { startReload(p); return; }
-  const def = WEAPONS[w.id], S = SUITS[p.suit];
+  const def = wdef(w), S = SUITS[p.suit];
   w.ammo--; p.nextFire = G.time + 1 / def.rate;
   const o = S.r + 0.5;
-  for (let i = 0; i < def.pellets; i++) spawnProj(p, w.id, p.x + d[0] * o, p.y + d[1] * o, p.z + d[2] * o, d, RARITY[w.rar].mul * S.dmg, 0, aim);
+  for (let i = 0; i < def.pellets; i++) spawnProj(p, w.id, p.x + d[0] * o, p.y + d[1] * o, p.z + d[2] * o, d, RARITY[w.rar].mul * S.dmg, 0, aim, def);
   if (G.mode !== 'exp') heatUp(p, w, def);
   if (w.ammo === 0) startReload(p);
 }
@@ -406,7 +409,7 @@ function coolDown(w, def) {
 function ventHeat(p) {
   for (const w of p.weapons) {
     if (!w || !w.shotT) continue;
-    const def = WEAPONS[w.id], held = w === p.weapons[p.slot];
+    const def = wdef(w), held = w === p.weapons[p.slot];
     const stopped = G.time - w.shotT >= Math.max(HEAT.pause, 1.6 / def.rate);   // langsame Waffen: etwas länger warten
     if (!stopped && !(held && p.reload > 0)) continue;
     const peak = w.peak || 0, s0 = heatStart(def.mag);
@@ -900,6 +903,7 @@ function addPearls(name, amt) {
 const suitsOf = (name) => [...(brSaves[saveKey(name)]?.suits || [])];   // gekaufte Taucher
 const gadsOf = (name) => [...(brSaves[saveKey(name)]?.gads || [])];     // gekaufte Gadgets
 const wepsOf = (name) => [...(brSaves[saveKey(name)]?.weps || [])];     // gekaufte Startwaffen
+const attsOf = (name) => [...(brSaves[saveKey(name)]?.atts || [])];     // gekaufte Aufsätze: ['needler:mag', …]
 const loadOf = (name) => ({ ...(brSaves[saveKey(name)]?.load || {}) });  // Ausrüstung pro Taucher: { triton: { wep: 'scatter', gad: true }, … }
 // Ausrüstung eines Tauchers speichern (nur gekaufte Sachen): wep = Startwaffe (null = seine eigene), gad = Gadget mitnehmen
 function setLoadout(c, m) {
@@ -908,6 +912,12 @@ function setLoadout(c, m) {
   const L = (s.load ||= {})[m.suit] ||= {};
   if (m.wep === null || (BR_WEAPONS.some(w => w.wid === m.wep) && (m.wep === 'pistol' || (s.weps || []).includes(m.wep)))) L.wep = m.wep;
   if (typeof m.gad === 'boolean') L.gad = m.gad;
+  // Aufsätze für eine Waffe: nur gekaufte, passende, einer pro Platz
+  if (typeof m.modsFor === 'string' && WEAPONS[m.modsFor] && Array.isArray(m.mods)) {
+    const owned = s.atts || [], used = new Set(), ok = [];
+    for (const k of m.mods) { const A = ATTACHMENTS.find(a => a.k === k); if (A && A.for.includes(m.modsFor) && owned.includes(m.modsFor + ':' + k) && !used.has(A.slot)) { used.add(A.slot); ok.push(k); } }
+    (L.mods ||= {})[m.modsFor] = ok;
+  }
   saveBr();
 }
 // Im Perlen-Shop kaufen (nur in der Lobby): k = Verbesserung (nächste Stufe) oder 'suit:name' (Taucher freischalten)
@@ -917,6 +927,12 @@ function brBuy(c, k) {
     const id = k.slice(5), S = SUITS[id];
     if (!S || !S.price || (s.suits || []).includes(id) || (s.pearls || 0) < S.price) return;
     s.pearls -= S.price; (s.suits ||= []).push(id); s.last = Date.now(); c.suit = id;   // gleich auswählen
+    saveBr(); return;
+  }
+  if (typeof k === 'string' && k.startsWith('att:')) {   // Aufsatz für eine Waffe: 'att:needler:mag'
+    const [, wid, ak] = k.split(':'), A = ATTACHMENTS.find(a => a.k === ak), key = wid + ':' + ak;
+    if (!A || !A.for.includes(wid) || (s.atts || []).includes(key) || (s.pearls || 0) < A.price) return;
+    s.pearls -= A.price; (s.atts ||= []).push(key); s.last = Date.now();
     saveBr(); return;
   }
   if (typeof k === 'string' && k.startsWith('wep:')) {
@@ -1311,7 +1327,7 @@ function snapshot() {
     if (p) {
       const v = p.veh && G.vehicles.get(p.veh);
       you = { alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxhp, sh: Math.round(p.shield), slot: p.slot, kills: p.kills, place: p.place,
-        w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo, (w.spare || []).map(s => Math.round(s * 100) / 100)] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
+        w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo, (w.spare || []).map(s => Math.round(s * 100) / 100), w.mods || []] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
         grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)),
         gd: p.gad >= 0 ? [p.gad, r2(Math.max(0, (p.gadT || 0) - G.time))] : null };   // Gadget: Nummer und wie lange es noch abkühlt
       if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, e) => a + fishValue(e), 0), air: r2(p.air),

@@ -1,5 +1,5 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned, GADGETS, gadgetOf, BR_WEAPONS } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef } from './shared.js';
 const perSec = (v) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
@@ -59,7 +59,7 @@ export class Hud {
     $('loadTitle').innerHTML = `${S.name.toUpperCase()}<span> · AUSRÜSTUNG</span>`;
     $('loadMoney').textContent = `🦪 ${pearls} Perlen`;
     const wname = (wid, rar) => `${WEAPONS[wid].name} <small style="display:inline;color:${RARITY[rar].color}">${RARITY[rar].name}</small>`;
-    const wstat = (wid, rar) => { const D = WEAPONS[wid]; return `${Math.round(D.dmg * RARITY[rar].mul * D.pellets)} Schaden · ${D.rate}/s · Magazin ${D.mag} · ${D.range} m`; };
+    const wstat = (wid, rar) => { const D = modDef(wid, (L.mods || {})[wid] || []); return `${Math.round(D.dmg * RARITY[rar].mul * D.pellets)} Schaden · ${D.rate}/s · Magazin ${D.mag} · ${Math.round(D.range)} m`; };   // mit Aufsätzen
     // Startwaffe: seine eigene (Standard) oder eine gekaufte
     const [sw, sr] = S.start || ['pistol', 0];
     let h = `<div class="item${!L.wep ? ' chosen' : ''}" style="--rar:${RARITY[sr].color}"><b>${wname(sw, sr)} · Standard</b><small>${wstat(sw, sr)}</small>`
@@ -81,6 +81,23 @@ export class Hud {
         : on ? '<button data-load="gad" data-v="0">Ablegen</button>' : '<button data-load="gad" data-v="1">Mitnehmen</button>';
       $('loadGad').innerHTML = `<div class="item${on ? ' chosen' : ''}" style="--rar:#5ef2e0"><b>${G.name}${on ? ' · dabei ✔' : ''}</b><small>${G.desc} · lädt ${G.cool} s</small>${btn}</div>`;
     }
+    // Aufsätze für die gewählte Startwaffe: pro Platz einer
+    const wid = L.wep || sw, mods = ((L.mods || {})[wid]) || [], atts = me.atts || [];
+    const fits = ATTACHMENTS.filter(A => A.for.includes(wid));
+    $('loadAttsFor').textContent = `für: ${WEAPONS[wid].name}`;
+    $('loadAtts').innerHTML = fits.length ? fits.map(A => {
+      const has = atts.includes(wid + ':' + A.k), on = mods.includes(A.k);
+      const btn = !has ? `<button data-buy="att:${wid}:${A.k}" ${pearls < A.price ? 'disabled' : ''}>🦪 ${A.price}</button>`
+        : on ? `<button data-att="${A.k}" data-on="0">Abnehmen</button>` : `<button data-att="${A.k}" data-on="1">Anbringen</button>`;
+      return `<div class="item${on ? ' chosen' : ''}" style="--rar:#ffd36b"><b>${A.name} <small style="display:inline">· ${A.slot}</small>${on ? ' ✔' : ''}</b><small>${A.desc}</small>${btn}</div>`;
+    }).join('') : '<div class="empty">Für diese Waffe gibt es keine Aufsätze.</div>';
+    for (const b of document.querySelectorAll('#loadAtts button[data-att]')) b.onclick = () => {
+      const A = ATTACHMENTS.find(a => a.k === b.dataset.att);
+      // gleicher Platz: der alte Aufsatz kommt runter, der neue drauf
+      const next = mods.filter(k => ATTACHMENTS.find(a => a.k === k)?.slot !== A.slot);
+      if (b.dataset.on === '1') next.push(A.k);
+      this.loadSend && this.loadSend({ suit: id, modsFor: wid, mods: next });
+    };
     for (const b of document.querySelectorAll('#loadout button[data-load]')) b.onclick = () => {
       const m = { suit: id }; if (b.dataset.load === 'wep') m.wep = b.dataset.v || null; else m.gad = b.dataset.v === '1';
       this.loadSend && this.loadSend(m);
@@ -268,7 +285,7 @@ export class Hud {
         if (sl.key === key) continue; sl.key = key;
         sl.d.classList.toggle('on', y.slot === i);
         if (w) {
-          const def = WEAPONS[w[0]];
+          const def = modDef(w[0], w[4]);   // mit Aufsätzen (größeres Magazin)
           sl.n.textContent = def.name; sl.d.style.setProperty('--rar', RARITY[w[1]].color);
           // Nachladen = Magazin wechseln. Daneben die Ersatzmagazine im Rucksack: jedes zeigt, wie voll es ist (der Kompressor füllt nach).
           const reloading = y.slot === i && y.rl > 0;
