@@ -68,6 +68,38 @@ export function makeShock(group, x, y, z, dx, dy, dz, widx, mine, scale = 1, hea
     const g = (0.12 + size * 0.15) * (mine ? 0.22 : 1);   // klein bleiben, vor allem direkt vor der eigenen Kamera
     add(SPHERE, false, q, (m, e) => { const r = g * e; m.scale.set(r, r, r * 1.5); m.position.copy(base).addScaledVector(sd, 0.04 + g * 1.4 * e); }, 0.8);
   }
+  return makeUpdater(group, parts, dur, op);
+}
+
+// Hitze ablassen – die große Schallwelle. P = Mündung, dir = wohin die Waffe zeigt, back = so weit hinter der Mündung
+// sitzen die Kiemen (Meter), heat 0…1. Alles bleibt an seinem Platz in der Welt: dreht man sich, sieht man sie weiterlaufen.
+//   1) aus jeder Seitenkieme schießt ein Druckstrahl zur Seite
+//   2) eine schimmernde Kugel-Schale breitet sich von der Waffe aus in alle Richtungen aus – 10 bis 35 m weit
+//   3) eine zweite, langsamere Schale dahinter (Nachdruck)
+export const BLAST = { range: 10, rangeHot: 25, time: 1.5, timeHot: 1.5, jet: 1.6, jetHot: 3.5 };
+export function makeBlast(group, x, y, z, dx, dy, dz, widx, heat, mine, back = 0.25) {
+  const dir = new THREE.Vector3(dx, dy, dz); if (dir.lengthSq() < 1e-6) return null; dir.normalize();
+  const side = new THREE.Vector3().crossVectors(dir, UPV); if (side.lengthSq() < 1e-4) side.set(1, 0, 0); side.normalize();
+  const gill = new THREE.Vector3(x, y, z).addScaledVector(dir, -back);
+  const tint = new THREE.Color(SHOCK.color).lerp(new THREE.Color(SHOCK.hot), heat);
+  const R = BLAST.range + BLAST.rangeHot * heat, dur = BLAST.time + BLAST.timeHot * heat, J = BLAST.jet + BLAST.jetHot * heat;
+  const parts = [];
+  const add = (geo, quat, pos, move, k = 1) => {
+    const m = new THREE.Mesh(geo, material(false)); m.material.uniforms.uColor.value.copy(tint); m.quaternion.copy(quat);
+    m.scale.setScalar(0.001); m.position.copy(pos); m.frustumCulled = false; group.add(m); parts.push({ m, move, k });
+  };
+  for (const s of [1, -1]) {   // Druckstrahlen aus den Kiemen: lang gezogen, schießen schnell zur Seite und werden breiter
+    const sd = side.clone().multiplyScalar(s), q = new THREE.Quaternion().setFromUnitVectors(Z, sd);
+    add(SPHERE, q, gill, (m, e) => { const r = (0.05 + 0.5 * e) * (0.6 + heat * 0.6); m.scale.set(r, r, J * 0.35 * (0.2 + e)); m.position.copy(gill).addScaledVector(sd, 0.05 + J * 0.6 * e); }, 1.3);
+  }
+  const Q0 = new THREE.Quaternion();
+  add(SPHERE, Q0, gill, (m, e) => { m.scale.setScalar(0.1 + R * e); }, 1.0);                 // große Druckwelle in alle Richtungen
+  add(SPHERE, Q0, gill, (m, e) => { m.scale.setScalar(0.1 + R * 0.55 * e * e); }, 0.6);     // Nachdruck
+  return makeUpdater(group, parts, dur, SHOCK.glow * (mine ? 0.7 : 1) * (1 + heat * 0.6), 1.2);
+}
+
+// gemeinsame Bewegung: e = 0 → 1 (schnell raus, dann langsamer), kurz aufblitzen, dann langsam verblassen
+function makeUpdater(group, parts, dur, op, fadePow = 1.6) {
   let t = 0;
   return {
     // gibt false zurück, wenn sie fertig ist (dann wurde alles entfernt)
@@ -75,7 +107,7 @@ export function makeShock(group, x, y, z, dx, dy, dz, widx, mine, scale = 1, hea
       t += dt / dur;
       if (t >= 1) { for (const p of parts) { group.remove(p.m); p.m.material.dispose(); } return false; }
       const e = 1 - (1 - t) ** 3;                                   // schnell raus, dann langsamer – wie eine echte Druckwelle
-      const fade = op * (t < 0.08 ? t / 0.08 : (1 - (t - 0.08) / 0.92) ** 1.6);   // kurz aufblitzen, dann verblassen
+      const fade = op * (t < 0.06 ? t / 0.06 : (1 - (t - 0.06) / 0.94) ** fadePow);   // kurz aufblitzen, dann verblassen
       for (const p of parts) { p.move(p.m, e); p.m.material.uniforms.uOp.value = fade * p.k; }
       return true;
     },

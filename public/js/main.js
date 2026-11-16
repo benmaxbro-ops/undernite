@@ -12,7 +12,9 @@ import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
 import { settings, onSettings, openSettings, closeSettings, QUALITY } from './settings.js';
 import { setReefQuality } from './reef.js';
-import { makeShock, SHOCK } from './shock.js';
+import { makeShock, makeBlast, SHOCK } from './shock.js';
+// so weit hinter der Mündung sitzen die Seitenkiemen je Waffe (Meter) – dort kommt beim Hitze-Ablassen der Druck raus
+const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6];
 import { makeLensPass } from './lens.js';
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -301,11 +303,14 @@ function onEvent(e) {
     case 'vent': {
       const pe = players.get(e[1]); if (!pe) break;
       const mz = e[4] ? muzzleOf(e[1]) : null, P = mz ? mz.clone() : new THREE.Vector3(pe.x, pe.y + 0.3, pe.z);
-      const d = e[1] === myId ? aimDir() : dirFrom(pe.yaw || 0, pe.pitch || 0);
-      // Wumms: große Welle, dazu eine zweite, die rundherum aufplatzt (nicht nur nach vorne)
-      addShock(P.x, P.y, P.z, d[0], d[1], d[2], e[2], e[1] === myId, 1.3 + e[3] * 1.9, e[3]);
-      addShock(P.x, P.y, P.z, -d[0], -d[1], -d[2], e[2], e[1] === myId, 0.6 + e[3] * 0.9, e[3]);
-      env.bubble(P.x, P.y, P.z, 14 + Math.round(e[3] * 50), 0.3 + e[3] * 0.7, 3);   // heiße Blasen steigen auf
+      const d = e[1] === myId ? dirFrom(camYaw, camPitch) : dirFrom(pe.yaw || 0, pe.pitch || 0);
+      // Wumms: Druckstrahlen aus den Kiemen + große Schallwelle, die sich weit ausbreitet (bleibt in der Welt stehen)
+      const back = GILL_BACK[e[2]] ?? 0.25;
+      const b = makeBlast(dyn, P.x, P.y, P.z, d[0], d[1], d[2], e[2], e[3], e[1] === myId, back); if (b) shocks.push(b);
+      addShock(P.x, P.y, P.z, d[0], d[1], d[2], e[2], e[1] === myId, 0.8 + e[3] * 0.8, e[3]);   // kurzer Druckstoß aus der Mündung
+      // heiße Blasen sprudeln aus beiden Kiemen
+      const sx = -d[2], sz = d[0], sl = Math.hypot(sx, sz) || 1, gx = P.x - d[0] * back, gy = P.y - d[1] * back, gz = P.z - d[2] * back;
+      for (const s of [1, -1]) env.bubble(gx + sx / sl * 0.12 * s, gy, gz + sz / sl * 0.12 * s, 8 + Math.round(e[3] * 25), 0.15 + e[3] * 0.3, 2.5);
       const vv = e[1] === myId ? 1 : volAt(P.x, P.y, P.z);
       sfx.ventBoom(vv, e[3], distTo(P.x, P.y, P.z)); sfx.hiss(vv, e[3]);
       // Druckwelle spürt man: Kamera wackelt (eigene stark, fremde je nach Entfernung)

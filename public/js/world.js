@@ -404,7 +404,8 @@ export function buildEnvironment(scene, W) {
       plankton.visible = !above; rays.visible = !above && exp;   // Lichtstrahlen von oben gibt es in der Tiefsee nicht
       // Meeresschnee: ohne Lampe sieht man ihn nur oben im hellen Wasser, in der Tiefe nur im Lichtkegel
       snowMat.uniforms.uDark.value = SNOW.dark + (exp ? 0.55 * Math.max(0, 1 - (SURFACE - cy) / 80) : 0);
-      snowMat.uniforms.uFogDensity.value = fog.density;
+      if (!exp) fog.density = -fog.density;   // Tiefsee-Zeichen für water.js: kein Sonnenlicht von oben (Nebel bleibt gleich)
+      snowMat.uniforms.uFogDensity.value = Math.abs(fog.density);
       snowMat.uniforms.uScale.value = innerHeight * Math.min(devicePixelRatio, 1.5) / (2 * Math.tan(cam.fov * Math.PI / 360));
       scene.background = fog.color;
       if (zone) { zoneWall.visible = zone[2] > 0.5 && zone[2] < 400; zoneWall.position.set(zone[0], 60, zone[1]); zoneWall.scale.set(zone[2], 1, zone[2]); }
