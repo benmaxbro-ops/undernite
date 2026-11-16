@@ -52,7 +52,7 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [ ] **Schüsse von anderen**: dumpfer Schlag wie gegen eine Holztür, großes Kaliber dumpfer
 - [ ] **Nadler**: längere Lade-/Schockwellen-Zeit
 - [x] **Sichtbare Schockwelle** aus Mündung und Seitenkiemen (shock.js) – kommt jetzt beim Hitze-Ablassen
-- [x] **Hitze-System:** zu viel am Stück schießen → verbrennen, „Ah!“, benommen; nach Pause Hitze ablassen
+- [x] **Hitze-System:** Hitze sammelt sich beim Schießen, kommt nach dem Aufhören auf einen Schlag raus (Schallwelle mit Wumms); zu viel → verbrennen, „Ah!“, benommen, Waffe 2 s wegstecken
 - [x] **Schüsse wie Schlag gegen Holztür** (echte CC0-Aufnahme, tiefer, mit Wasser-Echo, weit hörbar)
 - [x] **Bodycam-Linse** (lens.js)
 - [ ] **Kimme und Korn leuchten** (wie Leuchtvisiere)

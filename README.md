@@ -50,9 +50,12 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
   quer über den Boden (feste Hügel: man kann nicht hindurch, Kugeln auch nicht → Deckung).
 - **Schießen:** Vor jedem Schuss baut sich kurz Druck auf (Pistole 0,1 s, Harpune 0,3 s), dann geht er mit einem Wumms raus.
   Von weitem klingen Schüsse wie ein dumpfer Schlag gegen eine Holztür.
-- **Hitze:** Wer zu viel am Stück schießt, verbrennt sich (ab einem Drittel des Magazins; ein ganzes Pistolen-Magazin = 20 Schaden,
-  kein Schild hilft) und ist ein paar Sekunden benommen. Nach 2,5 s Pause lässt die Waffe die Hitze ab: Schockwelle, heiße Blasen, Zischen.
+- **Hitze:** Jeder schnelle Schuss heizt die Waffe auf. Während man schießt, passiert nichts. Hört man auf oder lädt nach,
+  kommt die Hitze auf einen Schlag raus: Schallwelle mit Wumms, heiße Blasen, Zischen. War es zu viel am Stück (ab einem Drittel
+  des Magazins im vollen Tempo), verbrennt man sich DANN: ein ganzes Pistolen-Magazin = 20 Schaden (kein Schild hilft), „Ah!“,
+  ein paar Sekunden benommen, und bei sehr viel Hitze muss man die Waffe 2 Sekunden wegstecken. Wer langsamer schießt, verbrennt sich nicht.
   Werte: `HEAT` in `shared.js`.
+- **Unterwasser-Licht:** Wasser schluckt Rot zuerst, dann Grün (Werte in `water.js`). Schwebeteilchen blitzen im Lampenkegel auf.
 - **Perlen 🦪:** Am Rundenende gibt es 50 pro Kill, 10 pro überlebter Minute und 300 / 150 / 75 für Platz 1–3.
   Sie werden unter deinem Namen gespeichert (`saves/battleroyale.json`), getrennt vom Expeditions-Geld.
 - **Perlen-Shop** (Knopf oben rechts in der Lobby): Verbesserungen mit je 3 Stufen – Schnellladen, Rückstoßdämpfer,

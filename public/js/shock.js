@@ -49,7 +49,7 @@ export function makeShock(group, x, y, z, dx, dy, dz, widx, mine, scale = 1, hea
   const tint = new THREE.Color(SHOCK.color).lerp(new THREE.Color(SHOCK.hot), heat);
   const side = new THREE.Vector3().crossVectors(dir, UPV); if (side.lengthSq() < 1e-4) side.set(1, 0, 0); side.normalize();
   const P = new THREE.Vector3(x, y, z), qF = new THREE.Quaternion().setFromUnitVectors(Z, dir);
-  const op = SHOCK.glow * (mine ? 0.55 : 1);
+  const op = SHOCK.glow * (mine ? 0.55 : 1) * (1 + heat * 0.8);   // mehr Hitze = heller
   const parts = [];
   const add = (geo, fan, quat, move, k = 1) => {
     const m = new THREE.Mesh(geo, material(fan)); m.material.uniforms.uColor.value.copy(tint); m.quaternion.copy(quat); m.scale.setScalar(0.001); m.position.copy(P);

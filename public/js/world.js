@@ -6,6 +6,7 @@ import { sand, rock } from './textures.js';
 import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT, deepGlow, DEEP } from './shared.js';
 const LAVA_FOG = new THREE.Color(0x4a1206), PRIM_FOG = new THREE.Color(0x061a3a);
 import { makeBoat, makeTag } from './models.js';
+import { SNOW, makeSnowMaterial } from './water.js';
 
 const TAU = Math.PI * 2;
 const CAUSTIC = `
@@ -218,15 +219,45 @@ export function buildEnvironment(scene, W) {
   const seaTop = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 2.4, SIZE * 2.4).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: surfTex, color: 0x2a7aa6, transparent: true, opacity: 0.94, depthWrite: false }));
   seaTop.position.y = SURFACE + 0.02; root.add(seaTop);
   const rayN = 70;
-  const rays = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.8, 6, 80, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xbff4ff, transparent: true, opacity: 0.028, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), rayN);
+  // Sonnenstrahlen unter Wasser: weicher Rand, oben hell, laufen nach unten aus, flackern mit den Wellen, verschwinden in der Ferne
+  const rayMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: uTime, uColor: { value: new THREE.Color(0xbff4ff) }, uOp: { value: 0.05 } },
+    vertexShader: `
+      uniform float uTime; varying float vT; varying float vEdge; varying float vFar; varying float vFlick;
+      void main() {
+        vec4 lp = vec4(position, 1.0);
+        #ifdef USE_INSTANCING
+          lp = instanceMatrix * lp;
+          vec2 seed = instanceMatrix[3].xz;
+        #else
+          vec2 seed = vec2(0.0);
+        #endif
+        vec4 mv = viewMatrix * modelMatrix * lp;
+        vec3 n = normalize(mat3(viewMatrix * modelMatrix) * normal);
+        vEdge = pow(abs(dot(n, normalize(-mv.xyz))), 2.0);
+        vT = (position.y + 40.0) / 80.0;                 // 1 = oben an der Oberfläche, 0 = unten
+        vFar = exp(-length(mv.xyz) * 0.012);
+        vFlick = 0.55 + 0.45 * sin(uTime * (0.7 + fract(seed.x * 0.37) * 0.8) + seed.y * 0.21) * sin(uTime * 0.33 + seed.x);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uOp; varying float vT; varying float vEdge; varying float vFar; varying float vFlick;
+      void main() {
+        float a = uOp * vEdge * smoothstep(0.0, 0.75, vT) * smoothstep(1.0, 0.92, vT) * vFar * vFlick;
+        gl_FragColor = vec4(uColor * a, 1.0);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+  });
+  const rays = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.8, 6, 80, 16, 1, true), rayMat, rayN);
   for (let i = 0; i < rayN; i++) put(rays, i, (Math.random() * 2 - 1) * 300, SURFACE - 40, (Math.random() * 2 - 1) * 300, (Math.random() - 0.5) * 0.25, 0, 0.18 + (Math.random() - 0.5) * 0.2, 0.6 + Math.random(), 1, 0.6 + Math.random());
   root.add(rays);
 
-  // ----- plankton -----
-  const PN = 1400, PR = 45, pArr = new Float32Array(PN * 3);
+  // ----- Meeresschnee (Schwebeteilchen), blitzt im Lampenkegel auf – Werte in water.js -----
+  const PN = SNOW.count, PR = SNOW.radius, pArr = new Float32Array(PN * 3);
   for (let i = 0; i < PN * 3; i++) pArr[i] = (Math.random() * 2 - 1) * PR;
   const pGeo = new THREE.BufferGeometry(); pGeo.setAttribute('position', new THREE.BufferAttribute(pArr, 3));
-  const plankton = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: 0xcdf3ff, size: 0.09, transparent: true, opacity: 0.55, depthWrite: false }));
+  const snowMat = makeSnowMaterial();
+  const plankton = new THREE.Points(pGeo, snowMat);
   plankton.frustumCulled = false; root.add(plankton);
 
   // ----- bubbles -----
@@ -308,8 +339,16 @@ export function buildEnvironment(scene, W) {
     c.putImageData(img, 0, 0); }
 
   const shallow = new THREE.Color(0x2b8fb0), deepC = new THREE.Color(0x05202e), toxic = new THREE.Color(0x1d0a33), abyss = new THREE.Color(0x010307);
+  const LD = new THREE.Vector3();
   return {
     seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat, base, bases, glow: reef.glow,
+    // Helmlampe → Meeresschnee leuchtet in ihrem Kegel auf
+    setLamp(l) {
+      const u = snowMat.uniforms;
+      u.uLampOn.value = l.intensity > 0 ? 1 : 0;
+      u.uLampPos.value.copy(l.position); u.uLampDir.value.copy(LD.subVectors(l.target.position, l.position).normalize());
+      u.uLampCos.value = Math.cos(l.angle); u.uLampRange.value = l.distance || 60;
+    },
     update(dt, t, cam, zone, outside) {
       uTime.value = t;
       reef.update(t);
@@ -363,6 +402,10 @@ export function buildEnvironment(scene, W) {
       const above = cy > SURFACE;
       if (above) { fog.color.setHex(0xa9d9ef); fog.density = 0.0016; }
       plankton.visible = !above; rays.visible = !above && exp;   // Lichtstrahlen von oben gibt es in der Tiefsee nicht
+      // Meeresschnee: ohne Lampe sieht man ihn nur oben im hellen Wasser, in der Tiefe nur im Lichtkegel
+      snowMat.uniforms.uDark.value = SNOW.dark + (exp ? 0.55 * Math.max(0, 1 - (SURFACE - cy) / 80) : 0);
+      snowMat.uniforms.uFogDensity.value = fog.density;
+      snowMat.uniforms.uScale.value = innerHeight * Math.min(devicePixelRatio, 1.5) / (2 * Math.tan(cam.fov * Math.PI / 360));
       scene.background = fog.color;
       if (zone) { zoneWall.visible = zone[2] > 0.5 && zone[2] < 400; zoneWall.position.set(zone[0], 60, zone[1]); zoneWall.scale.set(zone[2], 1, zone[2]); }
       else zoneWall.visible = false;

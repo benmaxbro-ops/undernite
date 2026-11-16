@@ -195,6 +195,23 @@ export class Sfx {
     if (vol < 0.03) return;
     this.sample(Math.random() < 0.5 ? 'burn_ah1' : 'burn_ah2', 1.3 * vol, { rate: 1.1 + Math.random() * 0.12, bus: vol > 0.95 ? 'shot' : '' });
   }
+  // Hitze ablassen – der Wumms: tiefer Druck-Schlag (hörbar auch auf kleinen Lautsprechern), die zuschlagende Tür
+  // ganz tief gestimmt und ein langes Grollen, das durchs Wasser rollt. heat 0…1 = wie stark
+  ventBoom(vol = 1, heat = 0.5, dist = 0) {
+    const v = Math.max(vol, 1.4 * Math.max(0, 1 - dist / 220) ** 1.3);   // tiefe Töne tragen weit
+    if (v < 0.03) return;
+    const k = 0.6 + heat * 0.6;
+    this.cur = this.master;
+    this.tone(150, 38, 0.5 + heat * 0.4, 1.4 * v * k, 'sine');                 // Wumms
+    this.tone(300, 70, 0.3, 0.5 * v * k, 'triangle');                          // Oberton, damit man ihn überall hört
+    this.noise(0.9 + heat * 0.8, 260, 0.9, 0.8 * v * k, 'lowpass', 60);        // Grollen
+    this.cur = null;
+    this.sample('knock_big', 1.6 * v * k, { rate: 0.45, drive: true });       // zuschlagende Tür, ganz tief
+    if (vol > 0.95 && SHOT.duck > 0 && this.world) {                           // alles andere kurz leiser → wirkt lauter
+      const t = this.ctx.currentTime, gw = this.world.gain; gw.cancelScheduledValues(t); gw.setValueAtTime(gw.value, t);
+      gw.linearRampToValueAtTime(0.35, t + 0.01); gw.setTargetAtTime(1, t + 0.15, 0.25);
+    }
+  }
   // Hitze ablassen: heißes Zischen, das langsam leiser wird, dazu viele aufsteigende Blasen. heat 0…1 = wie lange und laut
   hiss(vol = 1, heat = 0.5) {
     if (vol < 0.03) return;

@@ -362,7 +362,7 @@ function fire(p, d, aim) {
     return;
   }
   const w = p.weapons[p.slot];
-  if (!w || p.reload > 0 || G.time < p.nextFire - 0.06) return;
+  if (!w || p.reload > 0 || G.time < p.nextFire - 0.06 || G.time < (p.holsterT || 0)) return;   // weggesteckt (zu heiß): nicht schießen
   if (w.ammo <= 0) { startReload(p); return; }
   const def = WEAPONS[w.id], S = SUITS[p.suit];
   w.ammo--; p.nextFire = G.time + 1 / def.rate;
@@ -371,21 +371,41 @@ function fire(p, d, aim) {
   if (G.mode !== 'exp') heatUp(p, w, def);
   if (w.ammo === 0) startReload(p);
 }
-// Hitze: jeder Schuss am Stück heizt die Waffe auf. Ab heatStart(mag) Schüssen verbrennt man sich bei jedem weiteren Schuss,
-// bis zu HEAT.dmg Schaden für ein ganzes Magazin. Nach HEAT.pause Sekunden Pause lässt die Waffe die Hitze ab (ventHeat).
+// Hitze: jeder Schuss am Stück heizt die Waffe auf (und sie kühlt dabei langsam ab). Während man schießt, passiert nichts –
+// erst wenn man aufhört oder nachlädt, kommt alles auf einen Schlag raus (ventHeat). Nicht im Kampf bestraft, sondern danach.
 function heatUp(p, w, def) {
-  w.heat = (w.heat || 0) + 1; w.shotT = G.time;
-  const s0 = heatStart(def.mag);
-  if (w.heat <= s0) return;
-  const per = HEAT.dmg / Math.max(1, def.mag - s0), hot = Math.min(1, (w.heat - s0) / Math.max(1, def.mag - s0));
-  ev('burn', p.id, +hot.toFixed(2));   // alle hören das "Ah", der Schütze wird benommen
-  damage(p, per, null, 'burn');
+  coolDown(w, def);
+  w.heat = (w.heat || 0) + 1; w.shotT = G.time; w.peak = Math.max(w.peak || 0, w.heat);
 }
+// Abkühlen zwischen zwei Schüssen: Im vollen Tempo (mit 30 % Spielraum) kühlt sie gar nicht ab – jeder Schuss zählt.
+// Jede Zeit darüber hinaus kühlt sie ab: HEAT.cool Schuss pro Schuss-Abstand.
+function coolDown(w, def) {
+  const gap = w.coolT != null ? G.time - w.coolT : 0; w.coolT = G.time;
+  if (w.heat) w.heat = Math.max(0, w.heat - Math.max(0, gap - 1.3 / def.rate) * def.rate * HEAT.cool);
+}
+// Hitze ablassen, sobald man aufhört zu schießen (kurze Pause) oder die Waffe nachlädt:
+// Schallwelle mit Wumms (je mehr Hitze, desto stärker). War es zu viel, verbrennt man sich JETZT: Schaden, "Ah!", benommen.
+// War es viel zu viel, muss man die Waffe wegstecken und HEAT.holster Sekunden warten.
 function ventHeat(p) {
   for (const w of p.weapons) {
-    if (!w || !w.heat || G.time - w.shotT < HEAT.pause) continue;
-    if (p.alive) ev('vent', p.id, WEAPON_IDS.indexOf(w.id), +Math.min(1, w.heat / WEAPONS[w.id].mag).toFixed(2), w === p.weapons[p.slot] ? 1 : 0);
-    w.heat = 0;
+    if (!w || !w.shotT) continue;
+    const def = WEAPONS[w.id], held = w === p.weapons[p.slot];
+    const stopped = G.time - w.shotT >= Math.max(HEAT.pause, 1.6 / def.rate);   // langsame Waffen: etwas länger warten
+    if (!stopped && !(held && p.reload > 0)) continue;
+    const peak = w.peak || 0, s0 = heatStart(def.mag);
+    w.heat = 0; w.peak = 0; w.shotT = 0; w.coolT = null;
+    if (!p.alive || peak < 2) continue;
+    ev('vent', p.id, WEAPON_IDS.indexOf(w.id), +Math.min(1, peak / s0 * 0.6).toFixed(2), held ? 1 : 0);
+    if (peak <= s0) continue;
+    // so verteilt, dass ein ganzes Magazin im Dauerfeuer genau HEAT.dmg Schaden macht (mehr als ein Magazin am Stück: bis 30 % mehr)
+    const span = Math.max(1, def.mag * 0.8 - s0), hot = Math.min(1, (peak - s0) / span), dmg = HEAT.dmg * Math.min(1.3, (peak - s0) / span);
+    if (dmg < 1) continue;   // so wenig, dass es nicht wehtut
+    ev('burn', p.id, +hot.toFixed(2));   // alle hören das "Ah", der Schütze wird benommen
+    damage(p, dmg, null, 'burn');
+    if (p.alive && dmg >= HEAT.dmg * HEAT.holsterAt) {   // viel zu heiß: Waffe wegstecken, Strafe
+      p.holsterT = G.time + HEAT.holster;
+      if (!p.bot) p.ye.push(['holster', HEAT.holster]);
+    }
   }
 }
 function explode(pr, x, y, z) {

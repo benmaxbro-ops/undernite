@@ -14,6 +14,7 @@ import { settings, onSettings, openSettings, closeSettings, QUALITY } from './se
 import { setReefQuality } from './reef.js';
 import { makeShock, SHOCK } from './shock.js';
 import { makeLensPass } from './lens.js';
+import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -37,9 +38,11 @@ scene.add(lamp); scene.add(lamp.target);
 // visible light cone of the expedition flashlight (apex at the diver, opening towards -z)
 const torchBeam = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).translate(0, -0.5, 0).rotateX(Math.PI / 2),
   new THREE.ShaderMaterial({   // bright at the lamp, fading out towards the end of the cone
-    uniforms: { c: { value: new THREE.Color(LAMP_COLOR) }, o: { value: 0.08 } },
-    vertexShader: 'varying float vz; void main() { vz = -position.z; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform vec3 c; uniform float o; varying float vz; void main() { gl_FragColor = vec4(c, o * pow(1.0 - vz, 1.8)); }',
+    // Weicher Lichtdunst statt harter Kegel: an den Rändern (wo man flach auf den Kegel schaut) blendet er aus,
+    // und mit der Entfernung von der Lampe wird er schwächer – so sieht ein Lampenstrahl in trübem Wasser aus.
+    uniforms: { c: { value: new THREE.Color(LAMP_COLOR) }, o: { value: 0.07 } },
+    vertexShader: 'varying float vz; varying vec3 vN; varying vec3 vV; void main() { vz = -position.z; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 c; uniform float o; varying float vz; varying vec3 vN; varying vec3 vV; void main() { float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.6); gl_FragColor = vec4(c, o * pow(1.0 - vz, 2.2) * edge); }',
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
 torchBeam.rotation.order = 'YXZ'; torchBeam.visible = false; scene.add(torchBeam);
 function resize() {
@@ -152,7 +155,7 @@ function clearDyn() {
   you = null; zone = null; deadInfo = null; specId = 0;
 }
 function onStart(m) {
-  mode = m.mode || 'br'; cling = null; daze.t = 0; daze.burn = 0;
+  mode = m.mode || 'br'; cling = null; daze.t = 0; daze.burn = 0; holsterUntil = 0;
   ensureWorld(m.seed, mode); clearDyn();
   phase = 'play'; meta.clear(); hud.setMode(mode);
   torch.on = false; torchBeam.visible = false; torch.bat = LAMPS[torch.lvl].battery;   // Akku zurücksetzen (im Battle Royale war er unendlich)
@@ -299,9 +302,14 @@ function onEvent(e) {
       const pe = players.get(e[1]); if (!pe) break;
       const mz = e[4] ? muzzleOf(e[1]) : null, P = mz ? mz.clone() : new THREE.Vector3(pe.x, pe.y + 0.3, pe.z);
       const d = e[1] === myId ? aimDir() : dirFrom(pe.yaw || 0, pe.pitch || 0);
-      addShock(P.x, P.y, P.z, d[0], d[1], d[2], e[2], e[1] === myId, 0.6 + e[3] * 1.1, e[3]);
-      env.bubble(P.x, P.y, P.z, 8 + Math.round(e[3] * 40), 0.25 + e[3] * 0.5, 2.5);   // heiße Blasen steigen auf
-      sfx.hiss(e[1] === myId ? 1 : volAt(P.x, P.y, P.z), e[3]);
+      // Wumms: große Welle, dazu eine zweite, die rundherum aufplatzt (nicht nur nach vorne)
+      addShock(P.x, P.y, P.z, d[0], d[1], d[2], e[2], e[1] === myId, 1.3 + e[3] * 1.9, e[3]);
+      addShock(P.x, P.y, P.z, -d[0], -d[1], -d[2], e[2], e[1] === myId, 0.6 + e[3] * 0.9, e[3]);
+      env.bubble(P.x, P.y, P.z, 14 + Math.round(e[3] * 50), 0.3 + e[3] * 0.7, 3);   // heiße Blasen steigen auf
+      const vv = e[1] === myId ? 1 : volAt(P.x, P.y, P.z);
+      sfx.ventBoom(vv, e[3], distTo(P.x, P.y, P.z)); sfx.hiss(vv, e[3]);
+      // Druckwelle spürt man: Kamera wackelt (eigene stark, fremde je nach Entfernung)
+      shake = Math.max(shake, e[1] === myId ? 0.35 + e[3] * 0.4 : Math.max(0, 0.4 - distTo(P.x, P.y, P.z) / 40));
       break;
     }
     case 'pk+': addPickup(e.slice(1)); break;
@@ -349,6 +357,12 @@ function updateFinishers(dt) {
 }
 function onPrivate(e) {
   switch (e[0]) {
+    // viel zu heiß geschossen: Waffe wegstecken, e[1] Sekunden warten
+    case 'holster': {
+      holsterUntil = performance.now() + e[1] * 1000; chargeShot = null; firing = false;
+      sfx.stow(); hud.banner(`Zu heiß! Waffe weggesteckt – ${e[1]} Sekunden warten …`, e[1]);
+      break;
+    }
     case 'hurt': {
       if (e[4]) { hud.hurt(null); break; }
       const rel = Math.atan2(e[2] - me.x, -(e[3] - me.z)) + camYaw;
@@ -634,8 +648,9 @@ function aimDir() {
 let aimAt = null;
 // Aufladen: chargeShot merkt sich, welche Waffe gerade Druck aufbaut. Nach chargeEnd geht der Schuss raus,
 // auch wenn man die Maustaste schon losgelassen hat. Waffe gewechselt, Nachladen oder tot → Schuss fällt aus.
-let chargeShot = null, chargeStart = 0, chargeEnd = 0;
+let chargeShot = null, chargeStart = 0, chargeEnd = 0, holsterUntil = 0;
 function tryFire(now) {
+  if (now < holsterUntil) return;   // Waffe weggesteckt (zu heiß)
   if (chargeShot) {
     if (now < chargeEnd) return;
     const c = chargeShot; chargeShot = null;
@@ -838,7 +853,7 @@ function updateViewModel(dt) {
   const def = w ? WEAPONS[w[0]] : null;
   view.charge = def ? (reloading ? Math.max(0, done - RELOAD_STEPS.insert) / (1 - RELOAD_STEPS.insert) : w[2] / def.mag) : 0;
   // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
-  view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5;   // beim Zielen durchs Fernrohr ist die Waffe nicht zu sehen
+  view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil;   // Fernrohr oder weggesteckt: keine Waffe
   if (!view.g.visible) return;
   const widx = WEAPON_IDS.indexOf(w[0]);
   if (widx !== view.widx) {   // Waffe gewechselt: neues Modell bauen
@@ -985,7 +1000,7 @@ function frame(now) {
     else if (you.alive) hud.spec(null);
     if (mode !== 'exp' && you) updateTorch(dt, SURFACE - fx.y + DEEP.brOffset);
   } else lobbyCamera();
-  if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);
+  if (env) { env.setLamp(lamp); env.update(dt, time, camera, phase === 'play' ? zone : null, outside); }
   if (post.on) { if (post.lens.enabled) post.lens.tick(time, camera.aspect, daze.t > 0 ? Math.min(1, daze.t / daze.max * 1.4) : 0, daze.burn); post.composer.render(); } else renderer.render(scene, camera);
   // FPS-Anzeige (Bilder pro Sekunde), zweimal pro Sekunde aktualisiert
   if (settings.fps) { fpsN++; fpsT += dt; if (fpsT >= 0.5) { document.getElementById('fpsBox').textContent = Math.round(fpsN / fpsT) + ' FPS'; fpsN = 0; fpsT = 0; } }
