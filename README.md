@@ -24,6 +24,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | Maus | zielen / umsehen |
 | Leertaste / C | aufwärts / abwärts – ganz oben schaut dein Kopf aus dem Wasser (X geht auch abwärts) |
 | H | Waffe wegstecken / rausholen (weggesteckt: Hände frei, 8 % schneller) |
+| (Schwimmen) | Bewegungen laufen weich an, beim Loslassen gleitest du aus, beim Seitwärtsschwimmen neigt sich die Kamera leicht (Werte: `FLOW` in `main.js`) |
 | Q | Gadget benutzen (Battle Royale) |
 | C (Triton, Manta) | Battle Royale: am Riff-Hügel festhalten = Deckung (ganz still, ruhigeres Zielen). Abwärts dann mit X |
 | Shift | Schub (verbraucht Energie) |

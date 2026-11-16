@@ -670,6 +670,12 @@ function toggleCling() {
   cling = { x: me.x, y: me.y, z: me.z }; me.vx = me.vy = me.vz = 0;
   sfx.noise(0.12, 900, 1, 0.35, 'lowpass', 300); sfx.tone(160, 90, 0.08, 0.25, 'sine');   // Hand packt den Fels
 }
+// ---------- Flüssig schwimmen ----------
+// input = wie schnell die Tasten "anlaufen" (kleiner = weicher), accel = wie schnell man auf Tempo kommt,
+// glide = wie schnell man ausgleitet, wenn man loslässt (kleiner = längeres Gleiten),
+// roll = wie stark sich die Kamera beim Seitwärtsschwimmen neigt, rollSpeed = wie schnell sie das tut
+const FLOW = { input: 8, accel: 4.5, glide: 2.2, roll: 0.045, rollSpeed: 4 };
+const flow = { f: 0, s: 0, u: 0, roll: 0 };
 // ---------- local player ----------
 function controlMe(dt) {
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
@@ -681,8 +687,13 @@ function controlMe(dt) {
   const shop = hud.shopOpen;   // no swimming while shopping
   const down = canCling() ? keys.KeyX : (keys.KeyC || keys.KeyX);   // Triton/Manta: C = festhalten, also sinken nur mit X
   const f = shop ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = shop ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), u = shop ? 0 : (keys.Space ? 1 : 0) - (down ? 1 : 0);
+  // Tasten weich anlaufen lassen (zu Fuß), damit Richtungswechsel nicht eckig sind; Fahrzeuge reagieren direkt
+  const ki = vt ? 1 : Math.min(1, dt * FLOW.input);
+  flow.f += (f - flow.f) * ki; flow.s += (s - flow.s) * ki; flow.u += (u - flow.u) * ki;
+  if (!vt) accel = (f || s || u) ? FLOW.accel : FLOW.glide;   // loslassen = im Wasser ausgleiten
+  flow.roll += (-flow.s * FLOW.roll * (vt ? 0 : 1) - flow.roll) * Math.min(1, dt * FLOW.rollSpeed);
   const fw = dirFrom(me.hyaw, me.hpitch), rx = Math.cos(me.hyaw), rz = -Math.sin(me.hyaw);
-  let wx = fw[0] * f + rx * s * strafe, wy = fw[1] * f + u, wz = fw[2] * f + rz * s * strafe;
+  let wx = fw[0] * flow.f + rx * flow.s * strafe, wy = fw[1] * flow.f + flow.u, wz = fw[2] * flow.f + rz * flow.s * strafe;
   const wl = Math.hypot(wx, wy, wz); if (wl > 1) { wx /= wl; wy /= wl; wz /= wl; }
   // body direction: swimming backwards (S) the diver turns around and faces where he swims;
   // otherwise (and while shooting) he looks where the camera looks
@@ -1223,7 +1234,7 @@ function updateCamera(dt) {
   if (headUp > 0.5 && py < SURFACE + 0.8 && py > SURFACE - 0.8) py = SURFACE + 0.8;   // never sit exactly in the water plane
   shake = Math.max(0, shake - dt * 2.2);
   camera.position.set(px + (Math.random() - 0.5) * shake, py + (Math.random() - 0.5) * shake, pz + (Math.random() - 0.5) * shake);
-  camera.rotation.set(camPitch, camYaw, 0);
+  camera.rotation.set(camPitch, camYaw, alive ? flow.roll : 0);   // leichte Neigung beim Seitwärtsschwimmen
 }
 function lobbyCamera() {
   view.g.visible = false; lamp.intensity = 0; torchBeam.visible = false; for (const l of glowLights) l.intensity = 0;   // keine Waffe und keine Lampe in der Lobby
