@@ -18,7 +18,7 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 - [ ] **Mech-Cockpit:** Steuerhebel und Zeiger sind drin – noch mehr Bildschirme und Knöpfe möglich
 - [ ] **Mech-Freelook (Wunsch von Ben):** Maus dreht nur den Kopf im Cockpit (nach oben durch die Kuppel schauen, zur Seite, nach unten);
       die Waffe in der rechten Hand bleibt vorne. Rechtsklick = Arm mit Waffe folgt dem Blick und zielt. Kuppel rundum ausbauen (Glas, Streben, Lampen über dir).
-      Offen: Wie dreht sich der Mech? A) A/D drehen wie ein Panzer  B) dreht sich langsam zum Blick  C) nur beim Zielen
+      Entschieden: Ohne Rechtsklick dreht die Maus nur den Kopf. Mit Rechtsklick dreht sich der ganze Mech mit dem Blick, und man zielt. W/A/S/D bewegen wie bisher (relativ zum Mech).
 - [ ] **Mech wie eine Maschine animiert (auch von außen):** Arm mit Waffe im 90°-Winkel neben dem Körper;
       zum Nachladen kippt die Waffe 90° zur Seite (Magazin nach links), die andere Hand greift rein, Magazin raus und rein – mechanisch, wie ein Roboter
 
