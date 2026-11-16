@@ -445,6 +445,7 @@ function onEvent(e) {
       }
       projs.lastShot = time;
       if (e[3] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
+      if (projs.gasT !== time) { projs.gasT = time; const mz = muzzleOf(e[3]); gasBubble(mz ? mz.x : e[4], (mz ? mz.y : e[5]) + 0.05, mz ? mz.z : e[6], widx >= 3); }   // Gasblase
       break;
     }
     case 'beam': {
@@ -460,6 +461,7 @@ function onEvent(e) {
         sfx.jet(widx, e[2] === myId ? 1 : volAt(e[3], e[4], e[5]), distTo(e[3], e[4], e[5]));
         if (e[2] !== myId && e[2] > 0) shotFrom(e[3], e[5]);   // Richtungsanzeige: woher wird geschossen?
       }
+      if (beams.lastShot !== time) gasBubble(e[3], e[4] + 0.05, e[5], widx === 3 || widx === 8);   // Gasblase an der Mündung (Harpune/Revolver: größer)
       beams.lastShot = time;
       if (e[2] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
       break;
@@ -1113,19 +1115,51 @@ function updateScope(dt) {
 }
 // Rückstoß: die Kamera springt beim Schuss nach oben (und etwas zur Seite) und federt dann zum Großteil zurück.
 // Mehr Schaden pro Schuss = mehr Rückstoß. RECOIL_BACK = wie viel davon zurückfedert (0.75 = 75 %).
-let recoilBack = 0;
 const RECOIL = 0.0006, RECOIL_BACK = 0.75;
+// Rückstoß wie im Bodycam-Video: Waffe und Kamera reißen ZUSAMMEN hoch, aber das Wasser bremst –
+// wie eine Feder in Honig. stiff = wie stark die Feder zurückzieht, damp = wie stark das Wasser bremst,
+// punch = wie heftig der Stoß ist (größer = höher)
+const RSPRING = { stiff: 140, damp: 17, punch: 23 };
+const rspring = { p: 0, v: 0, yaw: 0, vy: 0, keep: 0 };   // p = wie weit die Kamera gerade hochgerissen ist
 function recoil(def) {
   const k = Math.min(0.09, 0.006 + def.dmg * def.pellets * RECOIL) * UP('recoil') * (def.recoil || 1);   // Rückstoßdämpfer, Kompensator
-  camPitch = Math.min(1.45, camPitch + k);
-  camYaw += (Math.random() - 0.5) * k * 0.6;
-  recoilBack += k * RECOIL_BACK;
+  rspring.v += k * RSPRING.punch;                              // der Stoß: die Feder bekommt Schwung nach oben
+  rspring.vy += (Math.random() - 0.5) * k * 0.6 * RSPRING.punch;
+  rspring.keep += k * (1 - RECOIL_BACK);                       // ein Teil bleibt (man muss nachziehen)
   shake = Math.max(shake, k * 2.5);
   view.kick = 1;
   view.kickPow = 0.7 + Math.min(1.5, def.dmg * def.pellets / 45);   // große Waffen schlagen stärker zurück
   view.kickRoll = (Math.random() - 0.5) * 0.12;
   // durchs Zielfernrohr: stärker hoch, das Fernrohr-Bild springt mit, und es federt langsamer zurück
-  if (scoped > 0.5) { camPitch = Math.min(1.45, camPitch + k * 0.6); recoilBack += k * 0.6 * RECOIL_BACK; view.scopeKick = 1; }
+  if (scoped > 0.5) { rspring.v += k * 0.6 * RSPRING.punch; view.scopeKick = 1; }
+}
+// Feder jedes Bild ein Stück weiterrechnen und nur die Änderung auf die Kamera geben (die Maus bleibt frei)
+function updateRecoil(dt) {
+  const R = rspring, pp = R.p, py = R.yaw;
+  for (const s of [dt / 2, dt / 2]) {   // zwei kleine Schritte = ruhiger
+    R.v += (-RSPRING.stiff * R.p - RSPRING.damp * R.v) * s; R.p += R.v * s;
+    R.vy += (-RSPRING.stiff * R.yaw - RSPRING.damp * R.vy) * s; R.yaw += R.vy * s;
+  }
+  const keep = R.keep * Math.min(1, dt * 10); R.keep -= keep;
+  camPitch = Math.min(1.45, camPitch + (R.p - pp) + keep); camYaw += R.yaw - py;
+}
+// Gasblase: beim Schuss quillt das Treibgas als glänzende Blase aus der Waffe, wackelt nach oben und platzt
+const GAS = { size: 0.07, rise: 0.9, life: 1.4 };
+const GAS_GEO = new THREE.SphereGeometry(1, 14, 10), gasBubbles = [];
+const GAS_MAT = new THREE.MeshStandardMaterial({ color: 0xd8f4ff, emissive: 0x2a5566, transparent: true, opacity: 0.4, roughness: 0.05, metalness: 0.6, depthWrite: false });
+function gasBubble(x, y, z, big) {
+  const m = new THREE.Mesh(GAS_GEO, GAS_MAT); m.position.set(x, y, z); m.renderOrder = 2; scene.add(m);
+  gasBubbles.push({ m, t: 0, s: GAS.size * (big ? 1.6 : 1) * (0.8 + Math.random() * 0.4), ph: Math.random() * 6, vx: (Math.random() - 0.5) * 0.4, vz: (Math.random() - 0.5) * 0.4 });
+}
+function updateGas(dt) {
+  for (let i = gasBubbles.length - 1; i >= 0; i--) {
+    const b = gasBubbles[i]; b.t += dt;
+    if (b.t > GAS.life) { env.bubble(b.m.position.x, b.m.position.y, b.m.position.z, 5, 0.12, 0.6); b.m.removeFromParent(); gasBubbles.splice(i, 1); continue; }   // platzt in kleine Bläschen
+    const g = Math.min(1, b.t * 6), w = Math.sin(b.t * 14 + b.ph) * 0.18;   // erst aufquellen, dann wabbeln
+    b.m.position.x += (b.vx + Math.sin(b.t * 5 + b.ph) * 0.15) * dt; b.m.position.z += b.vz * dt; b.m.position.y += GAS.rise * Math.min(1, b.t * 2) * dt;
+    b.vx *= 1 - dt * 2; b.vz *= 1 - dt * 2;
+    const s = b.s * g * (1 + b.t * 0.3); b.m.scale.set(s * (1 + w), s * (1 - w), s * (1 + w * 0.5));
+  }
 }
 // ---------- Nachladen: Magazin wechseln (die Bewegungen stehen in models.js bei poseReload) ----------
 // Nachlade-Geräusche: [Zeitpunkt 0…1, Name des Sounds in audio.js]
@@ -1136,7 +1170,7 @@ const IM = new THREE.Matrix4(), PL = new THREE.Vector3(), EL = new THREE.Vector3
 // Kiemen, Druckanzeige, Nachladen und die Waffe vor der Kamera (Ego-Perspektive)
 function updateViewModel(dt) {
   // Rückstoß zurückfedern lassen
-  const back = Math.min(recoilBack, dt * (scoped > 0.5 ? 0.22 : 0.6)); camPitch -= back; recoilBack -= back;   // im Fernrohr langsamer zurück
+  updateRecoil(dt); updateGas(dt);
   updateScope(dt);
   const w = you && you.alive ? you.w[you.slot] : null;
   // Der Server schickt den Nachlade-Stand nur 20-mal pro Sekunde. Damit die Animation flüssig ist, zählt der Browser
@@ -1218,9 +1252,9 @@ function updateViewModel(dt) {
   view.g.position.set(hip[0] * (1 - ads), hip[1] * (1 - ads) - view.swim * 0.4, view.swim * 0.1);   // beim Brustschwimmen nach unten weg
   view.gun.position.set(
     sx - U.sightAt[0] * ads + Math.cos(view.bob) * sway - view.tilt * 0.08 + view.inX * 0.5,
-    sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.02 + view.inY * 0.5 + breathe,
+    sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.012 + rspring.p * 0.35 + view.inY * 0.5 + breathe,   // reißt mit der Kamera hoch
     z - ads * 0.04 + (U.kind === 'pole' ? -K * 0.35 : K * 0.075));             // Rückstoß: die Waffe fährt nach hinten – Stabwaffe: Stoß nach vorne
-  view.gun.rotation.set(K * 0.2 + view.tilt * 0.15 - view.inY * 1.2, view.tilt * 0.3 + view.inX * 1.4 + (hip[2] || 0) * (1 - ads),
+  view.gun.rotation.set(K * 0.08 + rspring.p * 3.2 + view.tilt * 0.15 - view.inY * 1.2, view.tilt * 0.3 + view.inX * 1.4 + (hip[2] || 0) * (1 - ads),
     -view.tilt * 1.15 + K * (view.kickRoll || 0) + view.inX * 1.8);              // −z-Drehung = Boden nach links
   // der Schlitten / Spannhebel fährt bei jedem Schuss kurz zurück
   if (U.cock && !rl) U.cock.g.position.z = U.cock.travel * Math.min(1, view.kick * 1.4);
@@ -1377,5 +1411,5 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // small hook for automated smoke tests
-window.__un = { get state() { return { phase, myId, you, aliveN, me, aimLock, camYaw, mySuit, players: players.size, creatures: creatures.size, pickups: pickups.size, projs: projs.size }; },
+window.__un = { get state() { return { phase, myId, you, aliveN, me, aimLock, camYaw, camPitch, mySuit, players: players.size, creatures: creatures.size, pickups: pickups.size, projs: projs.size }; },
   look(y, p) { camYaw = y; camPitch = p; }, key(c, d) { keys[c] = d; }, fire(b) { firing = b; }, send, tp(x, y, z) { me.x = x; me.y = y; me.z = z; }, world: () => W, ents: () => ({ players, creatures, vehicles, crates, pickups }) };
