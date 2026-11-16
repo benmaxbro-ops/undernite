@@ -7,7 +7,7 @@ let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
 import { buildEnvironment } from './world.js';
 import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy, makeGunEnv, makeSwimArms } from './models.js';
-import { Hud } from './hud.js';
+import { Hud, SONAR } from './hud.js';
 import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
 import { settings, onSettings, openSettings, closeSettings, QUALITY } from './settings.js';
@@ -1293,7 +1293,13 @@ function frame(now) {
       hemi.groundColor.setHex(0x12303c).lerp(LAVA_GROUND, lava).lerp(PRIM_GROUND, prim);
       hemi.intensity = Math.max(hemi.intensity, 0.9 * lava + 0.45 * prim);
     } else { darkness(SURFACE - camera.position.y + DEEP.brOffset, LIGHT.br); hemi.color.setHex(0xb5e8ff); hemi.groundColor.setHex(0x12303c); }
-    hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), mode === 'exp' ? expPois() : W.pois, marks);
+    if (mode === 'exp' || !env.sonar) hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), mode === 'exp' ? expPois() : W.pois, marks);
+    else {
+      // Battle Royale: Sonar-Radar. Gegner hört es bis SONAR.hear Meter, Hammerhai und Sonar-Boje weiter
+      const hear = Math.max(SONAR.hear, sense), blips = [];
+      for (const e of players.values()) if (e.id !== myId && e.mesh.visible && Math.hypot(e.x - fx.x, e.y - fx.y, e.z - fx.z) < hear) blips.push({ id: e.id, x: e.x, z: e.z });
+      hud.drawSonar(env.sonar, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, [], blips, time);
+    }
     if (mode === 'exp' && you && !you.alive && deadInfo) hud.spec(`<b>Ohnmächtig!</b>Erwischt von ${esc(deadInfo.by)}${deadInfo.lost ? ` · ${deadInfo.lost} Fische verloren` : ''} · aufwachen in ${Math.ceil(you.x?.rt || 0)} s`);
     else if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }
     else if (!you) { const s = players.get(specId); hud.spec(`Zuschauer${s ? ` · ${esc(s.name)}` : ''}`); }

@@ -337,11 +337,25 @@ export function buildEnvironment(scene, W) {
       img.data[o] = 8 + 70 * k * k; img.data[o + 1] = 34 + 120 * k; img.data[o + 2] = 58 + 110 * k; img.data[o + 3] = 255;
     }
     c.putImageData(img, 0, 0); }
+  // ----- Sonar-Bild (nur Battle Royale): feiner, grün, mit Höhenlinien alle 8 m; Riff-Hügel geben ein helles Echo -----
+  let sonar = null;
+  if (!exp) {
+    const N = 384; sonar = document.createElement('canvas'); sonar.width = sonar.height = N;
+    const c = sonar.getContext('2d'), img = c.createImageData(N, N);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const h = W.heightAt((px / (N - 1) * 2 - 1) * HALF, (py / (N - 1) * 2 - 1) * HALF), k = Math.max(0, Math.min(1, (h + 15) / 110));
+      const fr = ((h / 8) % 1 + 1) % 1, line = fr < 0.12 ? 0.3 : 0, v = Math.min(1, 0.12 + 0.5 * k + line), o = (py * N + px) * 4;
+      img.data[o] = 20 * v; img.data[o + 1] = 230 * v; img.data[o + 2] = 110 * v; img.data[o + 3] = 255;
+    }
+    c.putImageData(img, 0, 0);
+    c.fillStyle = 'rgba(150,255,180,.55)';
+    for (const m of W.reefMounds || []) { c.beginPath(); c.arc((m.x + HALF) / SIZE * N, (m.z + HALF) / SIZE * N, Math.max(1, m.r * (m.sx + m.sz) / 2 / SIZE * N), 0, 7); c.fill(); }
+  }
 
   const shallow = new THREE.Color(0x2b8fb0), deepC = new THREE.Color(0x05202e), toxic = new THREE.Color(0x1d0a33), abyss = new THREE.Color(0x010307);
   const LD = new THREE.Vector3();
   return {
-    seed: W.seed, mode: W.mode, mini, bubble, explosion, ink, blood, boat, base, bases, glow: reef.glow,
+    seed: W.seed, mode: W.mode, mini, sonar, bubble, explosion, ink, blood, boat, base, bases, glow: reef.glow,
     // Helmlampe → Meeresschnee leuchtet in ihrem Kegel auf
     setLamp(l) {
       const u = snowMat.uniforms;

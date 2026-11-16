@@ -45,7 +45,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Anzüge:** Manta (klein, schnell, 70 LP) · Triton (Allrounder, 100 LP) · Bollwerk (Panzeranzug, 150 LP) ·
   Goliath (Mech wie ein Panzer-Tauchanzug mit Glaskuppel, in der Ego-Sicht sitzt man hinter dem Kuppelfenster, 240 LP, +12 % Schaden, passt in kein Fahrzeug, Oktopusse können ihn nicht halten).
 - **Neue Taucher (Perlen-Shop, je 1500 🦪):** Sepia (Tintenflucht: bei wenig Leben blendet eine Tintenwolke die Gegner), Barrakuda (schnellster Sprinter),
-  Nautilus (Techniker: Kompressor 35 % schneller), Hammerhai (Elektrosinn: sieht Gegner bis 60 m auf der Minikarte).
+  Nautilus (Techniker: Kompressor 35 % schneller), Hammerhai (Elektrosinn: hört Gegner bis 60 m auf dem Sonar).
 - **Gadgets (Perlen-Shop, Taste Q):** jeder Taucher hat eins – Manta Haiköder, Triton Sonar-Boje, Bollwerk Schild-Generator, Goliath Bodenstampfer,
   Sepia Tintenbombe, Barrakuda Seilharpune, Nautilus Geschütz-Drohne, Hammerhai Elektroschocker. Werte: `GADGETS` in `shared.js`.
 - **Ausrüstung (⚙ auf jeder Taucher-Karte):** Startwaffe wählen (Standard oder gekaufte: Nadler, Splitterwerfer, Harpune, Torpedowerfer) und Gadget mitnehmen oder ablegen – pro Taucher gespeichert.
@@ -74,6 +74,8 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
   Sie werden unter deinem Namen gespeichert (`saves/battleroyale.json`), getrennt vom Expeditions-Geld.
 - **Perlen-Shop** (Knopf oben rechts in der Lobby): Verbesserungen mit je 3 Stufen – Schnellladen, Rückstoßdämpfer,
   Ruhiges Visier, Profi-Flossen, Turbo-Kompressor, Schnellziehen (Waffe wechseln/rausholen geht schneller), Zäher Anzug (bis +30 % Leben). Gelten nur im Battle Royale.
+- **Sonar-Radar** (oben rechts, nur Battle Royale): du bist in der Mitte, vorne ist oben. Ein grüner Strahl dreht sich alle 3 Sekunden einmal herum;
+  wo er drüberstreicht, leuchten Boden, Riffe und Gegner in der Nähe (bis 45 m) kurz auf. Werte: `SONAR` in `hud.js`.
 
 ## Modus: Tiefsee-Expedition (v0.2)
 

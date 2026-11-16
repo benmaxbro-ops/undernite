@@ -7,6 +7,9 @@ const $ = (id) => document.getElementById(id);
 const SUIT_COL_HEX = { manta: 0x1fd6b4, triton: 0xf08a24, bulwark: 0x8a2f3a, goliath: 0x5a6a78 };   // Streifenfarbe der alten Taucher (Shop)
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
+// Sonar-Radar: range = so viele Meter zeigt es bis zum Rand, period = Sekunden für eine Umdrehung des Strahls,
+// fade = so viele Sekunden leuchtet ein Echo nach, hear = so nah müssen Gegner sein, damit das Sonar sie hört
+export const SONAR = { range: 90, period: 3, fade: 2.6, hear: 45 };
 
 export class Hud {
   constructor() {
@@ -334,6 +337,7 @@ export class Hud {
     $('vign').style.opacity = Math.max(this.vign, low);
   }
   drawMini(base, zone, me, vehicles, pois, marks = []) {
+    this.mini.canvas.classList.remove('sonar');
     const c = this.mini, n = 190, k = n / (HALF * 2), px = (x) => (x + HALF) * k;
     c.drawImage(base, 0, 0, n, n);
     c.font = '10px Bahnschrift, sans-serif'; c.textAlign = 'center'; c.fillStyle = 'rgba(230,251,255,.75)';
@@ -350,6 +354,64 @@ export class Hud {
     c.fillStyle = '#5ef2e0'; c.strokeStyle = '#03222a'; c.lineWidth = 1;
     c.beginPath(); c.moveTo(0, -7); c.lineTo(5, 6); c.lineTo(0, 3); c.lineTo(-5, 6); c.closePath(); c.fill(); c.stroke();
     c.restore();
+  }
+  // Sonar-Radar (Battle Royale): du bist in der Mitte, vorne ist oben. Ein grüner Strahl dreht sich;
+  // wo er drüberstreicht, leuchten Boden und Gegner kurz auf und verblassen dann wieder.
+  // blips = Gegner, die das Sonar hören kann ({ id, x, z }), time = Spielzeit in Sekunden
+  drawSonar(img, zone, me, vehicles, pois, marks, blips, time) {
+    this.mini.canvas.classList.add('sonar');
+    const c = this.mini, n = 190, h = n / 2, R = SONAR.range, k = (h - 2) / R, cy = Math.cos(me.yaw), sy = Math.sin(me.yaw);
+    const scr = (x, z) => { const dx = x - me.x, dz = z - me.z; return [h + (dx * cy - dz * sy) * k, h + (dx * sy + dz * cy) * k]; };
+    const TAU = Math.PI * 2, sweep = (time / SONAR.period * TAU) % TAU, last = this.lastSweep ?? sweep; this.lastSweep = sweep;
+    const swS = sweep + me.yaw;   // Strahl-Winkel auf dem Bildschirm
+    c.clearRect(0, 0, n, n);
+    c.save(); c.beginPath(); c.arc(h, h, h - 1, 0, TAU); c.clip();
+    c.fillStyle = '#010d08'; c.fillRect(0, 0, n, n);
+    // Boden: schwach immer, hell direkt hinter dem Strahl (in Stücken, die immer mehr verblassen)
+    const world = () => { c.translate(h, h); c.rotate(me.yaw); c.scale(k, k); c.translate(-me.x, -me.z); c.drawImage(img, -HALF, -HALF, HALF * 2, HALF * 2); };
+    c.save(); c.globalAlpha = 0.16; world(); c.restore();
+    const K = 32, step = TAU * (SONAR.fade / SONAR.period) / K;
+    for (let i = 0; i < K; i++) {
+      const a1 = swS - i * step, a0 = a1 - step * 1.02, al = 1 - i / K;
+      c.save(); c.beginPath(); c.moveTo(h, h); c.arc(h, h, h, a0, a1); c.closePath(); c.clip();
+      c.globalAlpha = 0.84 * al * al; world(); c.restore();
+      if (i < 10) { c.fillStyle = `rgba(90,255,150,${0.16 * (1 - i / 10)})`; c.beginPath(); c.moveTo(h, h); c.arc(h, h, h, a0, a1); c.closePath(); c.fill(); }
+    }
+    // Ringe alle 30 m und der Strahl selbst
+    c.strokeStyle = 'rgba(90,255,150,.22)'; c.lineWidth = 1;
+    for (let r = 30; r < R; r += 30) { c.beginPath(); c.arc(h, h, r * k, 0, TAU); c.stroke(); }
+    c.strokeStyle = 'rgba(160,255,190,.9)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(h, h); c.lineTo(h + Math.cos(swS) * h, h + Math.sin(swS) * h); c.stroke();
+    // Zone (lila außen) und nächste Zone (gestrichelt)
+    if (zone) {
+      const [zx, zy] = scr(zone[0], zone[1]), zr = Math.max(0, zone[2] * k);
+      c.fillStyle = 'rgba(120,40,220,.35)'; c.beginPath(); c.rect(0, 0, n, n); c.moveTo(zx + zr, zy); c.arc(zx, zy, zr, 0, TAU); c.closePath(); c.fill('evenodd');
+      c.strokeStyle = '#c58bff'; c.lineWidth = 1.6; c.beginPath(); c.arc(zx, zy, zr, 0, TAU); c.stroke();
+      if (zone[5] > 0) { const [nx, ny] = scr(zone[3], zone[4]); c.strokeStyle = 'rgba(255,255,255,.8)'; c.setLineDash([4, 4]); c.lineWidth = 1.2; c.beginPath(); c.arc(nx, ny, zone[5] * k, 0, TAU); c.stroke(); c.setLineDash([]); }
+    }
+    // Orte, freie Fahrzeuge und feste Markierungen
+    c.font = '10px Bahnschrift, sans-serif'; c.textAlign = 'center'; c.fillStyle = 'rgba(200,255,215,.7)';
+    for (const p of pois) { const [x, y] = scr(p.x, p.z); if (Math.hypot(x - h, y - h) < h - 8) c.fillText(p.n, x, y - 4); }
+    c.fillStyle = '#ffc94d';
+    for (const v of vehicles) if (!v.driver) { const [x, y] = scr(v.x, v.z), s = v.type === 'sub' ? 5 : 3; c.fillRect(x - s / 2, y - s / 2, s, s); }
+    for (const m of marks) { const [x, y] = scr(m.x, m.z); c.fillStyle = m.c; c.beginPath(); c.arc(x, y, m.s, 0, TAU); c.fill(); }
+    // Gegner: leuchten auf, wenn der Strahl über sie streicht, und bleiben kurz an der Stelle stehen
+    const echo = this.echo ||= new Map(), swept = ((sweep - last) % TAU + TAU) % TAU;
+    for (const b of blips) {
+      const a = Math.atan2(b.z - me.z, b.x - me.x);
+      if (((sweep - a) % TAU + TAU) % TAU <= swept) echo.set(b.id, { x: b.x, z: b.z, t: time });
+    }
+    for (const [id, e] of echo) {
+      const al = 1 - (time - e.t) / SONAR.fade; if (al <= 0) { echo.delete(id); continue; }
+      const [x, y] = scr(e.x, e.z);
+      c.fillStyle = `rgba(255,90,80,${al * 0.35})`; c.beginPath(); c.arc(x, y, 7, 0, TAU); c.fill();
+      c.fillStyle = `rgba(255,120,100,${al})`; c.beginPath(); c.arc(x, y, 3, 0, TAU); c.fill();
+    }
+    c.restore();
+    // Rand, Norden und du selbst (Pfeil zeigt immer nach oben = da wo du hinschaust)
+    c.strokeStyle = 'rgba(90,255,150,.6)'; c.lineWidth = 2; c.beginPath(); c.arc(h, h, h - 1, 0, TAU); c.stroke();
+    c.fillStyle = 'rgba(200,255,215,.9)'; c.font = 'bold 11px Bahnschrift, sans-serif'; c.fillText('N', h + sy * (h - 9), h - cy * (h - 9) + 4);
+    c.fillStyle = '#5ef2e0'; c.strokeStyle = '#03222a'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(h, h - 7); c.lineTo(h + 5, h + 6); c.lineTo(h, h + 3); c.lineTo(h - 5, h + 6); c.closePath(); c.fill(); c.stroke();
   }
   feed(html, me) {
     const d = document.createElement('div'); d.innerHTML = html; if (me) d.className = 'me';
