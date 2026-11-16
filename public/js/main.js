@@ -483,7 +483,7 @@ const death = { on: false, t: 0, shown: false };
 function updateDeath(dt) {
   const fx = document.getElementById('deathFx');
   if (!death.on) { if (fx.style.opacity !== '0') fx.style.opacity = '0'; return; }
-  death.t += dt;
+  const nowS = performance.now() / 1000; death.t = nowS - (death.start ??= nowS);   // echte Zeit (gleich lang auch auf langsamen Computern)
   const D = DEATH, t = death.t, a = t < D.dimTime ? D.dim * t / D.dimTime : t < D.dimTime + D.hold ? D.dim
     : Math.min(1, D.dim + (1 - D.dim) * (t - D.dimTime - D.hold) / D.blackTime);
   fx.style.opacity = a.toFixed(3);
@@ -532,7 +532,7 @@ function onPrivate(e) {
       hud.banner(SUITS[mySuit].mech ? 'Magnet-Treffer! Schaltkreise überlastet …' : 'Magnet-Treffer!', Math.min(2.5, e[1])); hud.shock(); sfx.zap(1, 0.9); break;
     case 'got': sfx.pickup(); hud.feed(e[1] === 'w' ? `Aufgenommen: <b style="color:${RARITY[e[3]].color}">${WEAPONS[e[2]].name}</b> · ${RARITY[e[3]].name}` : e[1] === 'med' ? 'Reparaturkit: <b>+50 Leben</b>' : 'Schildzelle: <b>+50 Schild</b>', true); break;
     case 'dead': held = -1; deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop();
-      if (mode !== 'exp') { death.t = 0; death.on = true; sfx.tinnitus(2); sfx.tone(70, 35, 0.8, 0.9, 'sine'); }   // Battle Royale: Bild wird dunkel, dann "Du bist tot"
+      if (mode !== 'exp') { death.t = 0; death.start = null; death.on = true; sfx.tinnitus(2); sfx.tone(70, 35, 0.8, 0.9, 'sine'); }   // Battle Royale: Bild wird dunkel, dann "Du bist tot"
       break;
     case 'spawn': torch.on = false; torch.bat = LAMPS[torch.lvl].battery; me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
     case 'fish': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`${e[2] ? '⭐ <b style="color:#ffd34d">Goldener</b> ' : 'Gefangen: '}<b>${S.name}</b> · +${e[3]} €`, true); break; }

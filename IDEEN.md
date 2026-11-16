@@ -6,8 +6,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Als Nächstes (Reihenfolge von Ben)
 
-- [ ] **Selbst sterben:** Bild wird langsam dunkler, dann ganz schwarz, dann „Du bist tot“.
-      Von da aus: zuschauen, neuen Taucher aussuchen oder in den Shop gehen. *(in Arbeit: gebaut, wird noch im Spiel geprüft)*
 - [ ] **Getroffener Gegner:** sackt zusammen und sinkt, Waffe fällt langsam zum Boden, dunkle Wolke im Wasser
 
 ## Danach
@@ -27,6 +25,11 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 - [ ] **Verbesserungen im Shop:** Waffe schneller ziehen, mehr Leben
 - [ ] **Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
 - [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
+
+- [ ] **Mech noch viel detaillierter** (außen und innen)
+- [ ] **Mech-Cockpit:** Steuerhebel und Steuereinheiten sichtbar; „keinen Waffenschaden“ (?) – noch bei Ben nachfragen, was gemeint ist
+- [ ] **Mech wie eine Maschine animiert (auch von außen):** Arm mit Waffe im 90°-Winkel neben dem Körper;
+      zum Nachladen kippt die Waffe 90° zur Seite (Magazin nach links), die andere Hand greift rein, Magazin raus und rein – mechanisch, wie ein Roboter
 
 ## Fairness: Ligen
 
