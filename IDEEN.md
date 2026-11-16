@@ -56,7 +56,7 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 
 - [x] **Deckung mit C** (nur Triton und Manta): am Riff-Hügel festhalten. Bollwerk und Goliath sinken mit C nur ab.
 - [x] **Löcher im Riff**, in denen man stecken bleibt, reparieren (bessere Kollision + Notausgang zum nächsten freien Platz)
-- [ ] **Finisher** sauberer (Manta sieht komisch aus; beim Goliath geht der Mech kaputt)
+- [x] **Finisher** sauberer: Kamerafahrt mit Kinobalken und Zoom, Zeitlupe beim Treffer, flüssige Bewegungen, Manta schleicht im Bogen, ein Mech als Opfer bricht auseinander
 - [x] **Schüsse von anderen**: dumpfer Schlag wie gegen eine Holztür, großes Kaliber dumpfer
 - [x] **Nadler**: längere Lade-/Schockwellen-Zeit
 - [x] **Sichtbare Schockwelle** aus Mündung und Seitenkiemen (shock.js) – kommt jetzt beim Hitze-Ablassen

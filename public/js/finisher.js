@@ -13,6 +13,8 @@ import { schoolFishGeo } from './reef.js';
 
 // wie lange jeder Finisher dauert (Sekunden) und wann genau der Treffer passiert (0 = Anfang, 1 = Ende)
 export const FIN_TIME = { manta: 1.8, triton: 2.4, bulwark: 2.4, goliath: 2.8 };
+// Zeitlupe um den Treffer herum: speed = so schnell läuft die Zeit dann (0.3 = 30 %), before/after = wie lange (Anteil des Finishers)
+export const SLOWMO = { speed: 0.3, before: 0.04, after: 0.1 };
 const HIT_AT = { manta: 0.5, triton: 0.6, bulwark: 0.25, goliath: 0.22 };
 
 const TAU = Math.PI * 2;
@@ -49,7 +51,7 @@ export function startFinisher(c, e) {
   // Kopie des Gegners; ihre Materialien werden kopiert, damit sie durchsichtig werden kann, ohne andere Taucher zu ändern
   const ghost = makePlayerModel(vSuit, e[2], '');
   const mats = [];
-  ghost.traverse((o) => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; mats.push(o.material); } });
+  ghost.traverse((o) => { if (o.material) { const base = o.material.opacity; o.material = o.material.clone(); o.material.transparent = true; o.material.userData.baseOp = base; mats.push(o.material); } });   // baseOp: Glas bleibt durchsichtig
   ghost.position.set(V.x, V.y, V.z);
   c.dyn.add(ghost);
   const gs = { yaw: V.yaw, pitch: 0, speed: 0, weapon: -1, surf: false };
@@ -62,6 +64,9 @@ export function startFinisher(c, e) {
     : type === 'goliath' ? { x: V.x - dx * 2.2, y: V.y, z: V.z - dz * 2.2, yaw: faceV }                       // ganz nah ran zum Packen
     : { x: A0.x, y: A0.y, z: A0.z, yaw: faceV };                                                              // Triton und Bollwerk bleiben stehen
   const moveEnd = type === 'manta' ? 0.4 : type === 'goliath' ? 0.2 : 0.01;
+  // Manta: Zwischenpunkt seitlich vom Gegner, damit er im Bogen hinter ihn schwimmt
+  const sideSign = ((A0.x - V.x) * vf[2] - (A0.z - V.z) * vf[0]) > 0 ? 1 : -1;
+  const side = { x: V.x + vf[2] * 2.4 * sideSign, y: V.y + 0.4, z: V.z - vf[0] * 2.4 * sideSign };
   const dur = FIN_TIME[type], hitAt = HIT_AT[type];
   let t = 0, hit = false, gone = 0;
   const extras = [];    // zusätzliche Dinge (Fische, Minigun), die am Ende entfernt werden
@@ -84,28 +89,64 @@ export function startFinisher(c, e) {
   const M4 = new THREE.Matrix4(), P = new THREE.Vector3(), S = new THREE.Vector3(), UPV = new THREE.Vector3(0, 1, 0), G = new THREE.Vector3();
 
   const f = {
-    attacker, type, p: 0, pose: null, ghost,
+    attacker, type, p: 0, pose: null, ghost, hitAt,
     // gibt false zurück, wenn der Finisher vorbei ist
     update(dt) {
+      // Zeitlupe kurz vor bis kurz nach dem Treffer (SLOWMO.speed = wie langsam)
+      const pp = t / dur; if (pp > hitAt - SLOWMO.before && pp < hitAt + SLOWMO.after) dt *= SLOWMO.speed;
       t += dt; const p = f.p = Math.min(1, t / dur);
       // 1) Angreifer bewegt sich in Position
       const m = ease(p / moveEnd);
-      f.pose = { x: A0.x + (goal.x - A0.x) * m, y: A0.y + (goal.y - A0.y) * m, z: A0.z + (goal.z - A0.z) * m, yaw: goal.yaw };
+      if (type === 'manta') {   // im Bogen seitlich um den Gegner herum (nicht durch ihn hindurch)
+        const u = 1 - m, bx = u * u * A0.x + 2 * u * m * side.x + m * m * goal.x, by = u * u * A0.y + 2 * u * m * side.y + m * m * goal.y, bz = u * u * A0.z + 2 * u * m * side.z + m * m * goal.z;
+        const yaw = m < 0.98 ? Math.atan2(-(bx - (f.pose?.x ?? bx)), -(bz - (f.pose?.z ?? bz))) : goal.yaw;
+        f.pose = { x: bx, y: by, z: bz, yaw: Number.isFinite(yaw) && (Math.abs(bx - (f.pose?.x ?? bx)) + Math.abs(bz - (f.pose?.z ?? bz)) > 1e-4) ? yaw : (f.pose?.yaw ?? goal.yaw) };
+      } else f.pose = { x: A0.x + (goal.x - A0.x) * m, y: A0.y + (goal.y - A0.y) * m, z: A0.z + (goal.z - A0.z) * m, yaw: goal.yaw };
       // 2) der Treffer
-      if (!hit && p >= hitAt) { hit = true; onHit(); }
+      if (!hit && p >= hitAt) { hit = true; onHit(); if (vSuit === 'goliath') breakMech(); }
       // 3) was mit dem Gegner (und Fischen, Minigun) passiert
       if (type === 'manta') manta(dt, p);
       else if (type === 'triton') triton(dt, p);
       else if (type === 'bulwark') bulwark(dt, p);
       else goliath(dt, p);
-      ghost.userData.update(dt, gs);
+      if (broken) updateBroken(dt, p); else ghost.userData.update(dt, gs);
       // am Ende ausblenden
       const fade = type === 'triton' ? 1 - gone : 1 - ease((p - 0.82) / 0.18);
-      for (const mt of mats) mt.opacity = fade;
+      for (const mt of mats) mt.opacity = fade * (mt.userData.baseOp ?? 1);
       if (p >= 1) { c.dyn.remove(ghost); for (const x of extras) c.dyn.remove(x); return false; }
       return true;
     },
   };
+
+  // ----- Ist das Opfer ein Mech, bricht er beim Treffer auseinander -----
+  // Jedes Teil (Arme, Beine, Rückenblock, Propeller, Scheinwerfer …) fliegt von der Mitte weg, dreht sich und sinkt langsam,
+  // die Glaskuppel zerspringt (verschwindet in einer Blasenwolke), Funken sprühen aus den Gelenken.
+  let broken = null;
+  function breakMech() {
+    const body = ghost.userData.inner && ghost.userData.inner.children[0]; if (!body) return;
+    broken = [];
+    for (const ch of [...body.children]) {
+      const glass = ch.material && (ch.material.isShaderMaterial || (ch.material.userData.baseOp ?? 1) < 0.5);
+      if (glass) { ch.visible = false; continue; }                                    // Kuppel zerspringt
+      const dir = ch.position.clone(); if (dir.lengthSq() < 0.04) dir.set(Math.random() - 0.5, 0.3, Math.random() - 0.5); dir.normalize();
+      const core = ch.position.length() < 0.6;                                          // der Rumpf selbst fliegt kaum
+      broken.push({ o: ch, v: dir.multiplyScalar(core ? 0.6 : 2.5 + Math.random() * 3.5).add(new THREE.Vector3(0, core ? 0.2 : 1.2, 0)),
+        w: new THREE.Vector3((Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7).multiplyScalar(core ? 0.15 : 1) });
+    }
+    const g = ghost.position;
+    c.env.bubble(g.x, g.y + 1.2, g.z, 60, 1.2, 3); c.env.explosion(g.x, g.y + 0.5, g.z, 2.5);
+    c.sfx.zap(1, 1); c.shake(0.5);
+  }
+  function updateBroken(dt, p) {
+    for (const b of broken) {
+      b.o.position.addScaledVector(b.v, dt); b.v.multiplyScalar(1 - dt * 1.1); b.v.y -= dt * 1.2;   // Wasser bremst, Teile sinken
+      b.o.rotation.x += b.w.x * dt; b.o.rotation.y += b.w.y * dt; b.o.rotation.z += b.w.z * dt;
+    }
+    if (p < hitAt + 0.3 && Math.random() < 0.5) {   // Funken aus den Gelenken
+      const g = ghost.position, a = Math.random() * TAU, r = 0.6 + Math.random() * 1.2, y = g.y + Math.random() * 2;
+      c.beam(g.x, y, g.z, g.x + Math.cos(a) * r, y + (Math.random() - 0.3) * r, g.z + Math.sin(a) * r, 0.012);
+    }
+  }
 
   function onHit() {
     const g = ghost.position;
@@ -119,7 +160,7 @@ export function startFinisher(c, e) {
   function manta(dt, p) {
     if (!hit) return;
     const g = ghost, s = Math.max(0, 1 - (p - hitAt) * 2.5);
-    g.rotation.z = Math.sin(t * 25) * 0.25 * s;
+    g.rotation.z = Math.sin(t * 13) * 0.3 * s + Math.sin(t * 7.3) * 0.12 * s;   // zappelt (flüssig, nicht zittrig)
     g.rotation.x = -ease((p - 0.65) / 0.3) * 1.2;
     g.position.y -= dt * 0.9 * ease((p - 0.6) / 0.2);
     if (Math.random() < 0.8) c.env.bubble(g.position.x - vf[0] * 0.35, g.position.y + 0.35, g.position.z - vf[2] * 0.35, 2, 0.1, 2.5, 0.03 + Math.random() * 0.05);
@@ -178,7 +219,7 @@ export function startFinisher(c, e) {
       }
       // der Gegner wird zurückgedrückt und durchgeschüttelt
       ghost.position.x += fx * dt * 2.2; ghost.position.z += fz * dt * 2.2;
-      ghost.rotation.z = (Math.random() - 0.5) * 0.3; ghost.rotation.x = (Math.random() - 0.5) * 0.2;
+      ghost.rotation.z = Math.sin(t * 23) * 0.13 + Math.sin(t * 37) * 0.05; ghost.rotation.x = Math.sin(t * 19) * 0.09;   // wird durchgeschüttelt (flüssig)
       c.shake(0.12);
     }
     if (p >= 0.78 && !f.spunDown) { f.spunDown = true; c.sfx.spin(false, 0.5); }

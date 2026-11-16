@@ -448,6 +448,9 @@ function onEvent(e) {
 // ---------- Finisher ----------
 const fins = [];      // alle Finisher, die gerade laufen
 let myFin = null;     // mein eigener (dann steuert die Animation meinen Taucher und die Kamera)
+// Kamerafahrt beim eigenen Finisher: [Winkel (rad, 0 = hinter dir), Abstand (m), Höhe (m)] für die drei Abschnitte,
+// zoom = so viel Grad Zoom im Moment des Treffers
+const FIN_CAM = { shoulder: [0.35, 2.8, 0.6], side: [1.55, 3.6, 0.1], pull: [2.1, 6.5, 2.2], zoom: 14 };
 let fpsN = 0, fpsT = 0;
 let lastGrunt = 0, sonarT = 2, bleedT = 0, bleedPuff = 0;   // bleedT = so lange blutest du noch   // sonarT = Sekunden bis zum nächsten Sonar-Ping im U-Boot
 const finCtx = {
@@ -468,6 +471,7 @@ function finTarget() {
 }
 function updateFinishers(dt) {
   for (let i = fins.length - 1; i >= 0; i--) if (!fins[i].update(dt)) { if (fins[i] === myFin) myFin = null; fins.splice(i, 1); }
+  document.body.classList.toggle("cine", !!myFin);   // Kinobalken während des eigenen Finishers
   // während meines Finishers bewegt die Animation meinen Taucher
   if (myFin && myFin.pose) { const P = myFin.pose; me.x = P.x; me.y = P.y; me.z = P.z; me.vx = me.vy = me.vz = 0; me.byaw = P.yaw; me.bpitch = 0; }
 }
@@ -1095,13 +1099,26 @@ function updateCamera(dt) {
   const alive = you && you.alive;
   fpOn = false;
   if (myFin) {
-    const G = myFin.ghost.position, mx = (me.x + G.x) / 2, my = (me.y + G.y) / 2 + 0.6, mz = (me.z + G.z) / 2;
-    const a = camYaw + 1.9 + myFin.p * 0.9, d = 5.5 + Math.hypot(me.x - G.x, me.z - G.z) * 0.55;   // weiter weg, wenn der Gegner weit fliegt
-    let px = mx + Math.sin(a) * d, py = my + 1.6, pz = mz + Math.cos(a) * d;
+    // Kamerafahrt wie im Kino (Werte in FIN_CAM): 1) über deiner Schulter, 2) im Moment des Treffers schwenkt sie zur Seite
+    // und geht tief, 3) danach zieht sie zurück und nach oben. Weich verbunden, damit nichts springt.
+    const G = myFin.ghost.position, p = myFin.p, h = myFin.hitAt, C = FIN_CAM;
+    if (!myFin.cam) { const dx = myFin.ghost.position.x - me.x, dz = myFin.ghost.position.z - me.z; myFin.cam = { base: Math.atan2(dx, dz), pos: camera.position.clone() }; }
+    const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+    const k1 = ease(p / h), k2 = ease((p - h) / (1 - h));
+    const ang = myFin.cam.base + Math.PI + C.shoulder[0] + (C.side[0] - C.shoulder[0]) * k1 + (C.pull[0] - C.side[0]) * k2;
+    const dist = C.shoulder[1] + (C.side[1] - C.shoulder[1]) * k1 + (C.pull[1] - C.side[1]) * k2 + Math.hypot(me.x - G.x, me.z - G.z) * 0.35;
+    const hgt = C.shoulder[2] + (C.side[2] - C.shoulder[2]) * k1 + (C.pull[2] - C.side[2]) * k2;
+    const look = 0.35 + 0.4 * k1;                                   // Blick wandert von dir zum Gegner
+    const mx = me.x + (G.x - me.x) * look, my = me.y + (G.y - me.y) * look + 0.4, mz = me.z + (G.z - me.z) * look;
+    let px = mx + Math.sin(ang) * dist, py = my + hgt, pz = mz + Math.cos(ang) * dist;
     py = Math.min(SURFACE - 0.6, Math.max(py, W.heightAt(px, pz) + 0.8));
+    myFin.cam.pos.lerp(V.set(px, py, pz), Math.min(1, dt * 6));   // sanft hinterher
     shake = Math.max(0, shake - dt * 2.2);
-    camera.position.set(px + (Math.random() - 0.5) * shake, py + (Math.random() - 0.5) * shake, pz);
+    const sh = shake * 0.6, st = time * 40;
+    camera.position.set(myFin.cam.pos.x + Math.sin(st) * sh, myFin.cam.pos.y + Math.sin(st * 1.3) * sh, myFin.cam.pos.z);
     camera.lookAt(mx, my, mz);
+    const zoom = C.zoom * Math.max(0, 1 - Math.abs(p - h) / 0.15);   // kurzer Zoom im Moment des Treffers
+    if (Math.abs(camera.fov - (FOV - zoom)) > 0.1) { camera.fov = FOV - zoom; camera.updateProjectionMatrix(); }
     return;
   }
   if (alive) {
