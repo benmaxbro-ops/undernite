@@ -10,7 +10,7 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 ## Danach
 
 - [ ] **Hände noch feiner:** Unterarme und Bündchen sind schon schlanker – Handfläche am Griff wirkt von der Seite noch etwas klotzig (Vorbild Call of Duty)
-- [ ] **Grafik noch realistischer:** Tiefenschärfe + Bewegungsunschärfe, bessere Oberflächen, bessere Taucher-Modelle
+- [ ] **Grafik noch realistischer:** bessere Oberflächen, bessere Taucher-Modelle (Bewegungs- und Tiefenunschärfe sind schon drin)
 - [ ] **Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
 - [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 

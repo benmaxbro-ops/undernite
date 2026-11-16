@@ -1339,6 +1339,7 @@ function lobbyCamera() {
   camera.lookAt(V.set(w.x, w.y + 6, w.z));
 }
 
+const blurCam = { x: 0, y: 0 };   // Bewegungsunschärfe (lens.js)
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
@@ -1403,7 +1404,11 @@ function frame(now) {
     if (mode !== 'exp' && you) updateTorch(dt, SURFACE - fx.y + DEEP.brOffset);
   } else lobbyCamera();
   if (env) { env.setLamp(lamp); env.update(dt, time, camera, phase === 'play' ? zone : null, outside); }
-  if (post.on) { if (post.lens.enabled) post.lens.tick(time, camera.aspect, daze.t > 0 ? Math.min(1, daze.t / daze.max * 1.4) : 0, daze.burn); post.composer.render(); } else renderer.render(scene, camera);
+  // Bewegungsunschärfe: wie weit sich die Kamera seit dem letzten Bild gedreht hat (auf den Bildschirm umgerechnet, gedeckelt)
+  const mdy = camYaw - (blurCam.yaw ?? camYaw), mdp = camPitch - (blurCam.pitch ?? camPitch); blurCam.yaw = camYaw; blurCam.pitch = camPitch;
+  const cl = (v) => Math.max(-0.03, Math.min(0.03, v));
+  blurCam.x += (cl(mdy * 0.35) - blurCam.x) * 0.5; blurCam.y += (cl(-mdp * 0.35 * camera.aspect) - blurCam.y) * 0.5;
+  if (post.on) { if (post.lens.enabled) post.lens.tick(time, camera.aspect, daze.t > 0 ? Math.min(1, daze.t / daze.max * 1.4) : 0, daze.burn, blurCam.x, blurCam.y, fpOn ? aim : 0); post.composer.render(); } else renderer.render(scene, camera);
   // FPS-Anzeige (Bilder pro Sekunde), zweimal pro Sekunde aktualisiert
   if (settings.fps) { fpsN++; fpsT += dt; if (fpsT >= 0.5) { document.getElementById('fpsBox').textContent = Math.round(fpsN / fpsT) + ' FPS'; fpsN = 0; fpsT = 0; } }
   requestAnimationFrame(frame);

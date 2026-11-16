@@ -23,6 +23,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | W A S D | schwimmen (in Blickrichtung, volle 3D-Bewegung) |
 | Maus | zielen / umsehen |
 | (Schießen) | Rückstoß wie bei einer Bodycam: Waffe und Kamera reißen zusammen hoch, das Wasser bremst sie weich ab (`RSPRING` in `main.js`). Aus der Waffe quillt eine Gasblase (`GAS`). |
+| (Grafik) | Bodycam-Linse (ab Qualität „Niedrig“): schnelles Drehen verwischt das Bild, beim Zielen wird der Rand unscharf (`motion` und `focus` in `lens.js`) |
 | Leertaste / C | aufwärts / abwärts – ganz oben schaut dein Kopf aus dem Wasser (X geht auch abwärts) |
 | H | Waffe wegstecken / rausholen (weggesteckt: Hände frei, 8 % schneller) |
 | (Schwimmen) | Bewegungen laufen weich an, beim Loslassen gleitest du aus, beim Seitwärtsschwimmen neigt sich die Kamera leicht (Werte: `FLOW` in `main.js`) |

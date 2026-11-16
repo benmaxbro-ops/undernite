@@ -7,17 +7,20 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
-export const LENS = { distort: 0.16, chroma: 0.014, vignette: 0.9, grain: 0.035, glare: 0.12 };
+//   motion   = Bewegungsunschärfe: schnelles Drehen verwischt das Bild (0 = aus, 1 = normal, 2 = stark)
+//   focus    = Tiefenschärfe beim Zielen: der Rand wird unscharf, die Mitte bleibt scharf (0 = aus, 0.008 = stark)
+export const LENS = { distort: 0.16, chroma: 0.014, vignette: 0.9, grain: 0.035, glare: 0.12, motion: 1, focus: 0.005 };
 
 const LensShader = {
   uniforms: {
     tDiffuse: { value: null }, uTime: { value: 0 }, uAspect: { value: 16 / 9 },
     uDistort: { value: LENS.distort }, uChroma: { value: LENS.chroma }, uVig: { value: LENS.vignette }, uGrain: { value: LENS.grain }, uGlare: { value: LENS.glare },
-    uDaze: { value: 0 }, uBurn: { value: 0 },   // benommen (Doppelbild, verschwommen) und Hitzeblitz am Rand, je 0…1
+    uDaze: { value: 0 }, uBurn: { value: 0 },
+    uMotion: { value: new THREE.Vector2() }, uFocus: { value: 0 },   // Verwisch-Richtung (Bildschirm) und Unschärfe am Rand beim Zielen   // benommen (Doppelbild, verschwommen) und Hitzeblitz am Rand, je 0…1
   },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float uTime, uAspect, uDistort, uChroma, uVig, uGrain, uGlare, uDaze, uBurn; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float uTime, uAspect, uDistort, uChroma, uVig, uGrain, uGlare, uDaze, uBurn, uFocus; uniform vec2 uMotion; varying vec2 vUv;
     // Fischauge: jeder Bildpunkt holt seine Farbe etwas weiter außen → der Rand wird zusammengedrückt (gewölbt)
     vec2 warp(vec2 uv, float k) {
       vec2 p = uv * 2.0 - 1.0; p.x *= uAspect;
@@ -41,6 +44,20 @@ const LensShader = {
         vec3 ghost = texture2D(tDiffuse, warp(vUv + o, uDistort)).rgb + texture2D(tDiffuse, warp(vUv - o * 0.7, uDistort)).rgb;
         col = mix(col, ghost * 0.5, 0.5 * uDaze);
       }
+      // Bewegungsunschärfe: 8 Proben entlang der Drehrichtung mitteln
+      float ml = length(uMotion);
+      if (ml > 0.0005) {
+        vec3 acc = col;
+        for (int i = 1; i <= 7; i++) { float k = float(i) / 7.0 - 0.5; acc += texture2D(tDiffuse, warp(vUv + uMotion * k, uDistort)).rgb; }
+        col = mix(col, acc / 8.0, clamp(ml * 60.0, 0.0, 1.0));
+      }
+      // Tiefenschärfe beim Zielen: am Rand ein weicher Kreis aus Proben, in der Mitte scharf
+      float fb = uFocus * smoothstep(0.22, 0.85, r);
+      if (fb > 0.0002) {
+        vec3 acc = col;
+        for (int i = 0; i < 8; i++) { float a = float(i) * 0.785 + 0.4; acc += texture2D(tDiffuse, warp(vUv + vec2(cos(a) / uAspect, sin(a)) * fb, uDistort)).rgb; }
+        col = acc / 9.0;
+      }
       // helle Stellen bluten etwas aus (billiger Kamerasensor)
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       col += col * smoothstep(0.55, 1.0, l) * uGlare;
@@ -58,9 +75,11 @@ const LensShader = {
 
 export function makeLensPass() {
   const pass = new ShaderPass(LensShader);
-  pass.tick = (t, aspect, daze = 0, burn = 0) => {
+  // mx, my = wie schnell sich die Kamera gerade dreht (Bildschirm-Richtung), focus = wie sehr man zielt (0…1)
+  pass.tick = (t, aspect, daze = 0, burn = 0, mx = 0, my = 0, focus = 0) => {
     const u = pass.uniforms;
     u.uTime.value = t; u.uAspect.value = aspect; u.uDaze.value = daze; u.uBurn.value = burn;
+    u.uMotion.value.set(mx * LENS.motion, my * LENS.motion); u.uFocus.value = focus * LENS.focus;
     u.uDistort.value = LENS.distort; u.uChroma.value = LENS.chroma; u.uVig.value = LENS.vignette; u.uGrain.value = LENS.grain; u.uGlare.value = LENS.glare;
   };
   return pass;
