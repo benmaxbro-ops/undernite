@@ -323,6 +323,7 @@ const GUNS = [
   /* 7 Schallkanone   */ { kind: 'tube',   L: 0.85, R: 0.095, gills: 6, dish: true },
 ];
 const GUN_WHITE = 0xf2f7fa, GUN_BLUE = 0x2fa8ff;
+const SIGHT_GLOW = 0x6dff8a;   // Farbe der Leuchtpunkte auf Kimme und Korn (grün wie echte Leuchtvisiere)
 // Profile werden pro Waffe nur einmal gebaut und dann wiederverwendet (spart Speicher)
 const GUN_GEO = new Map();
 // Würfel mit abgerundeten Kanten (1 × 1 × 1), damit nichts mehr kantig aussieht
@@ -461,9 +462,10 @@ export function makeWaterGun(widx, fp = false) {
     gills(3, 0.085, 0.024, H * 0.5, H * 0.75, W / 2 + 0.002);
     box(dark, 0.035, 0.08, H * 0.55, H + 0.001, 0.004, W / 2 + 0.001);                    // Auswurffenster rechts
     for (let i = 0; i < 4; i++) box(dark, L - 0.075 + i * 0.006, L - 0.072 + i * 0.006, H * 0.2, H * 0.85, W + 0.002);   // vordere Griffrillen
-    const dotM = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.8 });
-    for (const x of [-0.007, 0.007]) add(slideG, KNUCKLE, dotM, x, H + 0.005, 0.0235).scale.setScalar(0.0016);   // Punkte auf der Kimme
-    add(slideG, KNUCKLE, dotM, 0, H + 0.006, -(L - 0.05) - 0.0028).scale.setScalar(0.0016);                        // Punkt auf dem Korn
+    // Leuchtvisier wie bei echten Pistolen (Tritium): zwei grüne Punkte hinten auf der Kimme, einer vorne auf dem Korn
+    const dotM = new THREE.MeshStandardMaterial({ color: SIGHT_GLOW, emissive: SIGHT_GLOW, emissiveIntensity: 2.2 });
+    for (const x of [-0.007, 0.007]) add(slideG, KNUCKLE, dotM, x, H + 0.005, 0.0235).scale.setScalar(0.0019);   // Punkte auf der Kimme
+    add(slideG, KNUCKLE, dotM, 0, H + 0.006, -(L - 0.05) - 0.0028).scale.setScalar(0.0021);                        // Punkt auf dem Korn
     tgt = g;
     cock = { g: slideG, at: new THREE.Vector3(0, H + 0.012, 0.012), travel: 0.032 };   // hinten oben an den Griffrillen anfassen
     sightAt = [0, H + 0.005];
@@ -489,9 +491,12 @@ export function makeWaterGun(widx, fp = false) {
     for (let i = 0; i < 3; i++) box(dark, tip + 0.008 + i * 0.011, tip + 0.013 + i * 0.011, bv + P.br * 1.2, bv + P.br * 1.75, P.br * 1.2);   // Löcher oben
     ring(tip + 0.04, bv, P.br * 1.75);
     tube(dark, tip + 0.04, tip + 0.043, bv, P.br * 1.1);
-    // Kimme und Korn
+    // Kimme und Korn, mit grünen Leuchtpunkten
     box(dark, -back * 0.5, -back * 0.5 + 0.01, H / 2 + 0.01, H / 2 + 0.022, W * 0.4);
     box(blue, front + hg - 0.012, front + hg - 0.006, H * 0.3, H * 0.3 + 0.03, 0.004);
+    const dotR = new THREE.MeshStandardMaterial({ color: SIGHT_GLOW, emissive: SIGHT_GLOW, emissiveIntensity: 2.2 });
+    for (const x of [-W * 0.12, W * 0.12]) add(g, KNUCKLE, dotR, x, H / 2 + 0.019, back * 0.5 - 0.005).scale.setScalar(0.0022);
+    add(g, KNUCKLE, dotR, 0, H * 0.3 + 0.03, -(front + hg - 0.009)).scale.setScalar(0.0024);
     // Zielfernrohr
     if (P.scope) {
       const sv = H / 2 + 0.03;
@@ -602,7 +607,7 @@ export function makeWaterGun(widx, fp = false) {
   const muzzle = new THREE.Object3D(); muzzle.position.set(...muzzleAt); g.add(muzzle);
   // fpShift: Werferrohre sitzen in der Ego-Perspektive weiter vorne und weiter rechts (sonst schaut man ins Rohr)
   const fpShift = P.kind === 'tube' ? [0.07, -0.035, -0.32] : [0, 0, 0];
-  Object.assign(g.userData, { muzzle, gripTop, gripW, support, fpShift, mag, cock, sightAt });
+  Object.assign(g.userData, { muzzle, gripTop, gripW, support, fpShift, mag, cock, sightAt, kind: P.kind });
   g.userData.setGills(0); g.userData.setCharge(1);
   return g;
 }
@@ -651,7 +656,20 @@ export function makeViewArms(suit, gun) {
   if (big > 1.2) { const p = add(g, RBOX, acc, 0.05, t - 0.13, 0.19); p.scale.set(0.09, 0.05, 0.16); p.rotation.set(-0.6, 0.3, 0.2); }   // Panzerplatte
   // linke Hand (Gewehre und Werfer): Handfläche unten, Finger rechts hoch, Daumen links
   const right = g; g.userData.left = null;
-  if (gun.support) {
+  if (gun.kind === 'pistol') {
+    // Pistole beidhändig wie bei der Polizei: die linke Hand legt sich von links um die rechte,
+    // ihre Finger umfassen vorne die Finger der rechten Hand, der linke Daumen zeigt am Rahmen entlang nach vorne.
+    const g = new THREE.Group(); right.add(g); right.userData.left = g;
+    const L = -(R + 0.016);
+    const lp = add(g, RBOX, glove, L - 0.004, t - 0.05, 0.004); lp.scale.set(0.022, 0.074, 0.062); lp.rotation.y = 0.18;   // Handfläche links am Griff
+    for (let i = 0; i < 4; i++) {                                                                 // Finger umfassen vorne die rechte Hand
+      const y = t - 0.04 - i * 0.017, r = i === 3 ? 0.0082 : 0.0095;
+      finger(g, glove, [[L, y, -0.022], [L + 0.008, y - 0.002, -0.048], [-0.004, y - 0.003, -0.056], [R * 0.7, y - 0.002, -0.05], [R + 0.01, y - 0.001, -0.036]], r);
+    }
+    finger(g, glove, [[L + 0.004, t - 0.03, 0.012], [L + 0.002, t - 0.012, -0.018], [L + 0.004, t - 0.004, -0.048], [L + 0.006, t - 0.001, -0.07]], 0.0105);   // Daumen nach vorne
+    chain(g, acc, [[L - 0.004, t - 0.062, 0.04], [L - 0.012, t - 0.075, 0.074]], 0.03 * big);    // Bündchen
+    chain(g, sleeve, [[L - 0.012, t - 0.075, 0.072], [-0.2, t - 0.33, back]], 0.035 * big);      // Unterarm bis aus dem Bild
+  } else if (gun.support) {
     const g = new THREE.Group(); right.add(g); right.userData.left = g;
     const [sx, sy, sz] = gun.support;
     const h = add(g, RBOX, glove, sx, sy - 0.022, sz + 0.005); h.scale.set(0.058, 0.026, 0.075);

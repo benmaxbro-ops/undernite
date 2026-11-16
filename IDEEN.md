@@ -55,7 +55,12 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [x] **Hitze-System:** Hitze sammelt sich beim Schießen, kommt nach dem Aufhören auf einen Schlag raus (Schallwelle mit Wumms); zu viel → verbrennen, „Ah!“, benommen, Waffe 2 s wegstecken
 - [x] **Schüsse wie Schlag gegen Holztür** (echte CC0-Aufnahme, tiefer, mit Wasser-Echo, weit hörbar)
 - [x] **Bodycam-Linse** (lens.js)
-- [ ] **Kimme und Korn leuchten** (wie Leuchtvisiere)
+- [x] **Kimme und Korn leuchten** (grüne Leuchtpunkte)
+- [x] **Pistole beidhändig unten in der Mitte**, Waffe schwingt beim Drehen nach, Helmlampe beleuchtet die Hände
+- [ ] **Ulti für jede Klasse (Taste 4):**
+  - [ ] Manta: Zeitlupe wie in Matrix, weicht jeder Kugel aus
+  - [ ] Goliath: kurz automatisches Zielen (gleich viele Schüsse nötig, nur ohne Zielen)
+  - [ ] Triton und Bollwerk: noch ausdenken
 - [ ] **Schuss-Richtungsanzeige:** kleiner Ring in der Mitte, ein Pfeil zeigt, woher geschossen wird
 - [ ] **Grafik so realistisch wie möglich:** 1. Bodycam-Linse, 2. Unterwasser-Licht (Farben verschwinden mit der Tiefe,
       Lichtstrahlen, Meeresschnee), 3. Tiefenschärfe + Bewegungsunschärfe, 4. bessere Oberflächen, 5. Bodycam-Animationen, 6. bessere Taucher

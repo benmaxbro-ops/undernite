@@ -92,6 +92,8 @@ const beams = [], BEAM_TIME = 0.18;
 // Waffe in der Ego-Perspektive: hängt an der Kamera, rechts unten im Bild.
 // gills = wie weit die Kiemen offen sind (0…1), charge = wie voll das Druckfenster ist (0…1), kick = Rückstoß nach einem Schuss
 const flashLight = new THREE.PointLight(0x9fe4ff, 0, 5, 1.6); flashLight.position.set(0.15, -0.08, -0.6); camera.add(flashLight);
+// Streulicht der Helmlampe auf Hände und Waffe (sitzt oben am Helm, reicht nur bis zu den Händen)
+const handLight = new THREE.PointLight(0xe8f0ff, 0, 1.4, 2); handLight.position.set(0.05, 0.22, 0.05); camera.add(handLight);
 // Mündungsblitz: zwei gekreuzte leuchtende Scheiben und ein heller Kern (blau-weiß, wie ein Druckstoß aus Wasser)
 function makeFlash() {
   const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -99,7 +101,13 @@ function makeFlash() {
   const c = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), m); c.position.z = -0.015; g.add(c);
   return g;
 }
-const view = { g: new THREE.Group(), gun: null, arms: null, rHand: null, rl: 0, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, tilt: 0, rsnd: 0 };
+const view = { g: new THREE.Group(), gun: null, arms: null, rHand: null, rl: 0, widx: -2, gills: 0, charge: 0, kick: 0, bob: 0, tilt: 0, rsnd: 0, inX: 0, inY: 0 };
+// Waffe vor der Kamera (Bodycam): hip = wo sie ohne Zielen sitzt [rechts, oben, nach innen gedreht] je Waffenart.
+// Pistole beidhändig unten in der Mitte, Gewehre etwas rechts, Werfer rechts.
+// inertia = wie stark sie beim Drehen nachschwingt, inertiaMax = höchstens so weit, inertiaBack = wie schnell sie zurückkommt
+// breathe = wie stark sie beim Atmen auf und ab geht, hands = Licht der Helmlampe auf Händen und Waffe (an / aus)
+const VIEW = { hip: { pistol: [0.03, -0.112, 0.04], rifle: [0.1, -0.13, 0.02], tube: [0.15, -0.13, 0] },
+  inertia: 0.35, inertiaMax: 0.05, inertiaBack: 9, breathe: 0.0025, hands: [0.35, 0.06] };
 view.g.position.set(0.15, -0.13, 0);   // rechts, unten (die Tiefe kommt von der Waffe selbst, siehe updateViewModel)
 camera.add(view.g);
 // firstPerson = Taste V gedrückt (Ego-Perspektive), fpOn = sie ist gerade wirklich aktiv (nicht in Fahrzeugen)
@@ -885,12 +893,20 @@ function updateViewModel(dt) {
   const sway = Math.min(1, speed / 10) * 0.012 * (1 - ads * 0.8);
   const K = view.kick * (view.kickPow || 1);
   const sh = U.fpShift, z = -(U.rear + 0.3) + sh[2], sx = sh[0] * (1 - ads), sy = sh[1] * (1 - ads);
-  view.g.position.set(0.15 * (1 - ads), -0.13 * (1 - ads), 0);
+  // Trägheit (Bodycam): dreht man sich, bleibt die Waffe kurz zurück und kippt etwas – wie echte Arme mit Gewicht
+  const dYaw = (camYaw - (view.lastYaw ?? camYaw)), dPitch = (camPitch - (view.lastPitch ?? camPitch)); view.lastYaw = camYaw; view.lastPitch = camPitch;
+  const inT = Math.min(1, dt * VIEW.inertiaBack);
+  view.inX += (Math.max(-VIEW.inertiaMax, Math.min(VIEW.inertiaMax, -dYaw * VIEW.inertia)) - view.inX) * inT;
+  view.inY += (Math.max(-VIEW.inertiaMax, Math.min(VIEW.inertiaMax, -dPitch * VIEW.inertia)) - view.inY) * inT;
+  const breathe = Math.sin(time * 1.5) * VIEW.breathe * (1 - ads * 0.7);            // ganz leichtes Atmen
+  const hip = VIEW.hip[U.kind] || VIEW.hip.rifle;                                    // wo die Waffe ohne Zielen sitzt
+  view.g.position.set(hip[0] * (1 - ads), hip[1] * (1 - ads), 0);
   view.gun.position.set(
-    sx - U.sightAt[0] * ads + Math.cos(view.bob) * sway - view.tilt * 0.08,
-    sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.02,
+    sx - U.sightAt[0] * ads + Math.cos(view.bob) * sway - view.tilt * 0.08 + view.inX * 0.5,
+    sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.02 + view.inY * 0.5 + breathe,
     z - ads * 0.04 + K * 0.075);                                                    // Rückstoß: die Waffe fährt nach hinten
-  view.gun.rotation.set(K * 0.2 + view.tilt * 0.15, view.tilt * 0.3, -view.tilt * 1.15 + K * (view.kickRoll || 0));   // −z-Drehung = Boden nach links
+  view.gun.rotation.set(K * 0.2 + view.tilt * 0.15 - view.inY * 1.2, view.tilt * 0.3 + view.inX * 1.4 + (hip[2] || 0) * (1 - ads),
+    -view.tilt * 1.15 + K * (view.kickRoll || 0) + view.inX * 1.8);              // −z-Drehung = Boden nach links
   // der Schlitten / Spannhebel fährt bei jedem Schuss kurz zurück
   if (U.cock && !rl) U.cock.g.position.z = U.cock.travel * Math.min(1, view.kick * 1.4);
   if (rl) {
@@ -904,6 +920,7 @@ function updateViewModel(dt) {
   if (!U.flash) { U.flash = makeFlash(); U.muzzle.add(U.flash); }
   U.flash.visible = fl > 0; U.flash.scale.setScalar(0.6 + fl * (view.kickPow || 1) * 0.5); U.flash.rotation.z = Math.random() * 6;
   flashLight.intensity = fl * 6;
+  handLight.intensity = view.g.visible ? (lamp.intensity > 0 ? VIEW.hands[0] : VIEW.hands[1]) : 0;
 }
 const V = new THREE.Vector3();
 function updateCamera(dt) {
