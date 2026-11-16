@@ -65,6 +65,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
   ein paar Sekunden benommen, und bei sehr viel Hitze muss man die Waffe 2 Sekunden wegstecken. Wer langsamer schießt, verbrennt sich nicht. Der Goliath sitzt geschützt im Mech und bekommt keinen Hitzeschaden.
   Werte: `HEAT` in `shared.js`.
 - **Unterwasser-Licht:** Wasser schluckt Rot zuerst, dann Grün (Werte in `water.js`). Schwebeteilchen blitzen im Lampenkegel auf.
+- **Richtungsanzeige:** Ein feiner Ring um die Bildmitte; schießt jemand bis 80 m entfernt, zeigt ein gelber Pfeil in seine Richtung (rot = du wurdest getroffen).
 - **Sterben:** Das Bild wird dunkel, dann schwarz, dann „Du bist tot“ – zuschauen, schon den nächsten Taucher wählen oder in den Shop (Einkaufen geht nach dem Tod auch während der Runde).
 - **Perlen 🦪:** Am Rundenende gibt es 50 pro Kill, 10 pro überlebter Minute und 300 / 150 / 75 für Platz 1–3.
   Sie werden unter deinem Namen gespeichert (`saves/battleroyale.json`), getrennt vom Expeditions-Geld.

@@ -126,6 +126,12 @@ const torch = { on: false, bat: LAMPS[0].battery, lvl: 0, hinted: false };
 const keys = {};
 const lerpAngle = (a, b, k) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
 const approachAngle = (a, b, step) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2; return a + Math.max(-step, Math.min(step, d)); };
+// Schuss-Richtungsanzeige: Schüsse bis SHOT_DIR_RANGE Meter zeigen einen Pfeil am Ring in der Bildmitte
+const SHOT_DIR_RANGE = 80;
+function shotFrom(x, z) {
+  if (!you || !you.alive || Math.hypot(x - me.x, z - me.z) > SHOT_DIR_RANGE || Math.hypot(x - me.x, z - me.z) < 1) return;
+  hud.shotDir(Math.atan2(x - me.x, -(z - me.z)) + camYaw);
+}
 const distTo = (x, y, z) => Math.hypot(x - camera.position.x, y - camera.position.y, z - camera.position.z);
 const volAt = (x, y, z) => { const d = Math.hypot(x - camera.position.x, y - camera.position.y, z - camera.position.z); return Math.max(0, 1 - d / 95) ** 2; };
 
@@ -380,6 +386,7 @@ function onEvent(e) {
         whine: widx === 4 || widx === 5 ? sfx.torpedoWhine() : null });   // Torpedos: hohes, sirrendes Heulen
       if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) {
         sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]), distTo(e[4], e[5], e[6]));
+        if (e[3] !== myId) shotFrom(e[4], e[6]);   // Richtungsanzeige: woher wird geschossen?
       }
       projs.lastShot = time;
       if (e[3] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
@@ -396,6 +403,7 @@ function onEvent(e) {
       // Splitterwerfer schießt 7 Strahlen gleichzeitig – das Geräusch nur einmal abspielen
       if (beams.lastShot !== time) {
         sfx.jet(widx, e[2] === myId ? 1 : volAt(e[3], e[4], e[5]), distTo(e[3], e[4], e[5]));
+        if (e[2] !== myId && e[2] > 0) shotFrom(e[3], e[5]);   // Richtungsanzeige: woher wird geschossen?
       }
       beams.lastShot = time;
       if (e[2] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }

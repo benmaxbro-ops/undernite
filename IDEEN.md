@@ -9,7 +9,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Danach
 
-- [ ] **Schuss-Richtungsanzeige:** kleiner Ring in der Mitte, ein Pfeil zeigt, woher geschossen wird
 - [ ] **Sonar-Radar statt Minikarte:** grüner Strahl dreht sich langsam, Gelände und Spieler leuchten kurz auf, wenn er drüberstreicht
 - [ ] **Ulti für jede Klasse (Taste 4):**
   - [ ] Manta: Zeitlupe wie in Matrix, weicht jeder Kugel aus

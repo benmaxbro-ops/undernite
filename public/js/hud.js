@@ -374,6 +374,15 @@ export class Hud {
     this.vign = 0.9;
     if (rel === null) return;
     const i = document.createElement('i'); i.style.transform = `rotate(${rel}rad)`; $('dirs').appendChild(i); setTimeout(() => i.remove(), 1100);
+    this.shotDir(rel, true);
+  }
+  // Schuss-Richtungsanzeige: ein Pfeil am Ring um die Bildmitte zeigt, woher geschossen wurde (rot = du wurdest getroffen)
+  shotDir(rel, hit = false) {
+    const now = performance.now(), key = Math.round(rel * 6) + (hit ? 'h' : '');
+    if (this.lastDir && this.lastDir[key] && now - this.lastDir[key] < 350) return;   // nicht 10 Pfeile für eine Salve
+    (this.lastDir ||= {})[key] = now;
+    const b = document.createElement('b'); if (hit) b.className = 'hit';
+    b.style.transform = `rotate(${rel}rad)`; $('dirs').appendChild(b); setTimeout(() => b.remove(), 1600);
   }
   // Gadget unten rechts: Name und Ladebalken (voll = bereit). gd = [Nummer, Sekunden bis bereit] oder null
   gadget(gd) {
