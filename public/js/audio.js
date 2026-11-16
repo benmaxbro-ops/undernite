@@ -28,6 +28,8 @@ export const SHOT = { crack: 3.0, body: 3.1, boom: 3.0, mech: 4.5, duck: 5.45, w
 export const AH = { vol: 2.4, delay: 0.35 };
 // Treffer in einen Körper: crack = scharfes Knacken, flesh = nasser Einschlag, body = dumpfer Schlag (Lautstärken)
 export const HITS = { crack: 0.5, flesh: 1.6, body: 1.4 };
+// Schuss knapp vorbei: vol = Lautstärke, pan = wie stark links/rechts (0 = gar nicht, 1 = ganz)
+export const WHOOSH = { vol: 1.6, pan: 0.6 };
 export const KNOCK = { vol: 1.8, own: 0.5, range: 260, pitchSmall: 0.75, pitchBig: 0.6, body: 1.0 };
 export const PLASMA = {
   ring: 0.12,      // elektrisches Brummen (Ringmodulation): 0 = aus, 1 = stark (zu viel macht den Schuss dünn)
@@ -340,17 +342,30 @@ export class Sfx {
   cockBack() { if (this.sample('slide_back', 0.9)) return; this.noise(0.12, 2600, 3, 0.3, 'bandpass', 1600); this.tone(900, 600, 0.04, 0.15, 'square'); }
   cockRelease() { if (this.sample('slide_fwd', 1, { plasma: 0.15 })) { this.zap(0.2, 0.12); return; } this.tone(1400, 800, 0.03, 0.35, 'square'); this.noise(0.05, 3000, 2, 0.5, 'bandpass'); this.tone(200, 90, 0.08, 0.4, 'sine'); }
   // "Schusch": ein Schuss fliegt knapp an dir vorbei. pan = von welcher Seite (−1 links … +1 rechts)
-  whoosh(vol, pan) {
+  // Knapp vorbei: "Schwuuusch". vol 0…1 = wie knapp (1 = ganz knapp), pan −1 (links) … +1 (rechts).
+  // Rauschen, dessen Tonhöhe hoch- und wieder runtergeht (Doppler: es kommt auf dich zu … und fliegt weg),
+  // dazu ein Druckstoß; ganz knapp zusätzlich ein scharfes "Zipp". Leicht links/rechts, damit man weiß, wo es war. Stärke: WHOOSH
+  whoosh(vol, pan = 0) {
     const ctx = this.ctx; if (!ctx || vol < 0.03) return;
-    const t = ctx.currentTime, src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
-    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.6;
-    f.frequency.setValueAtTime(600, t); f.frequency.exponentialRampToValueAtTime(3400, t + 0.11); f.frequency.exponentialRampToValueAtTime(450, t + 0.32);   // kommt näher … und weg
-    const g = ctx.createGain(); g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.8 * vol, t + 0.1); g.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
-    src.connect(f).connect(g);
-    // keine Links/Rechts-Verteilung: unter Wasser scheint jedes Geräusch von überall zu kommen
-    g.connect(this.uw);
-    src.start(t, Math.random()); src.stop(t + 0.38);
-    this.tone(1100, 520, 0.28, 0.05 * vol, 'sine');   // leises Pfeifen mit Doppler-Effekt (Ton fällt, wenn es vorbei ist)
+    const t = ctx.currentTime, W = WHOOSH, v = Math.min(1, vol) * W.vol, dur = 0.42;
+    const out = ctx.createStereoPanner(); out.pan.value = Math.max(-1, Math.min(1, pan)) * W.pan;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6000; out.connect(lp).connect(this.master);   // direkt am Ohr, nur leicht gedämpft
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.9;
+    f.frequency.setValueAtTime(380, t); f.frequency.exponentialRampToValueAtTime(3200, t + 0.13); f.frequency.exponentialRampToValueAtTime(320, t + dur);   // kommt näher … und weg
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.9 * v, t + 0.12); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f).connect(g).connect(out); src.start(t, Math.random()); src.stop(t + dur + 0.02);
+    const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.setValueAtTime(190, t + 0.06); o.frequency.exponentialRampToValueAtTime(70, t + 0.3);   // Druckstoß
+    og.gain.setValueAtTime(0.001, t); og.gain.exponentialRampToValueAtTime(0.5 * v, t + 0.11); og.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+    o.connect(og).connect(out); o.start(t); o.stop(t + 0.35);
+    if (vol > 0.6) {   // ganz knapp: scharfes Zipp (Kugel reißt das Wasser direkt neben dem Kopf auf)
+      const z = ctx.createBufferSource(); z.buffer = this.noiseBuf; const zf = ctx.createBiquadFilter(); zf.type = 'highpass'; zf.frequency.value = 3500;
+      const zg = ctx.createGain(); zg.gain.setValueAtTime(0.001, t + 0.1); zg.gain.exponentialRampToValueAtTime(0.7 * v, t + 0.115); zg.gain.exponentialRampToValueAtTime(0.001, t + 0.17);
+      z.connect(zf).connect(zg).connect(out); z.start(t + 0.1, Math.random()); z.stop(t + 0.2);
+      const zt = ctx.createOscillator(), zt2 = ctx.createGain(); zt.type = 'sawtooth'; zt.frequency.setValueAtTime(2800, t + 0.1); zt.frequency.exponentialRampToValueAtTime(500, t + 0.2);
+      zt2.gain.setValueAtTime(0.001, t + 0.1); zt2.gain.exponentialRampToValueAtTime(0.08 * v, t + 0.11); zt2.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      zt.connect(zt2).connect(out); zt.start(t + 0.1); zt.stop(t + 0.24);
+    }
   }
   // ---------- Magazin wechseln ----------
   magOut() { if (this.sample('mag_out', 0.9)) return; this.tone(1500, 1100, 0.03, 0.22, 'square'); this.noise(0.12, 1800, 2, 0.25, 'bandpass', 900, 0.02); }          // Klick – Magazin löst sich und rutscht raus

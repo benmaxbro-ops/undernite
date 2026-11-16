@@ -234,11 +234,11 @@ function muzzleOf(id) {
   return m ? m.getWorldPosition(MZ) : null;
 }
 // Knapp vorbei: wie nah (Meter) ein fremder Schuss an dir vorbei muss, damit es "Schusch" macht
-const NEAR_MISS = 2.5;
+const NEAR_MISS = 4.5;
 function whooshAt(x, y, z, d) {
   const rx = Math.cos(camYaw), rz = -Math.sin(camYaw);                     // "rechts" von der Kamera aus
   const side = ((x - me.x) * rx + (z - me.z) * rz) / Math.max(0.3, d);
-  sfx.whoosh(1 - d / (NEAR_MISS + 0.5), side);
+  sfx.whoosh(Math.pow(1 - d / (NEAR_MISS + 0.5), 0.8), side);
 }
 function nearMiss(x0, y0, z0, x1, y1, z1) {
   if (!you || !you.alive) return;
