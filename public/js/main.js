@@ -537,6 +537,7 @@ canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !=
 document.getElementById('pause').addEventListener('click', lock);
 // Einstellungen: aus der Lobby und aus dem Pause-Bildschirm (Esc) erreichbar
 hud.initBrShop((k) => send({ t: 'brbuy', k }));   // Perlen-Shop in der Lobby
+hud.initLoadout((m) => send({ t: 'load', ...m }));   // Ausrüstungs-Fenster pro Taucher
 for (const id of ['setBtnLobby', 'setBtnPause']) document.getElementById(id).addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
 addEventListener('keydown', (e) => { if (e.code === 'Escape') closeSettings(); });
 

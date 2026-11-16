@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,7 @@ function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
   return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, urls: lanUrls(),
-    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name), gads: gadsOf(c.name) })) };
+    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name), gads: gadsOf(c.name), weps: wepsOf(c.name), load: loadOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
 
@@ -141,7 +141,10 @@ function startMatch() {
   // participants
   for (const c of clients.values()) {
     const p = mkPlayer(c.id, c.name, c.suit, false); p.up = upsOf(c.name);
-    const gi = gadgetOf(c.suit); p.gad = gi >= 0 && gadsOf(c.name).includes(GADGETS[gi].k) ? gi : -1; p.gadT = 0;   // gekauftes Gadget dieses Tauchers
+    // Ausrüstung aus dem Ausrüstungs-Fenster: Gadget (wenn gekauft und nicht abgelegt) und Startwaffe
+    const L = loadOf(c.name)[c.suit] || {}, gi = gadgetOf(c.suit);
+    p.gad = gi >= 0 && L.gad !== false && gadsOf(c.name).includes(GADGETS[gi].k) ? gi : -1; p.gadT = 0;
+    if (L.wep && (L.wep === 'pistol' || wepsOf(c.name).includes(L.wep)) && WEAPONS[L.wep]) p.weapons[0] = newWeapon(L.wep, 0);
     G.players.set(p.id, p); c.playing = true;
   }
   G.baits = []; G.drones = [];
@@ -896,6 +899,17 @@ function addPearls(name, amt) {
 }
 const suitsOf = (name) => [...(brSaves[saveKey(name)]?.suits || [])];   // gekaufte Taucher
 const gadsOf = (name) => [...(brSaves[saveKey(name)]?.gads || [])];     // gekaufte Gadgets
+const wepsOf = (name) => [...(brSaves[saveKey(name)]?.weps || [])];     // gekaufte Startwaffen
+const loadOf = (name) => ({ ...(brSaves[saveKey(name)]?.load || {}) });  // Ausrüstung pro Taucher: { triton: { wep: 'scatter', gad: true }, … }
+// Ausrüstung eines Tauchers speichern (nur gekaufte Sachen): wep = Startwaffe (null = seine eigene), gad = Gadget mitnehmen
+function setLoadout(c, m) {
+  if (!SUITS[m.suit]) return;
+  const s = brSaves[saveKey(c.name)] ||= { pearls: 0 };
+  const L = (s.load ||= {})[m.suit] ||= {};
+  if (m.wep === null || (BR_WEAPONS.some(w => w.wid === m.wep) && (m.wep === 'pistol' || (s.weps || []).includes(m.wep)))) L.wep = m.wep;
+  if (typeof m.gad === 'boolean') L.gad = m.gad;
+  saveBr();
+}
 // Im Perlen-Shop kaufen (nur in der Lobby): k = Verbesserung (nächste Stufe) oder 'suit:name' (Taucher freischalten)
 function brBuy(c, k) {
   const s = brSaves[saveKey(c.name)] ||= { pearls: 0 };
@@ -903,6 +917,12 @@ function brBuy(c, k) {
     const id = k.slice(5), S = SUITS[id];
     if (!S || !S.price || (s.suits || []).includes(id) || (s.pearls || 0) < S.price) return;
     s.pearls -= S.price; (s.suits ||= []).push(id); s.last = Date.now(); c.suit = id;   // gleich auswählen
+    saveBr(); return;
+  }
+  if (typeof k === 'string' && k.startsWith('wep:')) {
+    const W0 = BR_WEAPONS.find(x => x.wid === k.slice(4));
+    if (!W0 || !W0.price || (s.weps || []).includes(W0.wid) || (s.pearls || 0) < W0.price) return;
+    s.pearls -= W0.price; (s.weps ||= []).push(W0.wid); s.last = Date.now();
     saveBr(); return;
   }
   if (typeof k === 'string' && k.startsWith('gad:')) {
@@ -1369,6 +1389,7 @@ wss.on('connection', (ws) => {
       case 'start': if (G.phase === 'lobby') { if (G.mode === 'exp') startExp(); else startMatch(); } break;
       case 'buy': if (p && G.mode === 'exp') expBuy(p, m); break;
       case 'brbuy': if (G.phase === 'lobby') { brBuy(c, m.k); broadcast(lobbyMsg()); } break;
+      case 'load': if (G.phase === 'lobby') { setLoadout(c, m); broadcast(lobbyMsg()); } break;
       case 'gad': if (p && p.alive && G.mode !== 'exp') { try { useGadget(p, m); } catch (err) { console.error('[gadget error]', err); } } break;
       case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':

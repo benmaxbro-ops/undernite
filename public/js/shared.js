@@ -119,6 +119,15 @@ export const GADGETS = [
     desc: 'Ein Stromstoß: Gegner bis 8 m sind 1,8 Sekunden gelähmt (langsam, können nicht schießen) und bekommen 10 Schaden.' },
 ];
 export const gadgetOf = (suit) => GADGETS.findIndex(g => g.suit === suit);   // Nummer des Gadgets dieses Tauchers (-1 = keins)
+// Startwaffen (Ausrüstungs-Fenster): einmal kaufen, dann bei jedem Taucher als Startwaffe wählbar (in normaler Seltenheit).
+// Ohne Auswahl startet jeder Taucher mit seiner eigenen Startwaffe (SUITS[…].start, oft seltener und damit stärker).
+export const BR_WEAPONS = [
+  { wid: 'pistol',  price: 0 },
+  { wid: 'needler', price: 300 },
+  { wid: 'scatter', price: 450 },
+  { wid: 'harpoon', price: 700 },
+  { wid: 'torpedo', price: 1000 },
+];
 // Bonus in Prozent für einen Spieler (up = { reload: 2, ... }), 0 = nicht gekauft
 export const upBonus = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), l = (up && up[k]) | 0; return u && l > 0 ? u.bonus[Math.min(l, u.bonus.length) - 1] : 0; };
 // Umrechnung für das Spiel: Schwimmtempo wird mit (1 + Bonus) malgenommen,

@@ -1,5 +1,5 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned, GADGETS } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned, GADGETS, gadgetOf, BR_WEAPONS } from './shared.js';
 const perSec = (v) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
@@ -33,9 +33,11 @@ export class Hud {
       const S = SUITS[id], b = document.createElement('button');
       b.className = 'suit' + (id === cur ? ' on' : ''); b.dataset.id = id;
       const st = (l, v) => `<div class="stat">${l}<i><u style="width:${Math.round(Math.min(1, v) * 100)}%"></u></i></div>`;
-      b.innerHTML = `<b>${S.name}</b><small>${S.desc}</small>${st('Tempo', S.speed / 15)}${st('Panzer', S.hp / 240)}${st('Wendig', 1 - (S.r - 0.6) / 1.6)}`;
-      b.addEventListener('click', () => {
+      b.innerHTML = `<b>${S.name}</b><small>${S.desc}</small>${st('Tempo', S.speed / 15)}${st('Panzer', S.hp / 240)}${st('Wendig', 1 - (S.r - 0.6) / 1.6)}`
+        + '<span class="gear">⚙ Ausrüstung</span>';
+      b.addEventListener('click', (ev) => {
         if (b.classList.contains('locked')) { $('brShopBtn').click(); return; }   // gesperrt: Shop öffnen
+        if (ev.target.classList.contains('gear')) { this.openLoadout(id); }      // Ausrüstungs-Fenster (wählt den Taucher auch aus)
         suits.querySelectorAll('.suit').forEach(x => x.classList.toggle('on', x === b));
         localStorage.setItem('un_suit', id); cb({ suit: id });
       });
@@ -45,6 +47,45 @@ export class Hud {
     $('go').addEventListener('click', () => cb({ start: true }));
     for (const b of $('modes').children) b.addEventListener('click', () => cb({ mode: b.dataset.mode }));
     return { name: name.value, suit: cur };
+  }
+  // ----- Ausrüstungs-Fenster pro Taucher (Battle Royale) -----
+  // send({ suit, wep, gad }) speichert die Auswahl am Server; Kaufen geht über den Perlen-Shop (brSend)
+  initLoadout(send) { this.loadSend = send; $('loadClose').onclick = () => $('loadout').classList.add('hidden'); }
+  openLoadout(suit) { this.loadSuit = suit; $('loadout').classList.remove('hidden'); this.loadoutDraw(); }
+  loadoutDraw() {
+    if ($('loadout').classList.contains('hidden')) return;
+    const me = this.brMe || { pearls: 0 }, id = this.loadSuit, S = SUITS[id], L = (me.load || {})[id] || {};
+    const pearls = me.pearls || 0, weps = me.weps || [];
+    $('loadTitle').innerHTML = `${S.name.toUpperCase()}<span> · AUSRÜSTUNG</span>`;
+    $('loadMoney').textContent = `🦪 ${pearls} Perlen`;
+    const wname = (wid, rar) => `${WEAPONS[wid].name} <small style="display:inline;color:${RARITY[rar].color}">${RARITY[rar].name}</small>`;
+    const wstat = (wid, rar) => { const D = WEAPONS[wid]; return `${Math.round(D.dmg * RARITY[rar].mul * D.pellets)} Schaden · ${D.rate}/s · Magazin ${D.mag} · ${D.range} m`; };
+    // Startwaffe: seine eigene (Standard) oder eine gekaufte
+    const [sw, sr] = S.start || ['pistol', 0];
+    let h = `<div class="item${!L.wep ? ' chosen' : ''}" style="--rar:${RARITY[sr].color}"><b>${wname(sw, sr)} · Standard</b><small>${wstat(sw, sr)}</small>`
+      + (!L.wep ? '<button disabled>Gewählt</button>' : '<button data-load="wep" data-v="">Wählen</button>') + '</div>';
+    for (const W of BR_WEAPONS) {
+      if (W.wid === sw) continue;   // dieselbe Waffe hat er schon als Standard (gleich gut oder besser)
+      const has = !W.price || weps.includes(W.wid), chosen = L.wep === W.wid;
+      const btn = chosen ? '<button disabled>Gewählt</button>' : has ? `<button data-load="wep" data-v="${W.wid}">Wählen</button>`
+        : `<button data-buy="wep:${W.wid}" ${pearls < W.price ? 'disabled' : ''}>🦪 ${W.price}</button>`;
+      h += `<div class="item${chosen ? ' chosen' : ''}" style="--rar:${RARITY[0].color}"><b>${wname(W.wid, 0)}</b><small>${wstat(W.wid, 0)}</small>${btn}</div>`;
+    }
+    $('loadWeps').innerHTML = h;
+    // Gadget dieses Tauchers
+    const gi = gadgetOf(id), G = GADGETS[gi];
+    if (!G) $('loadGad').innerHTML = '<div class="empty">Dieser Taucher hat kein Gadget.</div>';
+    else {
+      const has = (me.gads || []).includes(G.k), on = has && L.gad !== false;
+      const btn = !has ? `<button data-buy="gad:${G.k}" ${pearls < G.price ? 'disabled' : ''}>🦪 ${G.price}</button>`
+        : on ? '<button data-load="gad" data-v="0">Ablegen</button>' : '<button data-load="gad" data-v="1">Mitnehmen</button>';
+      $('loadGad').innerHTML = `<div class="item${on ? ' chosen' : ''}" style="--rar:#5ef2e0"><b>${G.name}${on ? ' · dabei ✔' : ''}</b><small>${G.desc} · lädt ${G.cool} s</small>${btn}</div>`;
+    }
+    for (const b of document.querySelectorAll('#loadout button[data-load]')) b.onclick = () => {
+      const m = { suit: id }; if (b.dataset.load === 'wep') m.wep = b.dataset.v || null; else m.gad = b.dataset.v === '1';
+      this.loadSend && this.loadSend(m);
+    };
+    for (const b of document.querySelectorAll('#loadout button[data-buy]')) b.onclick = () => this.brSend && this.brSend(b.dataset.buy);
   }
   // ----- Perlen-Shop in der Lobby (Battle Royale) -----
   // send(k) schickt einen Kauf an den Server; der antwortet mit einer neuen Lobby-Nachricht → brShopDraw
@@ -85,7 +126,7 @@ export class Hud {
   }
   setLobby(m, myId) {
     this.brMe = m.players.find(p => p.id === myId);
-    this.brShopDraw();
+    this.brShopDraw(); this.loadoutDraw();
     // Taucher-Auswahl: gesperrte zeigen Schloss und Preis, der ausgewählte (laut Server) ist markiert
     const owned = this.brMe?.suits || [];
     for (const b of document.querySelectorAll('#suits .suit')) {
@@ -180,7 +221,7 @@ export class Hud {
   }
   show(which) {
     $('lobby').classList.toggle('hidden', which !== 'lobby');
-    if (which !== 'lobby') $('brShop').classList.add('hidden');   // Shop zu, sobald die Runde startet
+    if (which !== 'lobby') { $('brShop').classList.add('hidden'); $('loadout').classList.add('hidden'); }   // Fenster zu, sobald die Runde startet
     $('hud').classList.toggle('hidden', which !== 'game');
     $('end').classList.toggle('hidden', which !== 'end');
     if (which !== 'game') $('pause').classList.add('hidden');

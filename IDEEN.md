@@ -12,7 +12,7 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
 - [x] **2. Geld verdienen im Battle Royale:** (heißt jetzt „Perlen“ 🦪) Geld pro Kill, pro überlebter Minute, Bonus für Platz 1, 2 und 3.
       Wird unter deinem Namen gespeichert. Am Rundenende sieht man, wofür man wie viel bekommen hat.
 - [x] **3a. Perlen-Shop oben rechts in der Lobby**
-- [ ] **3b. Startwaffen** im Shop kaufen und aussuchen, mit welcher man startet
+- [x] **3b. Startwaffen** kaufen und im Ausrüstungs-Fenster aussuchen
 - [ ] **4. Verbesserungen** (jeweils 3 Stufen):
   - [x] schneller nachladen (Schnellladen)
   - [x] weniger Rückstoß (Rückstoßdämpfer)
@@ -28,7 +28,7 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
   - [x] **Nautilus:** Techniker, Kompressor schneller
   - [x] **Hammerhai:** Elektrosinn, Gegner auf der Minikarte
 - [x] **7. Gadgets:** je eins pro Taucher (Taste Q): Haiköder, Sonar-Boje, Schild-Generator, Bodenstampfer, Tintenbombe, Seilharpune, Geschütz-Drohne, Elektroschocker
-- [ ] **Ausrüstungs-Fenster pro Taucher** vor der Runde: Gadget, Waffe, Aufsätze (nur Gekauftes)
+- [x] **Ausrüstungs-Fenster pro Taucher** vor der Runde: Startwaffe und Gadget (Aufsätze folgen)
 - [x] **Mech realistischer:** wie echte Unterwasserroboter (Videos, Sounds), Roboterarme in der Ego-Sicht, Sicht wie hinter einer Glaskuppel mit Licht innen
 - [ ] **Arme und Hände weniger klobig** (nicht so zylindermäßig), Vorbild Call of Duty
 - [ ] **8. Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen

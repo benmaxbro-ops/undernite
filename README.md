@@ -45,6 +45,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
   Nautilus (Techniker: Kompressor 35 % schneller), Hammerhai (Elektrosinn: sieht Gegner bis 60 m auf der Minikarte).
 - **Gadgets (Perlen-Shop, Taste Q):** jeder Taucher hat eins – Manta Haiköder, Triton Sonar-Boje, Bollwerk Schild-Generator, Goliath Bodenstampfer,
   Sepia Tintenbombe, Barrakuda Seilharpune, Nautilus Geschütz-Drohne, Hammerhai Elektroschocker. Werte: `GADGETS` in `shared.js`.
+- **Ausrüstung (⚙ auf jeder Taucher-Karte):** Startwaffe wählen (Standard oder gekaufte: Nadler, Splitterwerfer, Harpune, Torpedowerfer) und Gadget mitnehmen oder ablegen – pro Taucher gespeichert.
 - **Waffen:** Bolzenpistole, Nadler, Splitterwerfer, Harpune, Torpedowerfer – jeweils in vier Seltenheitsstufen.
 - **Fahrzeuge:** U-Scooter (schnell, Fahrer ungeschützt) und Mini-U-Boot (450 Rumpfpunkte, Bordtorpedos).
 - **Raubtiere:** Haie wittern Verletzte aus großer Entfernung und greifen im Vorbeischwimmen an,
