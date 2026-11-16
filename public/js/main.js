@@ -649,7 +649,21 @@ function controlMe(dt) {
   me.x += me.vx * dt; me.y += me.vy * dt; me.z += me.vz * dt;
   // divers may swim right up until head and shoulders are out of the water (vehicles stay below)
   // Expedition: bis an die Oberfläche (Kopf schaut raus). Battle Royale: Tiefsee, die obere Grenze liegt tief unter der Oberfläche
-  W.collide(me, r, mode === 'exp' ? (vt ? undefined : SURFACE - 0.15) : SURFACE - DEEP.brCeil);
+  // Notausgang aktiv: sanft zum nächsten freien Platz gleiten – OHNE Kollision mit Hügeln (die würde einen zurückschieben)
+  if (me.escape) {
+    const E = me.escape, ex = E.x - me.x, ey = E.y - me.y, ez = E.z - me.z, el = Math.hypot(ex, ey, ez), st = Math.min(el, 8 * dt);
+    if (el < 0.05) me.escape = null; else { me.x = me.x - me.vx * dt + ex / el * st; me.y = me.y - me.vy * dt + ey / el * st; me.z = me.z - me.vz * dt + ez / el * st; me.vx = me.vy = me.vz = 0; }
+    me.y = Math.max(me.y, W.heightAt(me.x, me.z) + r);
+  } else W.collide(me, r, mode === 'exp' ? (vt ? undefined : SURFACE - 0.15) : SURFACE - DEEP.brCeil);
+  // Notausgang: wer schwimmen will, aber 1 Sekunde lang zwischen Hügeln festhängt, gleitet zum nächsten freien Platz
+  if (!me.escape && wl > 0.1 && me.hits > 0) {
+    me.stuckT = (me.stuckT || 0) + dt;
+    if (!me.stuckFrom) me.stuckFrom = { x: me.x, y: me.y, z: me.z };
+    if (me.stuckT > 1.2) {   // in 1,2 s weniger als 1 m vorangekommen, obwohl man schwimmt
+      if (Math.hypot(me.x - me.stuckFrom.x, me.y - me.stuckFrom.y, me.z - me.stuckFrom.z) < 1) me.escape = W.freeSpot(me.x, me.y, me.z, r);
+      me.stuckT = 0; me.stuckFrom = null;
+    }
+  } else { me.stuckT = 0; me.stuckFrom = null; }
   // splash when breaking through the surface
   const atTop = SURFACE - me.y < 0.6;
   if (atTop && !me.surfaced && me.vy > 0.5) { env.bubble(me.x, SURFACE - 0.4, me.z, 28, 1.4, 1.5); sfx.noise(0.45, 1100, 0.7, 0.35, 'lowpass', 250); }

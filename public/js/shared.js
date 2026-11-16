@@ -737,18 +737,43 @@ export class World {
   collide(p, r, top = SURFACE - r - 0.4) {
     if (p.x < -PLAY) { p.x = -PLAY; if (p.vx < 0) p.vx = 0; } else if (p.x > PLAY) { p.x = PLAY; if (p.vx > 0) p.vx = 0; }
     if (p.z < -PLAY) { p.z = -PLAY; if (p.vz < 0) p.vz = 0; } else if (p.z > PLAY) { p.z = PLAY; if (p.vz > 0) p.vz = 0; }
+    // Aus Felsen und Riff-Hügeln hinausschieben. Mehrmals hintereinander, damit man zwischen 3 Hügeln nicht hin- und
+    // hergeschoben wird (und stecken bleibt). Schwung in die Wand hinein wird weggenommen → man gleitet an Hügeln entlang.
     const list = this.hash.get(hkey(Math.floor(p.x / HC), Math.floor(p.z / HC)));
-    if (list) for (const c of list) {
-      const dx = p.x - c.x, dy = p.y - c.y, dz = p.z - c.z, rr = c.r + r;
-      const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 < rr * rr && d2 > 1e-6) {
-        const d = Math.sqrt(d2), k = (rr - d) / d;
-        p.x += dx * k; p.y += dy * k; p.z += dz * k;
+    p.hits = 0;
+    if (list) for (let pass = 0; pass < 4; pass++) {
+      let moved = false;
+      for (const c of list) {
+        const dx = p.x - c.x, dy = p.y - c.y, dz = p.z - c.z, rr = c.r + r;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < rr * rr && d2 > 1e-6) {
+          const d = Math.sqrt(d2), k = (rr - d) / d, nx = dx / d, ny = dy / d, nz = dz / d;
+          p.x += dx * k; p.y += dy * k; p.z += dz * k; moved = true; p.hits++;
+          if (p.vx !== undefined) { const vn = p.vx * nx + p.vy * ny + p.vz * nz; if (vn < 0) { p.vx -= vn * nx; p.vy -= vn * ny; p.vz -= vn * nz; } }
+        }
       }
+      if (!moved) break;
     }
     const g = this.heightAt(p.x, p.z) + r;
     if (p.y < g) { p.y = g; if (p.vy < 0) p.vy = 0; }
     if (p.y > top) { p.y = top; if (p.vy > 0) p.vy = 0; }
+  }
+
+  // Nächster freier Platz für eine Kugel mit Radius r (nicht im Boden, in keinem Felsen/Hügel), höchstens maxD Meter weit.
+  // Wird benutzt, wenn jemand zwischen Riff-Hügeln feststeckt. Gibt null zurück, wenn nichts frei ist.
+  freeSpot(x, y, z, r, maxD = 9) {
+    const free = (px, py, pz) => {
+      if (py < this.heightAt(px, pz) + r) return false;
+      const list = this.hash.get(hkey(Math.floor(px / HC), Math.floor(pz / HC)));
+      if (list) for (const c of list) if ((px - c.x) ** 2 + (py - c.y) ** 2 + (pz - c.z) ** 2 < (c.r + r + 0.15) ** 2) return false;
+      return true;
+    };
+    for (let d = 0.6; d <= maxD; d += 0.6) for (let i = 0; i < 26; i++) {
+      const u = (i + 0.5) / 26 * 2 - 1, a = i * 2.39996, s = Math.sqrt(1 - u * u);   // gleichmäßig verteilte Richtungen
+      const px = x + Math.cos(a) * s * d, py = y + u * d, pz = z + Math.sin(a) * s * d;
+      if (free(px, py, pz) && free(px, py + 2.5, pz)) return { x: px, y: py, z: pz };   // auch nach oben frei (kein Dach aus Hügeln)
+    }
+    return null;
   }
 
   // First hit of a segment against terrain/colliders. Returns t in (0,1] or -1.
