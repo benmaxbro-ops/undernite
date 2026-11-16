@@ -40,6 +40,9 @@ export const WEAPONS = {
   sonic:   { name: 'Schallkanone',   dmg: 150, rate: 1.1, speed: 120, mag: 4, reload: 3.6, spread: 0.003, range: 110, pellets: 1, splash: 10 },
 };
 for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
+// Aufladen vor jedem Schuss (Sekunden): erst baut sich der Druck auf (die Kiemen gehen auf), dann geht der Schuss
+// mit einer Druckwelle raus, die genauso lange dauert. Je größer das Kaliber, desto länger. 0 = sofort.
+export const SHOT_CHARGE = { pistol: 0.1, needler: 0.04, scatter: 0.15, harpoon: 0.3, torpedo: 0.25, subtorp: 0, plasma: 0.08, sonic: 0.3 };
 // Kompressor im Rucksack: Jede Waffe hat ein Magazin in der Waffe und "spares" Ersatzmagazine im Rucksack.
 // Der Kompressor füllt die Ersatzmagazine nacheinander wieder auf. fill = Sekunden, bis ein leeres Magazin wieder voll ist.
 // Beim Nachladen kommt das alte Magazin zurück in den Rucksack und wird dort wieder gefüllt.
@@ -74,6 +77,12 @@ export const CAVE = { ring: 3.6, stones: 9, stone: 1.9, height: 3.6 };
 // Korallen-Berge an jedem Riff: count Hügel mit Radius min…max Metern, dicht in spread Metern um die Riffmitte.
 // Sie stapeln sich aufeinander → ein großes, zusammenhängendes Riff mit Bergen und Graten.
 export const REEF_MOUNDS = { count: 95, min: 3, max: 12, spread: 36 };
+// Riff-Adern (nur Battle Royale): lange, kurvige Riff-Stränge über die ganze Karte, die ein Netz bilden.
+// cross = Adern quer von Rand zu Rand (dazu kommt ein Ring durch die 4 Riffe), step = Meter zwischen zwei Hügeln,
+// min/max = Hügelgröße, wobble = wie stark sich die Ader schlängelt, width = wie breit (Meter)
+export const REEF_VEINS = { cross: 3, step: 5, min: 2.5, max: 7, wobble: 10, width: 6 };
+// Hitbox der Riff-Hügel: 1 = so groß wie der sichtbare Hügel, kleiner = man taucht ein Stück in den Hügel hinein
+export const REEF_HITBOX = 1.05;
 export const GLOW_CORALS = { count: 520, dmg: 6, bleed: 4, bleedDps: 2.5, cooldown: 1.2 };
 
 export const RARITY = [
@@ -496,7 +505,8 @@ export class World {
     };
     this.reefMounds = [];   // Korallen-Berge und Höhlenwände (Kugeln: Position + Radius), werden in reef.js gezeichnet
     // Hitbox kleiner als die sichtbare (knubbelige) Form, damit man nie gegen "Luft" stößt
-    const rock = (x, y, z, r) => { const sx = 0.9 + RC() * 0.3, sy = 0.8 + RC() * 0.3, sz = 0.9 + RC() * 0.3; this.reefMounds.push({ x, y, z, r, sx, sy, sz, rot: RC() * TAU }); addCol({ x, y, z, r: r * Math.min(sx, sy, sz) * 0.78 }); };
+    // hit = wie groß die Hitbox im Vergleich zum sichtbaren Hügel ist (1 = gleich groß). Höhlensteine kleiner, damit die Eingänge frei bleiben.
+    const rock = (x, y, z, r, hit = 0.78) => { const sx = 0.9 + RC() * 0.3, sy = 0.8 + RC() * 0.3, sz = 0.9 + RC() * 0.3; this.reefMounds.push({ x, y, z, r, sx, sy, sz, rot: RC() * TAU }); addCol({ x, y, z, r: r * (hit < 0.9 ? Math.min(sx, sy, sz) : (sx + sy + sz) / 3) * hit }); };
     for (const cr of this.crates) {
       if (!reefs.some(s => Math.hypot(s.x - cr.x, s.z - cr.z) < 36)) continue;   // nur Truhen im Riff
       const door = RC() * TAU, ring = CAVE.ring;
@@ -519,18 +529,46 @@ export class World {
       return along > 0 && along < c.ring + 8 + r && side < r + 1.6;
     });
     const start = this.reefMounds.length;
-    for (const s of reefs) for (let k = 0; k < REEF_MOUNDS.count; k++) {
-      const a = RC() * TAU, d = Math.pow(RC(), 0.7) * REEF_MOUNDS.spread, x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d;
-      const r = REEF_MOUNDS.min + RC() * RC() * (REEF_MOUNDS.max - REEF_MOUNDS.min) * (1 - d / REEF_MOUNDS.spread * 0.5);   // in der Mitte größer
-      if (blocksCave(x, z, r)) continue;
-      if (this.crates.some(c => !this.caves.some(cv => cv.x === c.x && cv.z === c.z) && Math.hypot(c.x - x, c.z - z) < r + 2)) continue;
+    const mound = (x, z, r) => {
+      if (blocksCave(x, z, r)) return;
+      if (this.crates.some(c => !this.caves.some(cv => cv.x === c.x && cv.z === c.z) && Math.hypot(c.x - x, c.z - z) < r + 2)) return;
       // auf die schon gebauten Hügel setzen (stapeln), sonst auf den Boden
       let y = this.heightAt(x, z) + r * 0.3;
       for (let i = start; i < this.reefMounds.length; i++) {
         const m = this.reefMounds[i], hd = Math.hypot(m.x - x, m.z - z);
         if (hd < m.r * 0.9) y = Math.max(y, m.y + Math.sqrt(m.r * m.r * 0.81 - hd * hd) * m.sy - r * 0.45);
       }
-      rock(x, y, z, r);
+      rock(x, y, z, r, REEF_HITBOX);
+    };
+    for (const s of reefs) for (let k = 0; k < REEF_MOUNDS.count; k++) {
+      const a = RC() * TAU, d = Math.pow(RC(), 0.7) * REEF_MOUNDS.spread, x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d;
+      const r = REEF_MOUNDS.min + RC() * RC() * (REEF_MOUNDS.max - REEF_MOUNDS.min) * (1 - d / REEF_MOUNDS.spread * 0.5);   // in der Mitte größer
+      mound(x, z, r);
+    }
+    // Riff-Adern (nur Battle Royale): ein Ring durch die 4 Riffe und ein paar lange Adern von Rand zu Rand.
+    // Jede Ader ist eine Kurve, die sich schlängelt; entlang der Kurve steht alle paar Meter ein Korallen-Hügel.
+    if (!exp) {
+      const RV = rng(this.seed ^ 0x7e1a5b33), VN = REEF_VEINS, edge = PLAY - 25;
+      const ring = [...reefs].sort((a, b) => Math.atan2(a.z, a.x) - Math.atan2(b.z, b.x));
+      const veins = ring.map((s, i) => [s, ring[(i + 1) % ring.length]]);
+      for (let i = 0; i < VN.cross; i++) {
+        const a = RV() * TAU, b = a + Math.PI + (RV() - 0.5) * 1.2;
+        veins.push([{ x: Math.cos(a) * edge, z: Math.sin(a) * edge }, { x: Math.cos(b) * edge, z: Math.sin(b) * edge }]);
+      }
+      // frei lassen: Wrack, Ruinen und die Fahrzeuge
+      const tooClose = (x, z, r) => Math.hypot(ws.x - x, ws.z - z) < 32 + r || Math.hypot(rs.x - x, rs.z - z) < 28 + r
+        || this.vehSpawns.some(v => Math.hypot(v.x - x, v.z - z) < r + 6);
+      for (const [A, B] of veins) {
+        const dx = B.x - A.x, dz = B.z - A.z, len = Math.hypot(dx, dz), nx = -dz / len, nz = dx / len;
+        const bend = (RV() - 0.5) * len * 0.5, ph = RV() * TAU, steps = Math.ceil(len / VN.step);
+        for (let k = 0; k <= steps; k++) {
+          const t = k / steps, off = bend * 4 * t * (1 - t) + Math.sin(t * 9 + ph) * VN.wobble;
+          const x = A.x + dx * t + nx * off + (RV() - 0.5) * VN.width, z = A.z + dz * t + nz * off + (RV() - 0.5) * VN.width;
+          const r = VN.min + RV() * RV() * (VN.max - VN.min);
+          if (Math.max(Math.abs(x), Math.abs(z)) > PLAY - 12 || tooClose(x, z, r)) continue;
+          mound(x, z, r);
+        }
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE } from './shared.js';
 import { buildEnvironment } from './world.js';
 import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy } from './models.js';
 import { Hud } from './hud.js';
@@ -562,15 +562,34 @@ function aimDir() {
   return [ax / l, ay / l, az / l];
 }
 let aimAt = null;
+// Aufladen: chargeShot merkt sich, welche Waffe gerade Druck aufbaut. Nach chargeEnd geht der Schuss raus,
+// auch wenn man die Maustaste schon losgelassen hat. Waffe gewechselt, Nachladen oder tot → Schuss fällt aus.
+let chargeShot = null, chargeStart = 0, chargeEnd = 0;
 function tryFire(now) {
+  if (chargeShot) {
+    if (now < chargeEnd) return;
+    const c = chargeShot; chargeShot = null;
+    const w = you && you.alive && you.slot === c.slot && !you.veh ? you.w[you.slot] : null;
+    if (w && w[0] === c.id && you.rl <= 0 && w[2] > 0) { w[2]--; shoot(null, w); }
+    return;
+  }
   if (!firing || held >= 0) return;
   const v = you.veh ? vehicles.get(you.veh) : null;
   let rate, w = null;
   if (v && v.type === 'sub') rate = WEAPONS.subtorp.rate;
   else { w = you.w[you.slot]; if (!w || you.rl > 0 || w[2] <= 0) return; rate = WEAPONS[w[0]].rate; }
   if (now < nextFire) return;
-  nextFire = now + 1000 / rate;
+  const ct = w ? (SHOT_CHARGE[w[0]] || 0) * 1000 : 0;
+  nextFire = now + Math.max(1000 / rate, ct * 2);   // Aufladen + Druckwelle müssen vorbei sein
+  if (ct > 0) {
+    chargeShot = { slot: you.slot, id: w[0] }; chargeStart = now; chargeEnd = now + ct;
+    sfx.charge(WEAPON_IDS.indexOf(w[0]), ct / 1000);
+    return;
+  }
   if (w) w[2]--;
+  shoot(v, w);
+}
+function shoot(v, w) {
   const d = aimDir().map(x => +x.toFixed(4));
   send(aimAt ? { t: 'f', d, a: aimAt } : { t: 'f', d });
   recoil(v ? WEAPONS.subtorp : WEAPONS[w[0]]);
@@ -735,8 +754,9 @@ function updateViewModel(dt) {
   // Nachlade-Geräusche: jedes einmal, wenn sein Zeitpunkt erreicht ist
   if (!reloading) view.rsnd = 0;
   else while (view.rsnd < RELOAD_SOUNDS.length && done >= RELOAD_SOUNDS[view.rsnd][0]) sfx[RELOAD_SOUNDS[view.rsnd++][1]](WEAPON_IDS.indexOf(w[0]));
-  // Kiemen: beim Schuss puffen sie kurz auf (der Druck entweicht)
-  view.gills = Math.max(view.gills - dt * 4, view.kick * 0.7);
+  // Kiemen: beim Aufladen gehen sie langsam auf, beim Schuss puffen sie kurz auf (der Druck entweicht)
+  const chg = chargeShot ? Math.min(1, (performance.now() - chargeStart) / Math.max(1, chargeEnd - chargeStart)) : 0;
+  view.gills = Math.max(view.gills - dt * 4, view.kick * 0.7, chg);
   // Druckanzeige = wie voll das Magazin in der Waffe ist
   const def = w ? WEAPONS[w[0]] : null;
   view.charge = def ? (reloading ? Math.max(0, done - RELOAD_STEPS.insert) / (1 - RELOAD_STEPS.insert) : w[2] / def.mag) : 0;

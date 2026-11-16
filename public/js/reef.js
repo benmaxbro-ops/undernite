@@ -11,7 +11,8 @@ const TAU = Math.PI * 2;
 // schoolsPerReef = Fischschwärme um jedes Riff, fishPerSchool = Fische pro Schwarm, glow = wie stark die Riffkorallen leuchten
 // mound = Korallen pro Meter Hügel-Radius, moundGlow = wie stark die Korallen-Berge leuchten
 // colorful = Anteil bunter Korallen auf den Hügeln (0 = alle warmgelb, 1 = alle bunt)
-export const REEF = { stones: 320, perCoral: 1, lettuce: 1, schoolsPerReef: 8, extraSchools: 4, fishPerSchool: 60, glow: 0.22, fishGlow: 0.4, mound: 3.4, moundMax: 44, moundGlow: 0.28, colorful: 0.6 };
+// brGlow = im Battle Royale (dunkle Tiefsee) leuchtet das Riff so viel stärker (2 = doppelt so hell)
+export const REEF = { stones: 320, perCoral: 1, lettuce: 1, schoolsPerReef: 8, extraSchools: 4, fishPerSchool: 60, glow: 0.22, fishGlow: 0.4, mound: 3.4, moundMax: 44, moundGlow: 0.28, colorful: 0.6, brGlow: 2.5 };
 // Grafikqualität (aus den Einstellungen): 1 = alles, kleiner = weniger Korallen, Fische und Steine
 let QUAL = 1;
 export function setReefQuality(q) { QUAL = q; }
@@ -214,7 +215,8 @@ export function buildReef(root, W, decorate, uTime) {
         transformed.z += cos(uTime * 1.3 + ph + position.x * 9.0) * h * h * 1.1;`);
   };
   // Positionen: rund um jede vorhandene Koralle ein paar neue (immer gleich, weil der Zufall einen festen Startwert hat)
-  for (const t of [0, 1, 2, 4, 6, 7, 8, 9]) glowTint(kinds[t].mat, REEF.glow);   // Riffkorallen leuchten leicht in ihrer Farbe
+  const G = W.mode === 'exp' ? 1 : REEF.brGlow;   // Battle Royale: Riff leuchtet stärker
+  for (const t of [0, 1, 2, 4, 6, 7, 8, 9]) glowTint(kinds[t].mat, REEF.glow * G);   // Riffkorallen leuchten leicht in ihrer Farbe
   const spots = kinds.map(() => []);
   // ---------- Korallen-Berge (Positionen aus shared.js – der Server kennt sie, man kann nicht hindurch) ----------
   const mounds = W.reefMounds || [];
@@ -230,7 +232,7 @@ export function buildReef(root, W, decorate, uTime) {
       mcol[i * 3] = mcol[i * 3 + 1] = mcol[i * 3 + 2] = s;
     }
     mg.setAttribute('color', new THREE.BufferAttribute(mcol, 3)); mg.computeVertexNormals();
-    const mm = glowTint(decorate(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, bumpMap: poreTex, bumpScale: 1.6 })), REEF.moundGlow);
+    const mm = glowTint(decorate(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, bumpMap: poreTex, bumpScale: 1.6 })), REEF.moundGlow * G);
     const im = new THREE.InstancedMesh(mg, mm, mounds.length);
     mounds.forEach((m, i) => {
       im.setMatrixAt(i, M4.compose(V.set(m.x, m.y, m.z), Q.setFromEuler(E.set(0, m.rot, 0)), S.set(m.r * m.sx, m.r * m.sy, m.r * m.sz)));

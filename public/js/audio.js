@@ -1,6 +1,7 @@
 // Undernite - Sounds (WebAudio). Die Schüsse und das Nachladen sind echte Aufnahmen (CC0, siehe public/sounds/QUELLEN.txt),
 // alles andere wird aus Tönen und Rauschen gebaut. Die echten Aufnahmen laufen durch eine Unterwasser-Kette und bekommen
 // eine Plasma-Schicht dazu. Hier kannst du drehen:
+import { SHOT_CHARGE, WEAPON_IDS } from './shared.js';
 export const UNDERWATER = {
   cutoff: 1600,    // Hz: darüber wird es gedämpft (Wasser schluckt hohe Töne). Kleiner = dumpfer
   bass: 7,         // dB: mehr Bass für die Druckwelle
@@ -18,7 +19,8 @@ export const UNDERWATER = {
 //   boom  = ein kurzer, straffer Bass-Schlag (kurz, damit schnelle Schüsse nicht verschmieren)
 //   mech  = der Verschluss klackt (das Gefühl "ich halte eine Waffe")
 //   duck  = alle anderen Geräusche werden im Moment des Schusses kurz leiser → der Schuss wirkt lauter
-export const SHOT = { crack: 1.0, body: 1.1, boom: 1.0, mech: 0.5, duck: 0.45 };
+//   wumms = tiefer Druck-Schlag, den man auch auf Laptop-Lautsprechern hört (Punch bei 80–180 Hertz + Obertöne)
+export const SHOT = { crack: 3.0, body: 3.1, boom: 3.0, mech: 4.5, duck: 5.45, wumms: 1.0 };
 export const PLASMA = {
   ring: 0.12,      // elektrisches Brummen (Ringmodulation): 0 = aus, 1 = stark (zu viel macht den Schuss dünn)
   zap: 0.25,       // Lautstärke des "Dzzzt"
@@ -149,6 +151,12 @@ export class Sfx {
     this.tone(62 - big * 16, 32, 0.08 + big * 0.08, (1.2 + big * 0.4) * SHOT.boom * vol, 'sine');     // harter, dumpfer Schlag
     this.tone(130 - big * 30, 60, 0.05, 0.7 * SHOT.boom * vol, 'triangle');
     this.noise(0.05 + big * 0.06, 400, 0.8, 0.5 * SHOT.boom * vol, 'lowpass', 90);
+    // 3b) Wumms: der hörbare Druck-Schlag. Grundton fällt von ~150 auf ~55 Hertz, dazu die doppelte Frequenz (Oberton),
+    //     damit auch kleine Lautsprecher ihn spielen können. Große Waffen: tiefer und länger.
+    const W = SHOT.wumms * vol * (own ? 1 : 0.6), wl = Math.max(0.12, (SHOT_CHARGE[WEAPON_IDS[w]] || 0.1) * 1.6) + big * 0.1;   // so lang wie die Druckwelle
+    this.tone(150 - big * 40, 55 - big * 10, wl, 1.1 * W, 'sine');
+    this.tone(300 - big * 80, 110 - big * 20, wl * 0.7, 0.45 * W, 'triangle');
+    this.noise(wl * 0.8, 220, 1.2, 0.6 * W, 'lowpass', 70);           // dumpfes Druck-Rauschen (Wasser wird weggedrückt)
     this.cur = null;
     // 4) Mechanik: der Verschluss klackt kurz nach dem Schuss (bei Werfern ein dumpfes Klonk)
     this.sample(w === 4 || w === 5 || w === 7 ? 'mag_in' : 'slide_fwd', SHOT.mech * vol * (w === 1 ? 0.5 : 1), { at: 0.02, rate: 1.2, bus: 'shot' });
@@ -163,6 +171,22 @@ export class Sfx {
       gw.linearRampToValueAtTime(1 - SHOT.duck, t + 0.008); gw.setTargetAtTime(1, t + 0.06, 0.09);
     }
     return true;
+  }
+  // Aufladen vor dem Schuss: ein Brummen, das lauter und höher wird, dazu Zischen (Druck baut sich auf).
+  // Große Waffen brummen tiefer. dur = Sekunden bis zum Schuss.
+  charge(w, dur) {
+    const ctx = this.ctx; if (!ctx || dur <= 0) return;
+    const big = w === 7 ? 1 : w >= 4 && w <= 5 ? 0.95 : w === 6 ? 0.8 : w === 3 ? 0.85 : w === 2 ? 0.75 : w === 0 ? 0.55 : 0.35;
+    const t = ctx.currentTime, out = this.uwShot || this.master;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70 + (1 - big) * 60, t); o.frequency.exponentialRampToValueAtTime(180 + (1 - big) * 260, t + dur);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, t); lp.frequency.exponentialRampToValueAtTime(1400, t + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.35, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.02);
+    o.connect(lp).connect(g).connect(out); o.start(t); o.stop(t + dur + 0.05);
+    const n = ctx.createBufferSource(); n.buffer = this.noiseBuf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.5; bp.frequency.setValueAtTime(500, t); bp.frequency.exponentialRampToValueAtTime(2600, t + dur);
+    const ng = ctx.createGain(); ng.gain.setValueAtTime(0.001, t); ng.gain.exponentialRampToValueAtTime(0.2, t + dur); ng.gain.linearRampToValueAtTime(0, t + dur + 0.02);
+    n.connect(bp).connect(ng).connect(out); n.start(t, Math.random()); n.stop(t + dur + 0.05);
   }
   shotPhysics(w, vol, own) {
     const T = bubblePeriod(CHARGE[w] || 0.004, this.depth), f = Math.min(160, Math.max(35, 0.9 / T));   // Blasen-Schwingzeit und -ton
