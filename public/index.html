@@ -138,6 +138,9 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
 .modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .mode{pointer-events:auto;cursor:pointer;padding:10px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);color:var(--ink);font:700 15px var(--display);text-align:left}
 .mode small{display:block;font:400 11.5px var(--display);color:var(--mute);margin-top:3px} .mode.on{border-color:var(--glow);background:rgba(94,242,224,.1)}
+#gadBox{position:absolute;right:24px;bottom:120px;display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:9px;background:rgba(4,22,34,.7);border:1px solid var(--line);font:600 14px var(--display);color:var(--ink)}
+#gadBox.hidden{display:none} #gadBox i{display:block;width:70px;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden} #gadBox u{display:block;height:100%;background:var(--glow)}
+#gadBox.ready{border-color:var(--glow);box-shadow:0 0 12px rgba(94,242,224,.35)}
 #brShopBtn{position:absolute;top:16px;right:16px;cursor:pointer;padding:10px 18px;border:1px solid #ffd36b;border-radius:10px;background:rgba(40,30,8,.85);color:#ffd36b;font:700 16px var(--display);letter-spacing:.08em}
 #brShopBtn:hover{background:rgba(70,52,12,.95)}
 #brShop{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;background:rgba(2,12,20,.7);padding:20px;overflow:auto;z-index:20}
@@ -171,6 +174,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
 <canvas id="c"></canvas>
 
 <div id="hud" class="hidden">
+  <div id="gadBox" class="hidden"><kbd>Q</kbd><b id="gadName"></b><i><u id="gadFill"></u></i></div>
   <div class="fs" id="zoneTint"></div><div class="fs" id="vign"></div><div class="fs" id="shockFx"></div><div class="fs" id="ink"></div>
   <div id="dirs"></div>
   <div id="feed"></div>
@@ -268,6 +272,8 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
     <div class="hint">Verbesserungen gelten im Battle Royale. Perlen bekommst du am Ende jeder Runde.</div>
     <h3>Neue Taucher</h3>
     <div id="brShopSuits"></div>
+    <h3>Gadgets <small>(Taste Q in der Runde – nur mit dem passenden Taucher)</small></h3>
+    <div id="brShopGads"></div>
     <h3>Verbesserungen</h3>
     <div id="brShopUps"></div>
     <div class="shopFoot"><button class="go" id="brShopClose">ZURÜCK</button></div>

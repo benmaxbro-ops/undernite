@@ -27,7 +27,10 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
   - [x] **Barrakuda:** Sprinter
   - [x] **Nautilus:** Techniker, Kompressor schneller
   - [x] **Hammerhai:** Elektrosinn, Gegner auf der Minikarte
-- [ ] **7. Gadgets:** Sonar-Boje, Tintenbombe, Haiköder, Schild-Generator, Seilharpune
+- [x] **7. Gadgets:** je eins pro Taucher (Taste Q): Haiköder, Sonar-Boje, Schild-Generator, Bodenstampfer, Tintenbombe, Seilharpune, Geschütz-Drohne, Elektroschocker
+- [ ] **Ausrüstungs-Fenster pro Taucher** vor der Runde: Gadget, Waffe, Aufsätze (nur Gekauftes)
+- [ ] **Mech realistischer:** wie echte Unterwasserroboter (Videos, Sounds), Roboterarme in der Ego-Sicht, Sicht wie hinter einer Glaskuppel mit Licht innen
+- [ ] **Arme und Hände weniger klobig** (nicht so zylindermäßig), Vorbild Call of Duty
 - [ ] **8. Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
 - [ ] **9. Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 

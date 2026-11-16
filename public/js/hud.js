@@ -1,9 +1,10 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES, suitOwned, GADGETS } from './shared.js';
 const perSec = (v) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
 const $ = (id) => document.getElementById(id);
+const SUIT_COL_HEX = { manta: 0x1fd6b4, triton: 0xf08a24, bulwark: 0x8a2f3a, goliath: 0x5a6a78 };   // Streifenfarbe der alten Taucher (Shop)
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
 
@@ -72,6 +73,13 @@ export class Hud {
       const S = SUITS[id], has = owned.includes(id);
       const btn = has ? '<button disabled>Hast du</button>' : `<button data-k="suit:${id}" ${(me.pearls || 0) < S.price ? 'disabled' : ''}>🦪 ${S.price}</button>`;
       return `<div class="item" style="--rar:#${S.col.toString(16).padStart(6, '0')}"><b>${S.name}</b><small>${S.desc} · ${S.hp} Leben</small>${btn}</div>`;
+    }).join('');
+    // Gadgets: eins pro Taucher, Taste Q in der Runde
+    const gads = me.gads || [];
+    $('brShopGads').innerHTML = GADGETS.map(G => {
+      const has = gads.includes(G.k), S = SUITS[G.suit];
+      const btn = has ? '<button disabled>Hast du</button>' : `<button data-k="gad:${G.k}" ${(me.pearls || 0) < G.price ? 'disabled' : ''}>🦪 ${G.price}</button>`;
+      return `<div class="item" style="--rar:#${(S.col || SUIT_COL_HEX[G.suit] || 0x5ef2e0).toString(16).padStart(6, '0')}"><b>${G.name} <small style="display:inline">· für ${S.name}</small></b><small>${G.desc} · lädt ${G.cool} s</small>${btn}</div>`;
     }).join('');
     for (const b of document.querySelectorAll('#brShop button[data-k]')) b.onclick = () => this.brSend && this.brSend(b.dataset.k);
   }
@@ -308,6 +316,17 @@ export class Hud {
     this.vign = 0.9;
     if (rel === null) return;
     const i = document.createElement('i'); i.style.transform = `rotate(${rel}rad)`; $('dirs').appendChild(i); setTimeout(() => i.remove(), 1100);
+  }
+  // Gadget unten rechts: Name und Ladebalken (voll = bereit). gd = [Nummer, Sekunden bis bereit] oder null
+  gadget(gd) {
+    const key = gd ? gd[0] + ':' + gd[1] : '';
+    if (key === this.gadKey) return; this.gadKey = key;
+    $('gadBox').classList.toggle('hidden', !gd);
+    if (!gd) return;
+    const G = GADGETS[gd[0]], ready = gd[1] <= 0;
+    $('gadName').textContent = ready ? G.name : `${G.name} ${Math.ceil(gd[1])} s`;
+    $('gadFill').style.width = Math.round((1 - gd[1] / G.cool) * 100) + '%';
+    $('gadBox').classList.toggle('ready', ready);
   }
   shock() { const s = $('shockFx'); s.style.opacity = 1; setTimeout(() => { s.style.opacity = 0; }, 180); }
   spec(html) { const el = $('spec'); el.classList.toggle('hidden', !html); if (html && this.sKey !== html) { this.sKey = html; el.innerHTML = html; } }

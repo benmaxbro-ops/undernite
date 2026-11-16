@@ -98,6 +98,27 @@ export const BR_UPGRADES = [
   { k: 'swim',   name: 'Profi-Flossen',     what: 'Schwimmtempo',        bonus: [10, 20, 32],   price: [200, 500, 1100] },
   { k: 'comp',   name: 'Turbo-Kompressor',  what: 'Füllgeschwindigkeit', bonus: [30, 65, 110],  price: [150, 400, 900] },
 ];
+// Gadgets (Battle Royale, Taste Q): jeder Taucher hat sein eigenes. price = Perlen, cool = Sekunden bis man es wieder benutzen kann.
+// Neue Gadgets immer HINTEN anhängen (der Server schickt die Nummer in dieser Liste).
+export const GADGETS = [
+  { k: 'bait',   suit: 'manta',     name: 'Haiköder',         price: 400, cool: 30, range: 14, time: 8,
+    desc: 'Wirft einen blutigen Köder. Haie in der Nähe greifen die Gegner dort an.' },
+  { k: 'sonar',  suit: 'triton',    name: 'Sonar-Boje',       price: 350, cool: 25, range: 90, time: 10,
+    desc: 'Ein Sonar-Ping: 10 Sekunden lang siehst du alle Gegner bis 90 m auf der Minikarte und als Markierung.' },
+  { k: 'shield', suit: 'bulwark',   name: 'Schild-Generator', price: 450, cool: 28, time: 4,
+    desc: 'Eine Druckblase um dich: 4 Sekunden lang prallen alle Schüsse ab.' },
+  { k: 'stomp',  suit: 'goliath',   name: 'Bodenstampfer',    price: 450, cool: 22, range: 10, dmg: 18,
+    desc: 'Der Mech stampft: eine Druckwelle schleudert Gegner in der Nähe weg und macht 18 Schaden.' },
+  { k: 'inkbomb', suit: 'sepia',    name: 'Tintenbombe',      price: 350, cool: 20, range: 16, radius: 7, time: 3.5,
+    desc: 'Wirft eine Tintenwolke dorthin, wo du zielst. Gegner darin sind 3,5 Sekunden blind.' },
+  { k: 'grapple', suit: 'barrakuda', name: 'Seilharpune',     price: 400, cool: 12, range: 40,
+    desc: 'Schießt ein Seil an Fels oder Riff und zieht dich blitzschnell hin.' },
+  { k: 'drone',  suit: 'nautilus',  name: 'Geschütz-Drohne',  price: 500, cool: 35, range: 35, time: 15, dmg: 0.6,
+    desc: 'Eine kleine Drohne schwimmt 15 Sekunden neben dir und schießt auf Gegner in der Nähe.' },
+  { k: 'zap',    suit: 'hammerhai', name: 'Elektroschocker',  price: 400, cool: 22, range: 8, dmg: 10, time: 1.8,
+    desc: 'Ein Stromstoß: Gegner bis 8 m sind 1,8 Sekunden gelähmt (langsam, können nicht schießen) und bekommen 10 Schaden.' },
+];
+export const gadgetOf = (suit) => GADGETS.findIndex(g => g.suit === suit);   // Nummer des Gadgets dieses Tauchers (-1 = keins)
 // Bonus in Prozent für einen Spieler (up = { reload: 2, ... }), 0 = nicht gekauft
 export const upBonus = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), l = (up && up[k]) | 0; return u && l > 0 ? u.bonus[Math.min(l, u.bonus.length) - 1] : 0; };
 // Umrechnung für das Spiel: Schwimmtempo wird mit (1 + Bonus) malgenommen,

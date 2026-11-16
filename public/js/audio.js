@@ -24,6 +24,8 @@ export const SHOT = { crack: 3.0, body: 3.1, boom: 3.0, mech: 4.5, duck: 5.45, w
 // Holztür-Schlag bei jedem Schuss: vol = Lautstärke bei fremden Schüssen, own = bei eigenen,
 // range = bis so viele Meter weit hört man ihn, pitchSmall / pitchBig = Tonhöhe (kleiner = tiefer),
 // body = zusätzlicher tiefer Bass-Schlag darunter
+// "Ah!" beim Verbrennen: vol = Lautstärke, delay = so viele Sekunden nach der Hitze-Welle
+export const AH = { vol: 2.4, delay: 0.35 };
 export const KNOCK = { vol: 1.8, own: 0.5, range: 260, pitchSmall: 0.75, pitchBig: 0.6, body: 1.0 };
 export const PLASMA = {
   ring: 0.12,      // elektrisches Brummen (Ringmodulation): 0 = aus, 1 = stark (zu viel macht den Schuss dünn)
@@ -191,9 +193,10 @@ export class Sfx {
   }
   // ---------- Hitze ----------
   // "Ah!" – verbrannt an der überhitzten Waffe (echte Aufnahme, CC0). Eigener Schrei klingt näher (im Helm), fremde dumpf.
+  // Kommt 0,35 s NACH dem Wumms der Hitze-Welle, sonst wird es von ihm übertönt. AH.vol = Lautstärke
   ah(vol = 1) {
     if (vol < 0.03) return;
-    this.sample(Math.random() < 0.5 ? 'burn_ah1' : 'burn_ah2', 1.3 * vol, { rate: 1.1 + Math.random() * 0.12, bus: vol > 0.95 ? 'shot' : '' });
+    this.sample(Math.random() < 0.5 ? 'burn_ah1' : 'burn_ah2', AH.vol * vol, { rate: 1.08 + Math.random() * 0.1, at: AH.delay, bus: vol > 0.95 ? 'shot' : '' });
   }
   // Hitze ablassen – der Wumms: tiefer Druck-Schlag (hörbar auch auf kleinen Lautsprechern), die zuschlagende Tür
   // ganz tief gestimmt und ein langes Grollen, das durchs Wasser rollt. heat 0…1 = wie stark

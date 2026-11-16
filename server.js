@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,7 @@ function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
   return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, urls: lanUrls(),
-    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name) })) };
+    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name), gads: gadsOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
 
@@ -139,7 +139,12 @@ function startMatch() {
       hp: CREATURES.jelly.hp, state: 'drift', sw: s, sph: ph, ox: (rnd() - 0.5) * 12, oy: (rnd() - 0.5) * 7, oz: (rnd() - 0.5) * 12, ph: rnd() * 6.28 });
   }
   // participants
-  for (const c of clients.values()) { const p = mkPlayer(c.id, c.name, c.suit, false); p.up = upsOf(c.name); G.players.set(p.id, p); c.playing = true; }
+  for (const c of clients.values()) {
+    const p = mkPlayer(c.id, c.name, c.suit, false); p.up = upsOf(c.name);
+    const gi = gadgetOf(c.suit); p.gad = gi >= 0 && gadsOf(c.name).includes(GADGETS[gi].k) ? gi : -1; p.gadT = 0;   // gekauftes Gadget dieses Tauchers
+    G.players.set(p.id, p); c.playing = true;
+  }
+  G.baits = []; G.drones = [];
   const names = [...BOT_NAMES].sort(() => rnd() - 0.5);
   for (let i = 0; i < G.bots; i++) {
     const p = mkPlayer(nextId++, names[i % names.length], pick(SUIT_ORDER), true);
@@ -194,6 +199,8 @@ const aliveCount = () => { let n = 0; for (const p of G.players.values()) if (p.
 // ---------- damage ----------
 function damage(p, amt, src, how, sx, sz) {
   if (!p.alive || amt <= 0) return;
+  // Schild-Generator (Bollwerk): Schüsse von Gegnern prallen ab
+  if (G.time < (p.bubbleT || 0) && src && src.id && src !== p && how !== 'zone') { ev('deflect', p.id); return; }
   if (!p.bot && src && src.bot) amt *= 0.7;        // bots hit humans a little softer
   if (p.bot && (how === 'shark' || how === 'octo' || how === 'jelly')) amt *= 0.5;
   if (p.bot && src && src.bot) amt *= 0.1;   // keep bot-vs-bot fights from emptying the lobby too early
@@ -369,7 +376,7 @@ function fire(p, d, aim) {
     return;
   }
   const w = p.weapons[p.slot];
-  if (!w || p.reload > 0 || G.time < p.nextFire - 0.06 || G.time < (p.holsterT || 0)) return;   // weggesteckt (zu heiß): nicht schießen
+  if (!w || p.reload > 0 || G.time < p.nextFire - 0.06 || G.time < (p.holsterT || 0) || G.time < (p.stunT || 0)) return;   // weggesteckt (zu heiß) oder gelähmt: nicht schießen
   if (w.ammo <= 0) { startReload(p); return; }
   const def = WEAPONS[w.id], S = SUITS[p.suit];
   w.ammo--; p.nextFire = G.time + 1 / def.rate;
@@ -413,6 +420,75 @@ function ventHeat(p) {
       p.holsterT = G.time + HEAT.holster;
       if (!p.bot) p.ye.push(['holster', HEAT.holster]);
     }
+  }
+}
+// ---------- Gadgets (Battle Royale, Taste Q) – Werte in GADGETS (shared.js) ----------
+// Punkt, auf den man zielt: bis range Meter weit, oder früher, wenn Fels/Riff im Weg ist (hit = true)
+function aimPoint(p, d, range) {
+  const W = G.world, t = W.segmentHit(p.x, p.y, p.z, p.x + d[0] * range, p.y + d[1] * range, p.z + d[2] * range);
+  const k = t > 0 ? t * range - 0.8 : range;
+  return { x: p.x + d[0] * k, y: p.y + d[1] * k, z: p.z + d[2] * k, hit: t > 0 };
+}
+const foesNear = (p, x, y, z, r) => [...G.players.values()].filter(q => q !== p && q.alive && Math.hypot(q.x - x, q.y - y, q.z - z) < r);
+// jemanden wegstoßen: Bots direkt, echte Spieler bekommen den Stoß geschickt (ihre Position steuert der Browser)
+function pushAway(q, vx, vy, vz) { if (q.bot) { q.vx += vx; q.vy += vy; q.vz += vz; } else q.ye.push(['push', r2(vx), r2(vy), r2(vz)]); }
+function useGadget(p, m) {
+  if (p.gad < 0 || G.time < (p.gadT || 0) || p.veh) return;
+  const g = GADGETS[p.gad];
+  let d = Array.isArray(m.d) && m.d.length === 3 && m.d.every(Number.isFinite) ? m.d : null;
+  const l = d ? Math.hypot(...d) : 0; d = l > 0.5 ? d.map(v => v / l) : [0, 0, -1];
+  let at = { x: p.x, y: p.y, z: p.z };
+  switch (g.k) {
+    case 'bait': at = aimPoint(p, d, g.range); G.baits.push({ ...at, o: p.id, until: G.time + g.time }); break;
+    case 'sonar': break;   // der Browser zeigt die Gegner an
+    case 'shield': p.bubbleT = G.time + g.time; break;
+    case 'stomp':
+      for (const q of foesNear(p, p.x, p.y, p.z, g.range)) {
+        const dx = q.x - p.x, dy = q.y - p.y + 1, dz = q.z - p.z, dl = Math.hypot(dx, dy, dz) || 1, f = 22 * (1 - dl / g.range * 0.5);
+        pushAway(q, dx / dl * f, dy / dl * f * 0.6 + 4, dz / dl * f); damage(q, g.dmg, p, 'stomp', p.x, p.z);
+      }
+      break;
+    case 'inkbomb':
+      at = aimPoint(p, d, g.range); ev('ink', r2(at.x), r2(at.y), r2(at.z));
+      for (const q of foesNear(p, at.x, at.y, at.z, g.radius)) { q.ink = Math.max(q.ink, g.time); if (q.bot) { q.reactT = Math.max(q.reactT, g.time); q.target = null; } }
+      break;
+    case 'grapple': at = aimPoint(p, d, g.range); if (!at.hit) { if (!p.bot) p.ye.push(['warn', 'Kein Fels in Reichweite für das Seil']); return; } break;
+    case 'drone': G.drones.push({ o: p.id, until: G.time + g.time, next: G.time + 0.6 }); break;
+    case 'zap':
+      for (const q of foesNear(p, p.x, p.y, p.z, g.range)) {
+        q.stunT = G.time + g.time; q.shockT = G.time + g.time; damage(q, g.dmg, p, 'zap', p.x, p.z);
+        if (q.bot) q.reactT = Math.max(q.reactT, g.time); else q.ye.push(['stun', g.time]);
+      }
+      break;
+  }
+  p.gadT = G.time + g.cool;
+  ev('gad', p.id, p.gad, r2(at.x), r2(at.y), r2(at.z));   // alle sehen und hören es
+}
+function gadgetTick() {
+  // Köder: Haie in der Nähe stürzen sich auf Gegner am Köder
+  G.baits = (G.baits || []).filter(b => G.time < b.until);
+  for (const b of G.baits) for (const c of G.creatures) {
+    if (c.type !== 'shark' || c.dead || c.state === 'hunt' || Math.hypot(c.x - b.x, c.y - b.y, c.z - b.z) > 160) continue;
+    const q = [...G.players.values()].find(q => q.id !== b.o && q.alive && !q.veh && Math.hypot(q.x - b.x, q.y - b.y, q.z - b.z) < 16);
+    if (q) { c.state = 'hunt'; c.tid = q.id; if (!q.bot) q.ye.push(['warn', 'Haie wittern den Köder – weg hier!']); }
+  }
+  // Drohnen: schießen auf den nächsten Gegner in Reichweite, den sie sehen können
+  G.drones = (G.drones || []).filter(dr => { const o = G.players.get(dr.o); return o && o.alive && G.time < dr.until; });
+  for (const dr of G.drones) {
+    if (G.time < dr.next) continue;
+    const o = G.players.get(dr.o), g = GADGETS[gadgetOf('nautilus')], W = G.world;
+    const fx = o.x + Math.cos(o.yaw) * 0.9, fy = o.y + 0.9, fz = o.z - Math.sin(o.yaw) * 0.9;
+    let best = null, bd = g.range;
+    for (const q of foesNear(o, fx, fy, fz, g.range)) {
+      const dd = Math.hypot(q.x - fx, q.y - fy, q.z - fz);
+      if (dd < bd && W.segmentHit(fx, fy, fz, q.x, q.y, q.z) < 0) { bd = dd; best = q; }
+    }
+    if (!best) continue;
+    dr.next = G.time + 0.55;
+    const def = WEAPONS.pistol, dx = (best.x - fx) / bd, dy = (best.y - fy) / bd, dz = (best.z - fz) / bd;
+    const pr = { id: nextId++, o: o.id, wid: 'pistol', x: fx, y: fy, z: fz, dx, dy, dz, sp: def.range * 1.3, life: 1, dmg: def.dmg * g.dmg, splash: 0, veh: 0 };
+    const end = moveProj(pr, 1);
+    ev('beam', 0, -o.id, r2(fx), r2(fy), r2(fz), r2(end[0]), r2(end[1]), r2(end[2]));   // negative Nummer = die Drohne schießt (nicht die Waffe)
   }
 }
 function explode(pr, x, y, z) {
@@ -819,6 +895,7 @@ function addPearls(name, amt) {
   return s.pearls;
 }
 const suitsOf = (name) => [...(brSaves[saveKey(name)]?.suits || [])];   // gekaufte Taucher
+const gadsOf = (name) => [...(brSaves[saveKey(name)]?.gads || [])];     // gekaufte Gadgets
 // Im Perlen-Shop kaufen (nur in der Lobby): k = Verbesserung (nächste Stufe) oder 'suit:name' (Taucher freischalten)
 function brBuy(c, k) {
   const s = brSaves[saveKey(c.name)] ||= { pearls: 0 };
@@ -826,6 +903,12 @@ function brBuy(c, k) {
     const id = k.slice(5), S = SUITS[id];
     if (!S || !S.price || (s.suits || []).includes(id) || (s.pearls || 0) < S.price) return;
     s.pearls -= S.price; (s.suits ||= []).push(id); s.last = Date.now(); c.suit = id;   // gleich auswählen
+    saveBr(); return;
+  }
+  if (typeof k === 'string' && k.startsWith('gad:')) {
+    const G0 = GADGETS.find(x => x.k === k.slice(4));
+    if (!G0 || (s.gads || []).includes(G0.k) || (s.pearls || 0) < G0.price) return;
+    s.pearls -= G0.price; (s.gads ||= []).push(G0.k); s.last = Date.now();
     saveBr(); return;
   }
   const u = BR_UPGRADES.find(x => x.k === k); if (!u) return;
@@ -1167,6 +1250,7 @@ function tick(dt) {
     if (dist2d(p, z.x, z.z) > z.r) { p.zoneAcc += dps * dt; if (p.zoneAcc >= 1) { const a = Math.floor(p.zoneAcc); p.zoneAcc -= a; damage(p, a, null, 'zone', z.x, z.z); } }
     if (p.alive) autoCollect(p);
   }
+  gadgetTick();
   for (const v of G.vehicles.values()) {
     const d = v.driver && G.players.get(v.driver);
     if (d && d.alive && d.veh === v.id) { v.x = d.x; v.y = d.y; v.z = d.z; v.yaw = d.yaw; v.pitch = d.pitch; }
@@ -1208,7 +1292,8 @@ function snapshot() {
       const v = p.veh && G.vehicles.get(p.veh);
       you = { alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxhp, sh: Math.round(p.shield), slot: p.slot, kills: p.kills, place: p.place,
         w: p.weapons.map(w => w ? [w.id, w.rar, w.ammo, (w.spare || []).map(s => Math.round(s * 100) / 100)] : 0), rl: r2(p.reload), rlT: p.reloadT, veh: p.veh, vhp: v ? Math.ceil(v.hp) : 0,
-        grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)) };
+        grab: p.grabbed ? 1 : 0, ink: r2(Math.max(0, p.ink)),
+        gd: p.gad >= 0 ? [p.gad, r2(Math.max(0, (p.gadT || 0) - G.time))] : null };   // Gadget: Nummer und wie lange es noch abkühlt
       if (G.mode === 'exp') you.x = { money: p.money, bag: p.bag.length, bagV: p.bag.reduce((a, e) => a + fishValue(e), 0), air: r2(p.air),
         tank: p.tank, lung: p.lung, lamp: p.lamp, rt: r2(Math.max(0, p.respawnT)),
         bagL: p.bag.map(catchToNet), aq: p.aq.map(catchToNet), aqLvl: p.aqLvl, aqRate: Math.round(aqIncome(p.aq) * 100) / 100, afk: p.afk ? 1 : 0, base: p.baseIdx };
@@ -1284,6 +1369,7 @@ wss.on('connection', (ws) => {
       case 'start': if (G.phase === 'lobby') { if (G.mode === 'exp') startExp(); else startMatch(); } break;
       case 'buy': if (p && G.mode === 'exp') expBuy(p, m); break;
       case 'brbuy': if (G.phase === 'lobby') { brBuy(c, m.k); broadcast(lobbyMsg()); } break;
+      case 'gad': if (p && p.alive && G.mode !== 'exp') { try { useGadget(p, m); } catch (err) { console.error('[gadget error]', err); } } break;
       case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':
         if (p && p.alive && [m.x, m.y, m.z, m.yaw, m.pitch].every(Number.isFinite)) {

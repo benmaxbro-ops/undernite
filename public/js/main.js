@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf } from './shared.js';
 // gekaufte Verbesserungen aus dem Perlen-Shop (kommen mit der Lobby-Nachricht). Wirken nur im Battle Royale.
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
@@ -161,7 +161,7 @@ hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeSho
 function clearDyn() {
   for (const p of projs.values()) if (p.whine) p.whine.stop();
   sfx.engine(0);
-  dyn.clear(); shocks.length = 0; players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
+  dyn.clear(); shocks.length = 0; gfx.shields.clear(); gfx.drones.clear(); gfx.ropes.length = 0; gfx.grapple = null; gfx.sonarUntil = 0; players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
   you = null; zone = null; deadInfo = null; specId = 0;
 }
 function onStart(m) {
@@ -255,7 +255,80 @@ function addShock(x, y, z, dx, dy, dz, widx, mine, scale = 1, heat = 0) {
 }
 // Benommen nach dem Verbrennen: t = Sekunden übrig, max = Anfangswert, burn = roter Hitzeblitz am Rand (0…1)
 const daze = { t: 0, max: 1, burn: 0 };
-function updateShocks(dt) { for (let i = shocks.length - 1; i >= 0; i--) if (!shocks[i].update(dt)) shocks.splice(i, 1); }
+function updateShocks(dt) { for (let i = shocks.length - 1; i >= 0; i--) if (!shocks[i].update(dt)) shocks.splice(i, 1); updateGadgetFx(dt); }
+
+// ---------- Gadgets (Taste Q) – was sie machen, steht in GADGETS (shared.js), wirken tut es am Server ----------
+const gfx = { sonarUntil: 0, stunUntil: 0, grapple: null, drones: new Map(), shields: new Map(), ropes: [] };
+function useGadget() {
+  if (!you || !you.alive || !you.gd || you.gd[1] > 0) { if (you && you.gd && you.gd[1] > 0) hud.banner(`${GADGETS[you.gd[0]].name} lädt noch ${Math.ceil(you.gd[1])} s`, 1); return; }
+  send({ t: 'gad', d: dirFrom(camYaw, camPitch).map(v => +v.toFixed(3)) });
+}
+const SHIELD_GEO = new THREE.SphereGeometry(1, 32, 18), DRONE_GEO = new THREE.SphereGeometry(0.16, 16, 12), DRONE_RING = new THREE.TorusGeometry(0.24, 0.035, 8, 24);
+function onGadget(e) {
+  const [, id, gi, x, y, z] = e, g = GADGETS[gi], pe = players.get(id); if (!g) return;
+  const mine = id === myId, vol = mine ? 1 : volAt(x, y, z);
+  switch (g.k) {
+    case 'bait': env.blood(x, y, z); env.bubble(x, y, z, 12, 0.6, 1); sfx.noise(0.3, 600, 1, 0.4 * vol, 'lowpass', 200); break;
+    case 'sonar': {
+      if (mine) gfx.sonarUntil = time + g.time;
+      const b = makeBlast(dyn, x, y, z, 0, 0, -1, 1, 0, mine, 0); if (b) shocks.push(b);
+      sfx.tone(1400, 1350, 0.9, 0.35 * vol, 'sine'); sfx.tone(700, 690, 1.4, 0.2 * vol, 'sine', 0.05);   // "Piiing"
+      break;
+    }
+    case 'shield': {
+      const m = new THREE.Mesh(SHIELD_GEO, new THREE.MeshBasicMaterial({ color: 0x6fd6ff, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      dyn.add(m); gfx.shields.set(id, { m, until: time + g.time, r: (pe ? SUITS[pe.suit].r : 1) * 1.9 });
+      sfx.tone(180, 420, 0.4, 0.4 * vol, 'sawtooth'); sfx.noise(0.5, 900, 1, 0.3 * vol, 'bandpass', 2400);
+      break;
+    }
+    case 'stomp': {
+      const b = makeBlast(dyn, x, y - 0.8, z, 0, 1, 0, 7, 0.5, mine, 0); if (b) shocks.push(b);
+      env.bubble(x, y - 1, z, 50, 3, 2); sfx.ventBoom(vol, 0.7, distTo(x, y, z));
+      shake = Math.max(shake, mine ? 0.5 : Math.max(0, 0.5 - distTo(x, y, z) / 30));
+      break;
+    }
+    case 'inkbomb': sfx.noise(0.4, 400, 0.8, 0.5 * vol, 'lowpass', 120); break;   // die Wolke selbst kommt mit 'ink'
+    case 'grapple': {
+      if (pe) gfx.ropes.push({ id, x, y, z, t: 0.6 });
+      if (mine) gfx.grapple = { x, y, z, t: 1.2 };
+      sfx.noise(0.15, 2600, 2, 0.4 * vol, 'bandpass', 900); sfx.tone(900, 300, 0.25, 0.2 * vol, 'square');   // "Zing"
+      break;
+    }
+    case 'drone': {
+      const grp = new THREE.Group();
+      grp.add(new THREE.Mesh(DRONE_GEO, new THREE.MeshStandardMaterial({ color: 0xd8dde2, metalness: 0.8, roughness: 0.25, emissive: 0xffb347, emissiveIntensity: 0.25 })));
+      const ring = new THREE.Mesh(DRONE_RING, new THREE.MeshBasicMaterial({ color: 0xffb347 })); grp.add(ring);
+      dyn.add(grp); gfx.drones.set(id, { m: grp, ring, until: time + g.time });
+      sfx.tone(300, 900, 0.3, 0.3 * vol, 'triangle');
+      break;
+    }
+    case 'zap': {
+      const b = makeBlast(dyn, x, y, z, 0, 0, -1, 0, 0, mine, 0); if (b) shocks.push(b);
+      sfx.zap(1, 0.8 * vol); sfx.noise(0.5, 3000, 3, 0.4 * vol, 'bandpass', 800);
+      for (let i = 0; i < 6; i++) { const a = Math.random() * 6.28, r = 2 + Math.random() * 5; addBeam(x, y, z, x + Math.cos(a) * r, y + (Math.random() - 0.5) * 3, z + Math.sin(a) * r, 0.03); }   // Blitze
+      break;
+    }
+  }
+}
+function updateGadgetFx(dt) {
+  for (const [id, s] of gfx.shields) {
+    const pe = players.get(id);
+    if (!pe || time > s.until) { dyn.remove(s.m); s.m.material.dispose(); gfx.shields.delete(id); continue; }
+    s.m.position.set(pe.x, pe.y + 0.3, pe.z); s.m.scale.setScalar(s.r * (1 + Math.sin(time * 9) * 0.03));
+    s.m.material.opacity = 0.12 + 0.06 * Math.sin(time * 5) + (s.hit = Math.max(0, (s.hit || 0) - dt * 3)) * 0.3;
+  }
+  for (const [id, d] of gfx.drones) {
+    const pe = players.get(id);
+    if (!pe || time > d.until) { dyn.remove(d.m); gfx.drones.delete(id); continue; }
+    d.m.position.set(pe.x + Math.cos(pe.yaw || 0) * 0.9, pe.y + 0.9 + Math.sin(time * 3) * 0.08, pe.z - Math.sin(pe.yaw || 0) * 0.9);
+    d.ring.rotation.set(time * 2, time * 3, 0);
+  }
+  for (let i = gfx.ropes.length - 1; i >= 0; i--) {   // Seil: kurz sichtbar als dünner Strahl vom Taucher zum Fels
+    const r = gfx.ropes[i]; r.t -= dt; const pe = players.get(r.id);
+    if (r.t <= 0 || !pe) { gfx.ropes.splice(i, 1); continue; }
+    if (!r.drawn) { addBeam(pe.x, pe.y, pe.z, r.x, r.y, r.z, 0.025); r.drawn = true; }
+  }
+}
 function onEvent(e) {
   switch (e[0]) {
     case 'pj': {
@@ -299,6 +372,8 @@ function onEvent(e) {
       break;
     }
     case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); break; }
+    case 'gad': onGadget(e); break;
+    case 'deflect': { const s = gfx.shields.get(e[1]); if (s) s.hit = 1; const pe = players.get(e[1]); if (pe) sfx.tone(1800, 900, 0.08, 0.3 * (e[1] === myId ? 1 : volAt(pe.x, pe.y, pe.z)), 'triangle'); break; }   // Schuss prallt am Schild ab
     // Hitze: ['burn', Spieler, wie heiß 0…1] – er hat sich an der überhitzten Waffe verbrannt
     case 'burn': {
       const pe = players.get(e[1]); if (!pe) break;
@@ -370,6 +445,8 @@ function updateFinishers(dt) {
 }
 function onPrivate(e) {
   switch (e[0]) {
+    case 'push': me.vx += e[1]; me.vy += e[2]; me.vz += e[3]; shake = Math.max(shake, 0.4); break;   // weggeschleudert (Bodenstampfer)
+    case 'stun': gfx.stunUntil = performance.now() + e[1] * 1000; shockUntil = time + e[1]; hud.shock(); sfx.shock(); chargeShot = null; break;   // gelähmt (Elektroschocker)
     // viel zu heiß geschossen: Waffe wegstecken, e[1] Sekunden warten
     case 'holster': {
       holsterUntil = performance.now() + e[1] * 1000; chargeShot = null; firing = false;
@@ -420,6 +497,7 @@ addEventListener('keydown', (e) => {
   if (phase !== 'play' || !you || !you.alive) return;
   if (e.code === 'KeyV') { firstPerson = !firstPerson; return; }   // Ego-Perspektive an/aus
   if (e.code === 'KeyC' && canCling()) { toggleCling(); return; }  // Deckung: am Riff festhalten / loslassen
+  if (e.code === 'KeyQ' && mode !== 'exp') { useGadget(); return; } // Gadget
   if (e.code === 'KeyG') { const t = finTarget(); if (t) send({ t: 'fin', id: t.id }); return; }   // Finisher
   if (e.code === 'KeyL') {
     if (mode === 'exp' && torch.bat <= 0) hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 2);
@@ -510,6 +588,13 @@ function controlMe(dt) {
   } else {
     me.byaw = approachAngle(me.byaw ?? me.hyaw, me.hyaw, (vt ? 50 : 9) * dt);
     me.bpitch += (me.hpitch - me.bpitch) * Math.min(1, dt * (vt ? 50 : 8));
+  }
+  // Seilharpune: das Seil zieht dich schnell zum Fels (bis 2 m davor oder nach 1,2 s)
+  if (gfx.grapple) {
+    const G0 = gfx.grapple, gx = G0.x - me.x, gy = G0.y - me.y, gz = G0.z - me.z, gl = Math.hypot(gx, gy, gz);
+    G0.t -= dt;
+    if (gl < 2 || G0.t <= 0 || vt) gfx.grapple = null;
+    else { const sp = 34; me.vx = gx / gl * sp; me.vy = gy / gl * sp; me.vz = gz / gl * sp; cling = null; }
   }
   // am Riff festhalten: ganz still hängen. Wegschwimmen (WASD, Leertaste, X) lässt los.
   if (cling && (f || s || u || vt || you.grab || !canCling())) cling = null;
@@ -663,7 +748,7 @@ let aimAt = null;
 // auch wenn man die Maustaste schon losgelassen hat. Waffe gewechselt, Nachladen oder tot → Schuss fällt aus.
 let chargeShot = null, chargeStart = 0, chargeEnd = 0, holsterUntil = 0;
 function tryFire(now) {
-  if (now < holsterUntil) return;   // Waffe weggesteckt (zu heiß)
+  if (now < holsterUntil || now < gfx.stunUntil) return;   // Waffe weggesteckt (zu heiß) oder gelähmt
   if (chargeShot) {
     if (now < chargeEnd) return;
     const c = chargeShot; chargeShot = null;
@@ -994,7 +1079,10 @@ function frame(now) {
       lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null, held });
     let marks = [];
     // Hammerhai (Elektrosinn): Gegner in der Nähe erscheinen als rote Punkte auf der Minikarte
-    const sense = mode !== 'exp' && you && you.alive ? SUITS[mySuit].sense : 0;
+    // Sonar-Boje (Triton): solange sie läuft, sieht man alle Gegner bis 90 m
+    const sonar = time < gfx.sonarUntil ? GADGETS[gadgetOf('triton')].range : 0;
+    const sense = mode !== 'exp' && you && you.alive ? Math.max(SUITS[mySuit].sense || 0, sonar) : 0;
+    hud.gadget(mode !== 'exp' && you && you.alive ? you.gd : null);
     if (sense) for (const e of players.values()) if (e.id !== myId && e.mesh.visible && Math.hypot(e.x - me.x, e.y - me.y, e.z - me.z) < sense) marks.push({ x: e.x, z: e.z, c: '#ff4d4d', s: 3 });
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap
