@@ -347,6 +347,42 @@ const GUN_CYL_Y = new THREE.CylinderGeometry(1, 1, 1, 24);   // stehender Zylind
 const GUN_TUBE = new THREE.CylinderGeometry(1, 1, 1, 32, 1, true).rotateX(Math.PI / 2);   // Rohr ohne Deckel (offen)
 const FINGER = new THREE.CylinderGeometry(1, 1, 1, 14).rotateX(Math.PI / 2), KNUCKLE = new THREE.SphereGeometry(1, 16, 12);
 const FINGER_T = new THREE.CylinderGeometry(0.86, 1, 1, 16).rotateX(Math.PI / 2);   // Fingerglied: vorne 14 % dünner als hinten
+// weicher Klotz für Handflächen: stärker abgerundet als RBOX, damit Hände nicht wie Bauklötze aussehen
+const RBOX_SOFT = (() => {
+  const bs = 0.24, bt = 0.26, h = 0.5 - bs, r = 0.2, s = new THREE.Shape();
+  s.moveTo(-h + r, -h); s.lineTo(h - r, -h); s.quadraticCurveTo(h, -h, h, -h + r); s.lineTo(h, h - r); s.quadraticCurveTo(h, h, h - r, h);
+  s.lineTo(-h + r, h); s.quadraticCurveTo(-h, h, -h, h - r); s.lineTo(-h, -h + r); s.quadraticCurveTo(-h, -h, -h + r, -h);
+  const d = 1 - 2 * bt, geo = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelThickness: bt, bevelSize: bs, bevelSegments: 5, curveSegments: 6 });
+  geo.translate(0, 0, -d / 2); geo.computeVertexNormals();
+  return geo;
+})();
+// Unterarm wie ein echter Arm: am Handgelenk (z = −0.5) schmal, dann der Muskel, zum Ellbogen (z = +0.5) wieder etwas dünner.
+// ARM_PROFILE = [Stelle von 0 (Handgelenk) bis 1 (Ellbogen), Dicke] – zum Ausprobieren einfach die Zahlen ändern
+const ARM_PROFILE = [[0, 0.66], [0.12, 0.7], [0.35, 0.92], [0.55, 1.0], [0.8, 0.95], [1, 0.86]];
+const FORE = (() => {
+  const pts = [new THREE.Vector2(0, 0)];
+  for (let i = 0; i <= 24; i++) {   // weich zwischen den Profil-Punkten
+    const u = i / 24; let j = 0; while (j < ARM_PROFILE.length - 2 && u > ARM_PROFILE[j + 1][0]) j++;
+    const [u0, r0] = ARM_PROFILE[j], [u1, r1] = ARM_PROFILE[j + 1], k = (u - u0) / (u1 - u0), sk = k * k * (3 - 2 * k);
+    pts.push(new THREE.Vector2(r0 + (r1 - r0) * sk, u - 0.5));
+  }
+  pts.push(new THREE.Vector2(0, 0.5));
+  return new THREE.LatheGeometry(pts, 24).rotateX(Math.PI / 2);   // Achse zeigt nach z (wie FINGER)
+})();
+// Bündchen: kurzes, glattes Rohr, am Handgelenk enger (statt dicker Kugeln)
+const CUFF = new THREE.CylinderGeometry(1, 0.82, 1, 24).rotateX(Math.PI / 2);
+function cuff(parent, mat, a, b, r) {
+  const A = new THREE.Vector3(...a), d = new THREE.Vector3(...b).sub(A), len = d.length(); d.normalize();
+  const m = new THREE.Mesh(CUFF, mat); m.scale.set(r, r * 0.9, len); m.position.copy(A).addScaledVector(d, len / 2); m.quaternion.setFromUnitVectors(Z_AXIS, d); parent.add(m); return m;
+}
+const ARM_FLAT = 0.84;   // Unterarm ist oben/unten etwas flacher als breit (nicht kreisrund)
+// Unterarm von a (Handgelenk) nach b (Ellbogen) mit Dicke r, dazu zwei Neopren-Falten am Handgelenk
+function limb(parent, mat, a, b, r) {
+  const A = new THREE.Vector3(...a), d = new THREE.Vector3(...b).sub(A), len = d.length(); d.normalize();
+  const m = new THREE.Mesh(FORE, mat); m.scale.set(r, r * ARM_FLAT, len); m.position.copy(A).addScaledVector(d, len / 2); m.quaternion.setFromUnitVectors(Z_AXIS, d); parent.add(m);
+  for (const u of [0.07, 0.13]) { const f = new THREE.Mesh(GEO.torus, mat); f.scale.set(r * 0.74, r * 0.74 * ARM_FLAT, r * 0.5); f.position.copy(A).addScaledVector(d, len * u); f.quaternion.copy(m.quaternion); parent.add(f); }
+  return m;
+}
 function profileGeo(key, pts, depth, holes = []) {
   if (GUN_GEO.has(key)) return GUN_GEO.get(key);
   const sh = new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v)));
@@ -730,7 +766,8 @@ function chain(parent, mat, pts, r, taper = 1) {
     }
   }
 }
-const finger = (parent, mat, pts, r) => chain(parent, mat, pts, r, 0.86);
+const FINGER_SLIM = 0.9;   // Finger etwas schlanker (1 = alte Dicke)
+const finger = (parent, mat, pts, r) => chain(parent, mat, pts, r * FINGER_SLIM, 0.86);
 // gun = userData der Waffe (gripTop, gripW, support, rear). Die Arme hängen an der Waffe und bewegen sich mit ihr.
 export function makeViewArms(suit, gun) {
   const g = new THREE.Group(), col = SUIT_COL[suit] || 0x1fd6b4;
@@ -740,21 +777,21 @@ export function makeViewArms(suit, gun) {
   const big = suit === 'bulwark' ? 1.3 : suit === 'manta' ? 0.9 : 1;   // Bollwerk hat dicke Panzerarme
   const t = gun.gripTop, w = gun.gripW, back = gun.rear + 0.2, R = w / 2 + 0.009;
   // rechte Hand: Handfläche rechts am Griff, die Finger legen sich vorne herum bis auf die linke Seite
-  const palm = add(g, RBOX, glove, R + 0.006, t - 0.047, 0.008); palm.scale.set(0.024, 0.078, 0.06);   // Handfläche rechts am Griff
-  add(g, RBOX, glove, R * 0.25, t - 0.03, 0.034).scale.set(w + 0.024, 0.05, 0.032);                   // Handballen hinter dem Griff
-  add(g, RBOX, glove, R + 0.012, t - 0.03, -0.004).scale.set(0.012, 0.064, 0.03);                      // Fingerknöchel-Polster
+  const palm = add(g, RBOX_SOFT, glove, R + 0.006, t - 0.047, 0.008); palm.scale.set(0.024, 0.078, 0.06);   // Handfläche rechts am Griff
+  add(g, RBOX_SOFT, glove, R * 0.25, t - 0.03, 0.034).scale.set(w + 0.024, 0.05, 0.032);                   // Handballen hinter dem Griff
+  add(g, RBOX_SOFT, glove, R + 0.012, t - 0.03, -0.004).scale.set(0.012, 0.064, 0.03);                      // Fingerknöchel-Polster
   for (let i = 0; i < 3; i++) {                                                                  // Mittel-, Ring-, kleiner Finger
     const y = t - 0.034 - i * 0.02, f = -(0.028 - i * 0.004), r = 0.0098 - i * 0.0008;
     finger(g, glove, [[R, y, f + 0.026], [R + 0.002, y, f - 0.004], [0, y - 0.002, f - 0.014], [-R, y - 0.002, f - 0.002], [-R - 0.002, y - 0.001, f + 0.016]], r);
   }
   finger(g, glove, [[R, t - 0.014, -0.006], [R - 0.002, t - 0.016, -0.034], [0.006, t - 0.02, -0.052], [0, t - 0.03, -0.058]], 0.009);   // Zeigefinger am Abzug
   finger(g, glove, [[R * 0.6, t - 0.04, 0.03], [-R * 0.3, t - 0.02, 0.026], [-R - 0.004, t - 0.008, 0.004], [-R - 0.004, t - 0.004, -0.02]], 0.0105);   // Daumen
-  chain(g, acc, [[0.004, t - 0.058, 0.034], [0.01, t - 0.07, 0.07]], 0.031 * big);                // Bündchen in Anzugfarbe
+  cuff(g, acc, [0.004, t - 0.058, 0.034], [0.01, t - 0.07, 0.07], 0.027 * big);                // Bündchen in Anzugfarbe
   // Klettverschluss am Handgelenk wie bei echten Tauchhandschuhen
   const strapM = new THREE.MeshStandardMaterial({ color: 0x15191d, roughness: 0.9, bumpMap: neoprene(), bumpScale: 2 });
-  const strap = add(g, RBOX, strapM, 0.007, t - 0.064, 0.048); strap.scale.set(0.07 * big, 0.068 * big, 0.016); strap.rotation.x = -0.3;
+  const strap = add(g, RBOX, strapM, 0.007, t - 0.064, 0.048); strap.scale.set(0.062 * big, 0.058 * big, 0.014); strap.rotation.x = -0.3;
   add(g, RBOX, acc, 0.04 * big, t - 0.062, 0.048).scale.set(0.01, 0.03, 0.02);                          // Lasche
-  chain(g, sleeve, [[0.01, t - 0.07, 0.068], [0.16, t - 0.34, back]], 0.036 * big);              // Unterarm bis aus dem Bild
+  limb(g, sleeve, [0.01, t - 0.07, 0.068], [0.16, t - 0.34, back], 0.036 * big);              // Unterarm bis aus dem Bild
   if (big > 1.2) { const p = add(g, RBOX, acc, 0.05, t - 0.13, 0.19); p.scale.set(0.09, 0.05, 0.16); p.rotation.set(-0.6, 0.3, 0.2); }   // Panzerplatte
   // linke Hand (Gewehre und Werfer): Handfläche unten, Finger rechts hoch, Daumen links
   const right = g; g.userData.left = null;
@@ -763,22 +800,22 @@ export function makeViewArms(suit, gun) {
     // ihre Finger umfassen vorne die Finger der rechten Hand, der linke Daumen zeigt am Rahmen entlang nach vorne.
     const g = new THREE.Group(); right.add(g); right.userData.left = g;
     const L = -(R + 0.016);
-    const lp = add(g, RBOX, glove, L - 0.004, t - 0.05, 0.004); lp.scale.set(0.022, 0.074, 0.062); lp.rotation.y = 0.18;   // Handfläche links am Griff
+    const lp = add(g, RBOX_SOFT, glove, L - 0.004, t - 0.05, 0.004); lp.scale.set(0.022, 0.074, 0.062); lp.rotation.y = 0.18;   // Handfläche links am Griff
     for (let i = 0; i < 4; i++) {                                                                 // Finger umfassen vorne die rechte Hand
       const y = t - 0.04 - i * 0.017, r = i === 3 ? 0.0082 : 0.0095;
       finger(g, glove, [[L, y, -0.022], [L + 0.008, y - 0.002, -0.048], [-0.004, y - 0.003, -0.056], [R * 0.7, y - 0.002, -0.05], [R + 0.01, y - 0.001, -0.036]], r);
     }
     finger(g, glove, [[L + 0.004, t - 0.03, 0.012], [L + 0.002, t - 0.012, -0.018], [L + 0.004, t - 0.004, -0.048], [L + 0.006, t - 0.001, -0.07]], 0.0105);   // Daumen nach vorne
-    chain(g, acc, [[L - 0.004, t - 0.062, 0.04], [L - 0.012, t - 0.075, 0.074]], 0.03 * big);    // Bündchen
-    chain(g, sleeve, [[L - 0.012, t - 0.075, 0.072], [-0.2, t - 0.33, back]], 0.035 * big);      // Unterarm bis aus dem Bild
+    cuff(g, acc, [L - 0.004, t - 0.062, 0.04], [L - 0.012, t - 0.075, 0.074], 0.026 * big);    // Bündchen
+    limb(g, sleeve, [L - 0.012, t - 0.075, 0.072], [-0.2, t - 0.33, back], 0.035 * big);      // Unterarm bis aus dem Bild
   } else if (gun.support) {
     const g = new THREE.Group(); right.add(g); right.userData.left = g;
     const [sx, sy, sz] = gun.support;
-    const h = add(g, RBOX, glove, sx, sy - 0.022, sz + 0.005); h.scale.set(0.058, 0.026, 0.075);
+    const h = add(g, RBOX_SOFT, glove, sx, sy - 0.022, sz + 0.005); h.scale.set(0.058, 0.026, 0.075);
     for (let i = 0; i < 4; i++) { const z = sz - 0.03 + i * 0.019, r = i === 3 ? 0.0078 : 0.0092; finger(g, glove, [[0.016, sy - 0.028, z], [0.032, sy - 0.012, z], [0.034, sy + 0.012, z - 0.003], [0.026, sy + 0.028, z - 0.006]], r); }
     finger(g, glove, [[-0.018, sy - 0.03, sz + 0.02], [-0.032, sy - 0.006, sz + 0.008], [-0.03, sy + 0.02, sz - 0.012]], 0.0105);
-    chain(g, acc, [[-0.004, sy - 0.04, sz + 0.04], [-0.012, sy - 0.055, sz + 0.075]], 0.03 * big);
-    chain(g, sleeve, [[-0.012, sy - 0.055, sz + 0.072], [-0.24, sy - 0.32, back]], 0.035 * big);
+    cuff(g, acc, [-0.004, sy - 0.04, sz + 0.04], [-0.012, sy - 0.055, sz + 0.075], 0.026 * big);
+    limb(g, sleeve, [-0.012, sy - 0.055, sz + 0.072], [-0.24, sy - 0.32, back], 0.035 * big);
   }
   return right;
 }
@@ -791,16 +828,16 @@ export function makeReloadHand(suit) {
   const acc = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4, roughness: 0.45 });
   const big = suit === 'bulwark' ? 1.3 : suit === 'manta' ? 0.9 : 1;
   const hand = new THREE.Group(); g.add(hand);
-  add(hand, RBOX, glove, 0, -0.014, 0.014).scale.set(0.058, 0.026, 0.07);                                    // Handfläche
+  add(hand, RBOX_SOFT, glove, 0, -0.014, 0.014).scale.set(0.058, 0.026, 0.07);                                    // Handfläche
   for (let i = 0; i < 4; i++) { const x = -0.018 + i * 0.012; finger(hand, glove, [[x, -0.01, -0.012], [x, 0.008, -0.03], [x * 0.8, 0.02, -0.036]], i === 3 ? 0.0075 : 0.0088); }   // Finger umfassen das Magazin
   finger(hand, glove, [[0.026, -0.012, 0.01], [0.032, 0.006, -0.008], [0.026, 0.02, -0.02]], 0.01);         // Daumen
-  const cuff = new THREE.Mesh(FINGER, acc), arm = new THREE.Mesh(FINGER, sleeve); g.add(cuff); g.add(arm);
+  const cuff = new THREE.Mesh(FINGER, acc), arm = new THREE.Mesh(FORE, sleeve); g.add(cuff); g.add(arm);
   const A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3();
   const seg = (m, a, b, r) => { D.copy(b).sub(a); const l = D.length() || 0.001; m.scale.set(r, r, l); m.position.copy(a).addScaledVector(D, 0.5); m.quaternion.setFromUnitVectors(Z_AXIS, D.normalize()); };
   g.userData.setArm = (handPos, elbowPos) => {
     hand.position.copy(handPos);
     A.copy(handPos).add(new THREE.Vector3(0, -0.02, 0.03)); B.copy(elbowPos).sub(A).setLength(0.04).add(A);   // Bündchen immer 4 cm lang
-    seg(cuff, A, B, 0.03 * big); seg(arm, B, elbowPos, 0.035 * big);
+    seg(cuff, A, B, 0.03 * big); seg(arm, B, elbowPos, 0.035 * big); arm.scale.y *= ARM_FLAT;
   };
   return g;
 }
@@ -827,10 +864,10 @@ export function makeSwimArms(suit) {
   for (const s of [1, -1]) {
     const hand = new THREE.Group(); hand.scale.setScalar(1.35); g.add(hand);   // in Ego-Spielen sind die Hände etwas größer, sonst sieht man sie kaum
     // flache Hand: Handfläche, vier gestreckte Finger (leicht gebogen), Daumen seitlich – Finger zeigen nach −z, Handfläche nach unten
-    add(hand, RBOX, glove, 0, 0, 0.01).scale.set(0.075, 0.024, 0.085);
+    add(hand, RBOX_SOFT, glove, 0, 0, 0.01).scale.set(0.075, 0.024, 0.085);
     for (let i = 0; i < 4; i++) { const x = (-0.027 + i * 0.018) * s, len = [0.07, 0.08, 0.076, 0.062][i]; finger(hand, glove, [[x, 0, -0.03], [x * 1.02, -0.003, -0.03 - len * 0.55], [x * 1.04, -0.008, -0.03 - len]], i === 3 ? 0.0078 : 0.009); }
     finger(hand, glove, [[-0.035 * s, -0.004, 0.02], [-0.05 * s, -0.006, -0.006], [-0.056 * s, -0.008, -0.03]], 0.0105);
-    const cuff = new THREE.Mesh(FINGER, acc), fore = new THREE.Mesh(FINGER, sleeve), upper = new THREE.Mesh(FINGER, sleeve), elbowB = new THREE.Mesh(KNUCKLE, sleeve);
+    const cuff = new THREE.Mesh(FINGER, acc), fore = new THREE.Mesh(FORE, sleeve), upper = new THREE.Mesh(FORE, sleeve), elbowB = new THREE.Mesh(KNUCKLE, sleeve);
     g.add(cuff, fore, upper, elbowB);
     sides.push({ s, hand, cuff, fore, upper, elbowB, wrist: new THREE.Vector3(), elbow: new THREE.Vector3(), shoulder: new THREE.Vector3(0.24 * s, -0.46, 0.12), back: new THREE.Vector3() });
   }
@@ -851,7 +888,7 @@ export function makeSwimArms(suit) {
       S.elbow.copy(S.shoulder).addScaledVector(S.back, 0.5).add(R2.set(0.09 * s, -0.08, 0.04));          // Ellbogen nach außen-unten geknickt
       seg(S.cuff, S.wrist, R2.copy(S.elbow).sub(S.wrist).setLength(0.045).add(S.wrist), 0.03 * big);
       seg(S.fore, R2.copy(S.elbow).sub(S.wrist).setLength(0.045).add(S.wrist), S.elbow, 0.034 * big);
-      seg(S.upper, S.elbow, S.shoulder, 0.042 * big);
+      seg(S.upper, S.elbow, S.shoulder, 0.042 * big); S.fore.scale.y *= ARM_FLAT;
       S.elbowB.position.copy(S.elbow); S.elbowB.scale.setScalar(0.038 * big);
     }
   };
