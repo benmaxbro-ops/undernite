@@ -8,11 +8,11 @@ export const DEFAULTS = { volume: 0.8, music: 0.5, sens: 1, invertY: false, fov:
 // Grafikqualität: pr = Bildauflösung (Pixel pro Bildpunkt), reef = wie dicht die Riffe sind (1 = normal),
 // bloom = wie stark Leuchtendes strahlt (0 = aus), ao = weiche Schatten in Spalten und Ecken (Ambient Occlusion)
 export const QUALITY = {
-  phone: { name: 'Handy',   pr: 0.6,  reef: 0.12, bloom: 0,    ao: false },   // so wenig wie möglich, damit das Handy nicht heiß wird
-  low:   { name: 'Niedrig', pr: 0.75, reef: 0.35, bloom: 0,    ao: false },
-  mid:   { name: 'Mittel',  pr: 1,    reef: 0.65, bloom: 0.55, ao: false },
-  high:  { name: 'Hoch',    pr: 1.5,  reef: 1,    bloom: 0.7,  ao: true },
-  ultra: { name: 'Ultra',   pr: 2,    reef: 1.5,  bloom: 0.9,  ao: true,
+  phone: { name: 'Handy',   pr: 0.6,  reef: 0.12, bloom: 0,    ao: false, lens: false },   // so wenig wie möglich, damit das Handy nicht heiß wird
+  low:   { name: 'Niedrig', pr: 0.75, reef: 0.35, bloom: 0,    ao: false, lens: true },
+  mid:   { name: 'Mittel',  pr: 1,    reef: 0.65, bloom: 0.55, ao: false, lens: true },
+  high:  { name: 'Hoch',    pr: 1.5,  reef: 1,    bloom: 0.7,  ao: true,  lens: true },
+  ultra: { name: 'Ultra',   pr: 2,    reef: 1.5,  bloom: 0.9,  ao: true,  lens: true,
            warn: '⚠️ Ultra belastet die Grafikkarte sehr stark: Sie kann heiß und laut werden, und das Spiel kann ruckeln. Nur mit einer starken Grafikkarte benutzen.' },
 };
 const KEY = 'undernite.settings';

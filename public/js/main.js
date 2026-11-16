@@ -13,6 +13,7 @@ import { startFinisher } from './finisher.js';
 import { settings, onSettings, openSettings, closeSettings, QUALITY } from './settings.js';
 import { setReefQuality } from './reef.js';
 import { makeShock, SHOCK } from './shock.js';
+import { makeLensPass } from './lens.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -49,9 +50,10 @@ function resize() {
 // Das Bild wird erst normal gezeichnet und dann bearbeitet:
 //   GTAO  = weiche Schatten in Spalten, Höhlen und Ecken (macht alles weniger "blockig")
 //   Bloom = helle, leuchtende Dinge strahlen in ihre Umgebung (Korallen, Quallen, Mündungsblitz, Lampe)
-const post = { on: false, composer: null, bloom: null, ao: null };
+//   Linse = Bodycam-Look: Fischauge, Farbsäume, dunkler Rand, Filmkorn (Werte in lens.js)
+const post = { on: false, composer: null, bloom: null, ao: null, lens: null };
 function setupPost(Q) {
-  post.on = Q.bloom > 0 || Q.ao;
+  post.on = Q.bloom > 0 || Q.ao || Q.lens;
   if (!post.on) return;
   if (!post.composer) {
     post.composer = new EffectComposer(renderer);
@@ -62,7 +64,9 @@ function setupPost(Q) {
     post.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.55, 0.7);
     post.composer.addPass(post.bloom);
     post.composer.addPass(new OutputPass());   // Farben und Helligkeit wie ohne Nachbearbeitung (Tone Mapping)
+    post.lens = makeLensPass(); post.composer.addPass(post.lens);   // zuletzt: die Bodycam-Linse
   }
+  post.lens.enabled = !!Q.lens;
   post.ao.enabled = !!Q.ao;
   post.bloom.enabled = Q.bloom > 0; post.bloom.strength = Q.bloom;
   post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(innerWidth, innerHeight);
@@ -960,7 +964,7 @@ function frame(now) {
     if (mode !== 'exp' && you) updateTorch(dt, SURFACE - fx.y + DEEP.brOffset);
   } else lobbyCamera();
   if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);
-  if (post.on) post.composer.render(); else renderer.render(scene, camera);
+  if (post.on) { if (post.lens.enabled) post.lens.tick(time, camera.aspect); post.composer.render(); } else renderer.render(scene, camera);
   // FPS-Anzeige (Bilder pro Sekunde), zweimal pro Sekunde aktualisiert
   if (settings.fps) { fpsN++; fpsT += dt; if (fpsT >= 0.5) { document.getElementById('fpsBox').textContent = Math.round(fpsN / fpsT) + ' FPS'; fpsN = 0; fpsT = 0; } }
   requestAnimationFrame(frame);
