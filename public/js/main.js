@@ -1203,6 +1203,7 @@ function updateViewModel(dt) {
   handLight.intensity = view.swimArms.visible ? (lamp.intensity > 0 ? VIEW.hands[0] : VIEW.hands[1]) : 0;   // Helmlampe beleuchtet die Arme
   // im Mech sitzt man in der Ego-Perspektive hinter der Glaskuppel
   cockpit.visible = fpOn && !!(you && you.alive) && !!SUITS[mySuit].mech;
+  if (cockpit.visible) cockpit.userData.update(dt, flow.f, flow.s, blurCam.x * 30, time);   // Steuerhebel kippen mit, Zeiger zittern
   // Mech-Geräusche: Motor und Propeller je nach Tempo, Hydraulik bei jedem Schritt, Servos beim schnellen Drehen
   const inMech = phase === 'play' && !!(you && you.alive) && !!SUITS[mySuit].mech && mode !== 'exp';
   const mspd = Math.hypot(me.vx, me.vy, me.vz);

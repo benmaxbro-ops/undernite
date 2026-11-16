@@ -213,8 +213,49 @@ export function makeCockpit() {
   const leds = [0x5ef2e0, 0xffd36b, 0x7dff9a, 0xff6b5e, 0x5ef2e0, 0x7dff9a];
   leds.forEach((c, i) => { const l = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: c })); l.position.set(-0.36 + i * 0.05, -0.375, -0.585); l.scale.set(0.022, 0.01, 0.006); l.rotation.x = -0.5; g.add(l); });
   const scr = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0x0f4a46 })); scr.position.set(0.3, -0.37, -0.57); scr.scale.set(0.15, 0.07, 0.005); scr.rotation.set(-0.5, -0.2, 0); g.add(scr);
+  // Steuerhebel links und rechts unten: Sockel mit Gummimanschette, Stange, Griff mit Knöpfen.
+  // Sie kippen mit, wenn du steuerst (update unten).
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x111417, roughness: 0.95 });
+  const grip = new THREE.MeshStandardMaterial({ color: 0x2a3036, roughness: 0.7, metalness: 0.2 });
+  const sticks = [];
+  for (const s of [-1, 1]) {
+    const base = new THREE.Group(); base.position.set(0.44 * s, -0.5, -0.52); base.rotation.x = -0.1; g.add(base);
+    const plate = new THREE.Mesh(RBOX, dark); plate.scale.set(0.16, 0.03, 0.14); base.add(plate);
+    const boot = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.045, 0.06, 16), rubber); boot.position.y = 0.04; base.add(boot);
+    const stick = new THREE.Group(); stick.position.y = 0.03; base.add(stick);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.011, 0.16, 12), steel); rod.position.y = 0.08; stick.add(rod);
+    const hand = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, 0.06, 6, 12), grip); hand.position.set(0, 0.19, 0.005); hand.rotation.x = 0.15; stick.add(hand);
+    const top = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: s < 0 ? 0xff5040 : 0xffc94d })); top.position.set(0, 0.235, -0.006); top.scale.set(0.016, 0.006, 0.016); stick.add(top);   // Feuerknopf oben
+    const hat = new THREE.Mesh(BOX, steel); hat.position.set(0.012 * -s, 0.215, -0.018); hat.scale.set(0.01, 0.01, 0.01); stick.add(hat);   // kleiner Daumenknopf
+    sticks.push(stick);
+  }
+  // Seitenpanele mit Kippschaltern und runden Zeigern (Druck, Hitze)
+  const needles = [];
+  for (const s of [-1, 1]) {
+    const p = new THREE.Group(); p.position.set(0.66 * s, -0.36, -0.6); p.rotation.set(0, -0.75 * s, 0.15 * s); p.scale.setScalar(0.75); g.add(p);
+    const board = new THREE.Mesh(RBOX, dark); board.scale.set(0.2, 0.26, 0.02); p.add(board);
+    for (let i = 0; i < 3; i++) {   // Kippschalter mit kleinem Licht darüber
+      const sw = new THREE.Mesh(BOX, steel); sw.position.set(-0.06 + i * 0.06, -0.07, 0.016); sw.scale.set(0.01, 0.024, 0.01); sw.rotation.x = i === 1 ? -0.5 : 0.5; p.add(sw);
+      const l = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: [0x7dff9a, 0xffd36b, 0x5ef2e0][i] })); l.position.set(-0.06 + i * 0.06, -0.03, 0.012); l.scale.set(0.012, 0.006, 0.004); p.add(l);
+    }
+    const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.01, 32), new THREE.MeshBasicMaterial({ color: 0xd9e6e8 })); dial.rotation.x = Math.PI / 2; dial.position.set(0, 0.05, 0.013); p.add(dial);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.047, 0.006, 8, 32), steel); ring.position.set(0, 0.05, 0.016); p.add(ring);
+    const needle = new THREE.Group(); needle.position.set(0, 0.05, 0.02); p.add(needle);
+    const nm = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0xd0302a })); nm.position.y = 0.018; nm.scale.set(0.004, 0.036, 0.002); needle.add(nm);
+    needles.push(needle);
+  }
   // warmes Licht innen (beleuchtet Kragen, Arme und Waffe)
   const light = new THREE.PointLight(MECH.cabin, 0.9, 2.2, 2); light.position.set(0, 0.3, 0.15); g.add(light);
   g.userData.light = light;
+  // jedes Bild: f = vor/zurück, s = links/rechts (−1…1), t = Zeit. Linker Hebel = Schwimmen, rechter = Drehen/Zielen.
+  const tilt = { lx: 0, lz: 0, rx: 0, rz: 0 };
+  g.userData.update = (dt, f, s, turn, t) => {
+    const k = Math.min(1, dt * 10);
+    tilt.lx += (-f * 0.35 - tilt.lx) * k; tilt.lz += (-s * 0.3 - tilt.lz) * k;
+    tilt.rx += (0 - tilt.rx) * k; tilt.rz += (Math.max(-0.35, Math.min(0.35, -turn * 0.8)) - tilt.rz) * k;
+    sticks[0].rotation.set(tilt.lx, 0, tilt.lz); sticks[1].rotation.set(tilt.rx, 0, tilt.rz);
+    needles[0].rotation.z = 0.6 - Math.abs(f) * 0.9 + Math.sin(t * 7) * 0.03;   // Druck: geht hoch, wenn du schwimmst
+    needles[1].rotation.z = -0.4 + Math.sin(t * 1.3) * 0.1 + Math.sin(t * 11) * 0.02; // Hitze: zittert leicht
+  };
   return g;
 }
