@@ -22,3 +22,8 @@ https://opengameart.org/content/handgun-reload-sound-effect
 Gewehr-Magazin – "Gun Reload Sound Effects" (BMacZero, CC0)
 https://opengameart.org/content/gun-reload-sound-effects
   mag_in_rifle.wav   (clipload1.wav)
+
+Holztür-Schlag – "100 CC0 metal and wood SFX" (rubberduck, CC0)
+https://opengameart.org/content/100-cc0-metal-and-wood-sfx
+  knock_small.wav   (wood_hit_08.ogg)    dumpfer Holzschlag, für kleine Waffen
+  knock_big.wav     (wood_close_01.ogg)  zuschlagende Tür, für große Waffen

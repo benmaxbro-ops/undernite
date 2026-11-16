@@ -44,7 +44,7 @@ depth.oninput = () => { dv.textContent = depth.value + ' m'; };
 const btn = (parent, text, fn) => { const b = document.createElement('button'); b.textContent = text; b.onclick = go(fn); document.getElementById(parent).appendChild(b); };
 W.forEach((n, w) => {
   btn('own', n, () => PROJ.includes(w) ? sfx.shot(w, 1) : sfx.jet(w, 1));
-  btn('far', n, () => PROJ.includes(w) ? sfx.shot(w, 0.4) : sfx.jet(w, 0.4));
+  btn('far', n, () => PROJ.includes(w) ? sfx.shot(w, 0.4, 60) : sfx.jet(w, 0.4, 60));   // 60 m weg
 });
 btn('misc', 'Explosion nah', () => sfx.boom(1, 1));
 btn('misc', 'Explosion weit weg', () => sfx.boom(0.4, 0));

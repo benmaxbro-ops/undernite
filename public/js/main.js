@@ -102,6 +102,7 @@ const torch = { on: false, bat: LAMPS[0].battery, lvl: 0, hinted: false };
 const keys = {};
 const lerpAngle = (a, b, k) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
 const approachAngle = (a, b, step) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2; return a + Math.max(-step, Math.min(step, d)); };
+const distTo = (x, y, z) => Math.hypot(x - camera.position.x, y - camera.position.y, z - camera.position.z);
 const volAt = (x, y, z) => { const d = Math.hypot(x - camera.position.x, y - camera.position.y, z - camera.position.z); return Math.max(0, 1 - d / 95) ** 2; };
 
 // ---------- network ----------
@@ -246,7 +247,7 @@ function onEvent(e) {
       projs.set(e[1], { mesh, x: e[4], y: e[5], z: e[6], dx: e[7], dy: e[8], dz: e[9], sp: def.speed, life: def.life, trail: widx >= 4 ? 0.03 : 0.09, tt: 0, mine: e[3] === myId,
         whine: widx === 4 || widx === 5 ? sfx.torpedoWhine() : null });   // Torpedos: hohes, sirrendes Heulen
       if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) {
-        sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]));
+        sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]), distTo(e[4], e[5], e[6]));
         addShock(e[4], e[5], e[6], e[7], e[8], e[9], widx, e[3] === myId);   // sichtbare Schockwelle
       }
       projs.lastShot = time;
@@ -263,7 +264,7 @@ function onEvent(e) {
       for (let i = 0; i < 4; i++) { const k = Math.random(); env.bubble(e[3] + (e[6] - e[3]) * k, e[4] + (e[7] - e[4]) * k, e[5] + (e[8] - e[5]) * k, 1, 0.15, 0.5); }
       // Splitterwerfer schießt 7 Strahlen gleichzeitig – das Geräusch nur einmal abspielen
       if (beams.lastShot !== time) {
-        sfx.jet(widx, e[2] === myId ? 1 : volAt(e[3], e[4], e[5]));
+        sfx.jet(widx, e[2] === myId ? 1 : volAt(e[3], e[4], e[5]), distTo(e[3], e[4], e[5]));
         addShock(e[3], e[4], e[5], e[6] - e[3], e[7] - e[4], e[8] - e[5], widx, e[2] === myId);   // sichtbare Schockwelle
       }
       beams.lastShot = time;

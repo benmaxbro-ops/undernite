@@ -21,6 +21,10 @@ export const UNDERWATER = {
 //   duck  = alle anderen Geräusche werden im Moment des Schusses kurz leiser → der Schuss wirkt lauter
 //   wumms = tiefer Druck-Schlag, den man auch auf Laptop-Lautsprechern hört (Punch bei 80–180 Hertz + Obertöne)
 export const SHOT = { crack: 3.0, body: 3.1, boom: 3.0, mech: 4.5, duck: 5.45, wumms: 1.0 };
+// Holztür-Schlag bei jedem Schuss: vol = Lautstärke bei fremden Schüssen, own = bei eigenen,
+// range = bis so viele Meter weit hört man ihn, pitchSmall / pitchBig = Tonhöhe (kleiner = tiefer),
+// body = zusätzlicher tiefer Bass-Schlag darunter
+export const KNOCK = { vol: 1.8, own: 0.5, range: 260, pitchSmall: 0.75, pitchBig: 0.6, body: 1.0 };
 export const PLASMA = {
   ring: 0.12,      // elektrisches Brummen (Ringmodulation): 0 = aus, 1 = stark (zu viel macht den Schuss dünn)
   zap: 0.25,       // Lautstärke des "Dzzzt"
@@ -35,7 +39,7 @@ export const bubblePeriod = (W, depth) => 2.11 * Math.cbrt(W) / Math.pow(Math.ma
 const CHARGE = [0.004, 0.003, 0.008, 0.01, 0.03, 0.03, 0.006, 0.015];
 // Schuss-Aufnahme je Waffe (Reihenfolge wie WEAPON_IDS)
 const SHOT_FILES = ['shot_pistol', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic'];
-const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd'];
+const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd', 'knock_small', 'knock_big'];
 export class Sfx {
   constructor() { this.ctx = null; this.depth = 30; this.vol = 0.8; }
   // Lautstärke aus den Einstellungen (0 … 1)
@@ -133,7 +137,7 @@ export class Sfx {
   // echter Schuss: Aufnahme (unter Wasser) + Plasma-Brummen + Dzzzt + ein tiefer Druckstoß
   // echter Schuss mit BUM: die Aufnahme (leicht übersteuert für mehr Biss), darunter ein großer Bass-Schlag (BUM),
   // ein dumpfer Druck-Knall, das Plasma-"Dzzzt" und bei Torpedos das "Wusch" der Druckluft
-  realShot(w, vol) {
+  realShot(w, vol, dist = 0) {
     const name = SHOT_FILES[w] || SHOT_FILES[0], buf = this.bufs && this.bufs[name], ctx = this.ctx;
     if (!buf) return false;
     const big = w === 7 ? 1 : w >= 4 && w <= 5 ? 0.95 : w === 6 ? 0.8 : w === 3 ? 0.85 : w === 2 ? 0.75 : w === 0 ? 0.55 : 0.35;
@@ -162,6 +166,8 @@ export class Sfx {
     this.sample(w === 4 || w === 5 || w === 7 ? 'mag_in' : 'slide_fwd', SHOT.mech * vol * (w === 1 ? 0.5 : 1), { at: 0.02, rate: 1.2, bus: 'shot' });
     // 4b) Physik: Druckstoß, Gasblase und Kavitation
     this.shotPhysics(w, vol, own);
+    // 4c) Holztür-Schlag: so hört man Schüsse auch von weit weg (tiefe Töne tragen im Wasser weit)
+    this.knock(w, dist, own, big);
     // 5) Plasma-"Dzzzt" (leise darunter) und bei Torpedos das "Wusch"
     this.zap(big, PLASMA.zap * vol * (0.6 + big * 0.4));
     if (w === 4 || w === 5) this.launch(vol);
@@ -171,6 +177,17 @@ export class Sfx {
       gw.linearRampToValueAtTime(1 - SHOT.duck, t + 0.008); gw.setTargetAtTime(1, t + 0.06, 0.09);
     }
     return true;
+  }
+  // Schuss wie ein Faustschlag gegen eine Holztür: echter Holzschlag (CC0, siehe QUELLEN.txt), tiefer gestimmt,
+  // durch die Unterwasser-Kette mit Echo. Große Waffen: zuschlagende Tür, noch tiefer.
+  knock(w, dist, own, big) {
+    const v = own ? KNOCK.own : KNOCK.vol * Math.max(0, 1 - dist / KNOCK.range) ** 1.3;
+    if (v < 0.02) return;
+    const heavy = big >= 0.75, rate = (heavy ? KNOCK.pitchBig : KNOCK.pitchSmall) * (1.1 - big * 0.2);
+    this.sample(heavy ? 'knock_big' : 'knock_small', v, { rate, drive: true });
+    this.cur = this.uw;   // dazu ein tiefer Körper-Schlag, damit es richtig dumpf wird
+    this.tone(120 - big * 45, 45, 0.16 + big * 0.18, 0.9 * v * KNOCK.body, 'sine');
+    this.cur = null;
   }
   // Aufladen vor dem Schuss: ein Brummen, das lauter und höher wird, dazu Zischen (Druck baut sich auf).
   // Große Waffen brummen tiefer. dur = Sekunden bis zum Schuss.
@@ -229,8 +246,8 @@ export class Sfx {
     const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     o.connect(g).connect(this.cur || this.world || this.master); o.start(t); o.stop(t + dur + 0.02);
   }
-  shot(w, vol) {
-    if (this.realShot(w, vol)) return;
+  shot(w, vol, dist = 0) {
+    if (this.realShot(w, vol, dist)) return;
     if (w === 1) { this.noise(0.07, 2600, 2, 0.35 * vol, 'bandpass', 900); this.tone(900, 300, 0.06, 0.12 * vol, 'square'); }
     else if (w === 2) { this.noise(0.22, 900, 0.8, 0.6 * vol, 'lowpass', 200); }
     else if (w === 3) { this.tone(500, 90, 0.25, 0.4 * vol, 'sawtooth'); this.noise(0.18, 1800, 3, 0.3 * vol); }
@@ -244,8 +261,8 @@ export class Sfx {
   //   B) Abschuss: Druckstoß (tiefer Bums), Knall (Ventil), Strahl (Rauschen, das nach oben rast), Nachhall
   //   C) Abschluss: ein tiefes "Bwwww", das ausklingt, und das Ventil klackt zu ("Tschk")
   // big: 0 = kleine Waffe (hell, kurz) … 1 = große Waffe (tief, lang)
-  jet(w, vol) {
-    if (this.realShot(w, vol)) return;
+  jet(w, vol, dist = 0) {
+    if (this.realShot(w, vol, dist)) return;
     const big = w === 6 ? 1 : w === 3 ? 0.9 : w === 2 ? 0.75 : w === 0 ? 0.4 : 0.15;   // Plasmalanze, Harpune, Splitterwerfer, Pistole, Nadler
     const dur = 0.1 + big * 0.12, at = 0.018;                          // at = wann der Abschuss kommt (nach einem ganz kurzen Aufladen)
     // A) Aufladen
