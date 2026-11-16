@@ -168,7 +168,7 @@ hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeSho
 function clearDyn() {
   for (const p of projs.values()) if (p.whine) p.whine.stop();
   sfx.engine(0); sfx.mechLoop(false);
-  dyn.clear(); shocks.length = 0; gfx.shields.clear(); gfx.drones.clear(); gfx.ropes.length = 0; gfx.grapple = null; gfx.sonarUntil = 0; players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
+  dyn.clear(); shocks.length = 0; corpses.length = 0; gfx.shields.clear(); gfx.drones.clear(); gfx.ropes.length = 0; gfx.grapple = null; gfx.sonarUntil = 0; players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
   you = null; zone = null; deadInfo = null; specId = 0; endDeath(); document.getElementById('deathFx').style.opacity = '0';
 }
 function onStart(m) {
@@ -317,7 +317,40 @@ function onGadget(e) {
     }
   }
 }
+// ---------- Getroffener Gegner: sackt zusammen und sinkt ----------
+// Eine Kopie des Tauchers bleibt liegen: er sackt nach vorne, sinkt langsam zum Boden, die Waffe trudelt hinterher,
+// eine dunkle Wolke breitet sich aus. Nach CORPSE.time Sekunden verblasst alles. (Beim Finisher gibt es eine eigene Animation.)
+const CORPSE = { time: 9, sink: 1.4 };
+const corpses = [];
+function spawnCorpse(id) {
+  const pe = players.get(id); if (!pe || id === myId || !pe.mesh) return;
+  const m = makePlayerModel(pe.suit, id, ''), mats = [];
+  m.traverse((o) => { if (o.material) { const b = o.material.opacity; o.material = o.material.clone(); o.material.transparent = true; o.material.userData.baseOp = b; mats.push(o.material); } });
+  m.position.set(pe.x, pe.y, pe.z); dyn.add(m);
+  const gun = pe.weapon >= 0 ? makeWaterGun(pe.weapon) : null;
+  if (gun) { gun.position.set(pe.x + 0.4, pe.y + 0.2, pe.z); dyn.add(gun); }
+  env.ink(pe.x, pe.y + 0.4, pe.z); env.blood(pe.x, pe.y + 0.4, pe.z); env.bubble(pe.x, pe.y + 0.6, pe.z, 25, 0.6, 2);
+  corpses.push({ m, mats, gun, t: 0, yaw: pe.yaw || 0, spin: (Math.random() - 0.5) * 2, tilt: 0 });
+  dyn.remove(pe.mesh); players.delete(id);   // der lebende Taucher verschwindet, die Kopie übernimmt
+}
+function updateCorpses(dt) {
+  for (let i = corpses.length - 1; i >= 0; i--) {
+    const c = corpses[i]; c.t += dt; const k = c.t / CORPSE.time;
+    const ground = W.heightAt(c.m.position.x, c.m.position.z) + 0.35;
+    if (c.m.position.y > ground) c.m.position.y = Math.max(ground, c.m.position.y - dt * CORPSE.sink * Math.min(1, c.t));   // sinkt langsam
+    c.tilt += (1.35 - c.tilt) * Math.min(1, dt * 1.5);                                   // sackt nach vorne zusammen
+    c.m.userData.update(dt, { yaw: c.yaw + Math.sin(c.t * 0.7) * 0.15, pitch: -c.tilt, speed: 0, weapon: -1, surf: false });
+    if (c.gun) {   // Waffe trudelt zum Boden
+      const g = c.gun, gg = W.heightAt(g.position.x, g.position.z) + 0.05;
+      if (g.position.y > gg) { g.position.y -= dt * 2.2; g.rotation.x += dt * c.spin * 2; g.rotation.z += dt * c.spin; } else g.position.y = gg;
+    }
+    const fade = k < 0.75 ? 1 : 1 - (k - 0.75) / 0.25;
+    for (const mt of c.mats) mt.opacity = Math.max(0, fade) * (mt.userData.baseOp ?? 1);
+    if (k >= 1) { dyn.remove(c.m); if (c.gun) dyn.remove(c.gun); corpses.splice(i, 1); }
+  }
+}
 function updateGadgetFx(dt) {
+  updateCorpses(dt);
   for (const [id, s] of gfx.shields) {
     const pe = players.get(id);
     if (!pe || time > s.until) { dyn.remove(s.m); s.m.material.dispose(); gfx.shields.delete(id); continue; }
@@ -378,7 +411,7 @@ function onEvent(e) {
       shake = Math.max(shake, near * 1.4 + far * 0.25);   // Druckstoß: man spürt ihn als Schlag
       break;
     }
-    case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); break; }
+    case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); spawnCorpse(e[3]); break; }
     case 'gad': onGadget(e); break;
     // Stabwaffe: ['melee', Spieler, Waffe, getroffen, x, y, z] – Wusch, bei Treffer ein dumpfer Schlag und Blasen
     case 'melee': {

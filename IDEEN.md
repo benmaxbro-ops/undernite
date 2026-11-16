@@ -6,7 +6,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Als Nächstes (Reihenfolge von Ben)
 
-- [ ] **Getroffener Gegner:** sackt zusammen und sinkt, Waffe fällt langsam zum Boden, dunkle Wolke im Wasser
 
 ## Danach
 
