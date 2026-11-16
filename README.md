@@ -62,7 +62,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Hitze:** Jeder schnelle Schuss heizt die Waffe auf. Während man schießt, passiert nichts. Hört man auf oder lädt nach,
   kommt die Hitze auf einen Schlag raus: Schallwelle mit Wumms, heiße Blasen, Zischen. War es zu viel am Stück (ab einem Drittel
   des Magazins im vollen Tempo), verbrennt man sich DANN: ein ganzes Pistolen-Magazin = 20 Schaden (kein Schild hilft), „Ah!“,
-  ein paar Sekunden benommen, und bei sehr viel Hitze muss man die Waffe 2 Sekunden wegstecken. Wer langsamer schießt, verbrennt sich nicht.
+  ein paar Sekunden benommen, und bei sehr viel Hitze muss man die Waffe 2 Sekunden wegstecken. Wer langsamer schießt, verbrennt sich nicht. Der Goliath sitzt geschützt im Mech und bekommt keinen Hitzeschaden.
   Werte: `HEAT` in `shared.js`.
 - **Unterwasser-Licht:** Wasser schluckt Rot zuerst, dann Grün (Werte in `water.js`). Schwebeteilchen blitzen im Lampenkegel auf.
 - **Sterben:** Das Bild wird dunkel, dann schwarz, dann „Du bist tot“ – zuschauen, schon den nächsten Taucher wählen oder in den Shop (Einkaufen geht nach dem Tod auch während der Runde).

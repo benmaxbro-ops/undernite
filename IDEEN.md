@@ -27,7 +27,7 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 - [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 
 - [ ] **Mech noch viel detaillierter** (außen und innen)
-- [ ] **Mech-Cockpit:** Steuerhebel und Steuereinheiten sichtbar; „keinen Waffenschaden“ (?) – noch bei Ben nachfragen, was gemeint ist
+- [ ] **Mech-Cockpit:** Steuerhebel und Steuereinheiten sichtbar
 - [ ] **Mech wie eine Maschine animiert (auch von außen):** Arm mit Waffe im 90°-Winkel neben dem Körper;
       zum Nachladen kippt die Waffe 90° zur Seite (Magazin nach links), die andere Hand greift rein, Magazin raus und rein – mechanisch, wie ein Roboter
 

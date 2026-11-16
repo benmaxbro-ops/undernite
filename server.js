@@ -424,6 +424,7 @@ function ventHeat(p) {
     // so verteilt, dass ein ganzes Magazin im Dauerfeuer genau HEAT.dmg Schaden macht (mehr als ein Magazin am Stück: bis 30 % mehr)
     const span = Math.max(1, def.mag * 0.8 - s0), hot = Math.min(1, (peak - s0) / span), dmg = HEAT.dmg * Math.min(1.3, (peak - s0) / span);
     if (dmg < 1) continue;   // so wenig, dass es nicht wehtut
+    if (SUITS[p.suit].mech) continue;   // der Goliath sitzt geschützt im Mech: kein Hitzeschaden (die Schallwelle kommt trotzdem)
     ev('burn', p.id, +hot.toFixed(2));   // alle hören das "Ah", der Schütze wird benommen
     damage(p, dmg, null, 'burn');
     if (p.alive && dmg >= HEAT.dmg * HEAT.holsterAt) {   // viel zu heiß: Waffe wegstecken, Strafe
