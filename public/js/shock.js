@@ -10,7 +10,7 @@ import { SHOT_CHARGE, WEAPON_IDS } from './shared.js';
 // size = Größe je Waffe in Metern (Pistole, Nadler, Splitter, Harpune, Torpedo, Bordtorpedo, Plasma, Schall)
 // glow = wie hell (1 = normal, 2 = doppelt), color = Farbe, hot = Farbe bei voller Hitze, streaks = Streifen im Fächer
 // Die Welle kommt beim Hitze-Ablassen: nach ein paar Sekunden Pause (HEAT.pause in shared.js)
-export const SHOCK = { size: [1.1, 0.8, 1.5, 1.9, 2.6, 2.2, 1.5, 3.4], glow: 1.0, color: 0xc8f4ff, hot: 0xffa060, streaks: 70 };
+export const SHOCK = { size: [1.1, 0.8, 1.5, 1.9, 2.6, 2.2, 1.5, 3.4, 1.5, 0.9, 1.8, 2.2], glow: 1.0, color: 0xc8f4ff, hot: 0xffa060, streaks: 70 };
 
 const VERT = `
 varying vec3 vN; varying vec3 vV; varying vec2 vUv; varying float vD;

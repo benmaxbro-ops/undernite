@@ -14,7 +14,7 @@ import { settings, onSettings, openSettings, closeSettings, QUALITY } from './se
 import { setReefQuality } from './reef.js';
 import { makeShock, makeBlast, SHOCK } from './shock.js';
 // so weit hinter der Mündung sitzen die Seitenkiemen je Waffe (Meter) – dort kommt beim Hitze-Ablassen der Druck raus
-const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6];
+const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6, 0.16, 0.24, 0.4, 0.32];
 import { makeLensPass } from './lens.js';
 import { makeMechViewArms, makeCockpit } from './mech.js';
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
@@ -261,7 +261,7 @@ const daze = { t: 0, max: 1, burn: 0 };
 function updateShocks(dt) { for (let i = shocks.length - 1; i >= 0; i--) if (!shocks[i].update(dt)) shocks.splice(i, 1); updateGadgetFx(dt); }
 
 // ---------- Gadgets (Taste Q) – was sie machen, steht in GADGETS (shared.js), wirken tut es am Server ----------
-const gfx = { sonarUntil: 0, stunUntil: 0, grapple: null, drones: new Map(), shields: new Map(), ropes: [] };
+const gfx = { sonarUntil: 0, stunUntil: 0, netUntil: 0, empUntil: 0, grapple: null, drones: new Map(), shields: new Map(), ropes: [] };
 function useGadget() {
   if (!you || !you.alive || !you.gd || you.gd[1] > 0) { if (you && you.gd && you.gd[1] > 0) hud.banner(`${GADGETS[you.gd[0]].name} lädt noch ${Math.ceil(you.gd[1])} s`, 1); return; }
   send({ t: 'gad', d: dirFrom(camYaw, camPitch).map(v => +v.toFixed(3)) });
@@ -376,6 +376,14 @@ function onEvent(e) {
     }
     case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); break; }
     case 'gad': onGadget(e); break;
+    // Treffer mit Netz oder Magnet sieht man auch bei anderen: Netz = Blasenwolke, Magnet = violette Blitze
+    case 'net': { const pe = players.get(e[1]); if (pe) env.bubble(pe.x, pe.y, pe.z, 16, 0.8, 0.5); break; }
+    case 'emp': {
+      const pe = players.get(e[1]); if (!pe) break;
+      for (let i = 0; i < 5; i++) { const a = Math.random() * 6.28, r = 1 + Math.random() * 1.5; addBeam(pe.x, pe.y + 0.6, pe.z, pe.x + Math.cos(a) * r, pe.y + 0.6 + (Math.random() - 0.5) * 2, pe.z + Math.sin(a) * r, 0.025); }
+      sfx.zap(0.8, 0.6 * (e[1] === myId ? 1 : volAt(pe.x, pe.y, pe.z)));
+      break;
+    }
     case 'deflect': { const s = gfx.shields.get(e[1]); if (s) s.hit = 1; const pe = players.get(e[1]); if (pe) sfx.tone(1800, 900, 0.08, 0.3 * (e[1] === myId ? 1 : volAt(pe.x, pe.y, pe.z)), 'triangle'); break; }   // Schuss prallt am Schild ab
     // Hitze: ['burn', Spieler, wie heiß 0…1] – er hat sich an der überhitzten Waffe verbrannt
     case 'burn': {
@@ -473,6 +481,11 @@ function onPrivate(e) {
     case 'warn': hud.banner(e[1], 2.5); break;
     case 'grab': hud.banner('Ein Oktopus hat dich gepackt – F hämmern!', 3); break;
     case 'shock': shockUntil = time + 0.8; hud.shock(); sfx.shock(); break;
+    // vom Netz getroffen: e[1] Sekunden langsam, kein Schub
+    case 'net': gfx.netUntil = time + e[1]; hud.banner('Im Netz! Du bist langsam …', 1.5); sfx.noise(0.4, 900, 1, 0.4, 'lowpass', 300); break;
+    // Magnet-Treffer: e[1] Sekunden kann man sich nicht bewegen und nicht schießen (im Mech: Schaltkreise überlastet)
+    case 'emp': gfx.empUntil = time + e[1]; gfx.stunUntil = performance.now() + e[1] * 1000; chargeShot = null;
+      hud.banner(SUITS[mySuit].mech ? 'Magnet-Treffer! Schaltkreise überlastet …' : 'Magnet-Treffer!', Math.min(2.5, e[1])); hud.shock(); sfx.zap(1, 0.9); break;
     case 'got': sfx.pickup(); hud.feed(e[1] === 'w' ? `Aufgenommen: <b style="color:${RARITY[e[3]].color}">${WEAPONS[e[2]].name}</b> · ${RARITY[e[3]].name}` : e[1] === 'med' ? 'Reparaturkit: <b>+50 Leben</b>' : 'Schildzelle: <b>+50 Schild</b>', true); break;
     case 'dead': held = -1; deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop(); break;
     case 'spawn': torch.on = false; torch.bat = LAMPS[torch.lvl].battery; me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
@@ -612,6 +625,8 @@ function controlMe(dt) {
   else { me.energy = Math.min(100, me.energy + 13 * dt); if (me.energy > 20) me.exhaust = false; }
   if (you.grab) speed *= 0.3;
   if (time < shockUntil) speed *= 0.5;
+  if (time < (gfx.netUntil || 0)) { speed *= 0.35; me.boost = false; }   // im Netz
+  if (time < (gfx.empUntil || 0)) speed = 0;                           // Magnet-Treffer: lahm
   const k = Math.min(1, accel * dt);
   me.vx += (wx * speed - me.vx) * k; me.vy += (wy * speed - me.vy) * k; me.vz += (wz * speed - me.vz) * k;
   me.x += me.vx * dt; me.y += me.vy * dt; me.z += me.vz * dt;

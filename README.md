@@ -48,7 +48,8 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Ausrüstung (⚙ auf jeder Taucher-Karte):** Startwaffe wählen (Standard oder gekaufte: Nadler, Splitterwerfer, Harpune, Torpedowerfer) und Gadget mitnehmen oder ablegen – pro Taucher gespeichert.
 - **Waffen-Aufsätze (im Ausrüstungs-Fenster, für die Startwaffe):** Leuchtpunkt-Visier, Zielfernrohr 4×, großes Magazin, Trommelmagazin,
   Kompensator, Würgebohrung, Laservisier, Druck-Verstärker – je nach Waffe, einer pro Platz. Werte: `ATTACHMENTS` in `shared.js`.
-- **Waffen:** Bolzenpistole, Nadler, Splitterwerfer, Harpune, Torpedowerfer – jeweils in vier Seltenheitsstufen.
+- **Waffen:** Bolzenpistole, Nadler, Splitterwerfer, Harpune, Torpedowerfer, Bolzen-Revolver, Stachel-MG, Netzwerfer (macht langsam),
+  Magnet-Gewehr (legt einen Mech 3,5 s lahm) – jeweils in vier Seltenheitsstufen.
 - **Fahrzeuge:** U-Scooter (schnell, Fahrer ungeschützt) und Mini-U-Boot (450 Rumpfpunkte, Bordtorpedos).
 - **Raubtiere:** Haie wittern Verletzte aus großer Entfernung und greifen im Vorbeischwimmen an,
   Oktopusse lauern an Wrack, Ruinen und Riffen, packen zu und vernebeln die Sicht, Quallenschwärme

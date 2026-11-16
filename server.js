@@ -59,7 +59,7 @@ const PHASES = [
   { wait: 30, shrink: 25, r: 70, dps: 5 }, { wait: 25, shrink: 20, r: 32, dps: 7 },
   { wait: 20, shrink: 20, r: 10, dps: 10 }, { wait: 10, shrink: 15, r: 0, dps: 14 },
 ];
-const LOOT_W = [['needler', 30], ['scatter', 22], ['harpoon', 22], ['torpedo', 12], ['pistol', 14]];
+const LOOT_W = [['needler', 30], ['scatter', 22], ['harpoon', 22], ['torpedo', 12], ['pistol', 14], ['revolver', 8], ['spikemg', 8], ['netgun', 6], ['magrifle', 5]];
 const W_SCORE = { pistol: 1, needler: 2.2, scatter: 2.0, harpoon: 2.2, torpedo: 2.6 };
 const W_PREF = { pistol: 16, needler: 18, scatter: 8, harpoon: 30, torpedo: 24 };
 
@@ -428,6 +428,22 @@ function ventHeat(p) {
     }
   }
 }
+// ---------- Besondere Treffer der neuen Waffen ----------
+// Netz: langsam (net Sekunden). Magnet-Gewehr: ein Mech ist emp Sekunden komplett lahm (Schaltkreise überlastet),
+// ein normaler Taucher nur ganz kurz, weil er kaum Elektronik hat.
+function hitEffects(q, def) {
+  if (def.net) {
+    q.shockT = Math.max(q.shockT, G.time + def.net);
+    if (q.bot) q.reactT = Math.max(q.reactT, 0.6); else q.ye.push(['net', def.net]);
+    ev('net', q.id, def.net);
+  }
+  if (def.emp) {
+    const t = SUITS[q.suit].mech ? def.emp : 0.5;
+    q.stunT = Math.max(q.stunT || 0, G.time + t); q.empT = Math.max(q.empT || 0, G.time + t);
+    if (q.bot) q.reactT = Math.max(q.reactT, t); else q.ye.push(['emp', t]);
+    ev('emp', q.id, t);
+  }
+}
 // ---------- Gadgets (Battle Royale, Taste Q) – Werte in GADGETS (shared.js) ----------
 // Punkt, auf den man zielt: bis range Meter weit, oder früher, wenn Fels/Riff im Weg ist (hit = true)
 function aimPoint(p, d, range) {
@@ -553,7 +569,7 @@ function moveProj(pr, dt) {
     if (pr.splash) explode(pr, hx, hy, hz);
     else {
       ev('hit', pr.id, r2(hx), r2(hy), r2(hz), kind);
-      if (kind === 1) damage(hit, pr.dmg, owner, 'p', pr.x, pr.z);
+      if (kind === 1) { damage(hit, pr.dmg, owner, 'p', pr.x, pr.z); if (hit.alive) hitEffects(hit, WEAPONS[pr.wid]); }
       else if (kind === 2) { const d = hit.driver && G.players.get(hit.driver); if (d) damage(d, pr.dmg, owner, 'p', pr.x, pr.z); else damageVehicle(hit, pr.dmg, owner); }
       else if (kind === 3) damageCreature(hit, pr.dmg, owner);
     }
@@ -825,7 +841,7 @@ function botStep(b, dt) {
   const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
   if (d > 1) { dx /= d; dy /= d; dz /= d; } else { dx = dy = dz = 0; }
   if (b.y < W.heightAt(b.x, b.z) + S.r + 1.5) dy += 0.7;
-  const sp = S.speed * (b.mode === 'zone' ? S.boost * 0.9 : 1) * (b.grabbed ? 0.3 : 1) * (G.time < b.shockT ? 0.5 : 1);
+  const sp = S.speed * (b.mode === 'zone' ? S.boost * 0.9 : 1) * (b.grabbed ? 0.3 : 1) * (G.time < b.shockT ? 0.5 : 1) * (G.time < (b.empT || 0) ? 0 : 1);   // Magnet-Treffer: komplett lahm
   b.boost = b.mode === 'zone';
   const k = Math.min(1, 4 * dt);
   b.vx += (dx * sp - b.vx) * k; b.vy += (dy * sp - b.vy) * k; b.vz += (dz * sp - b.vz) * k;

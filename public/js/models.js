@@ -278,10 +278,11 @@ export function makePickup(kind, wid, rar) {
 }
 
 // ---------- projectiles ----------
-const PGEO = [zCapsule(0.05, 0.5, 5), zCapsule(0.035, 0.7, 5), new THREE.SphereGeometry(0.08, 6, 5), zCyl(0.03, 0.03, 1.6, 5), zCapsule(0.16, 0.8, 8), zCapsule(0.2, 1.0, 8), zCapsule(0.07, 1.1, 6), new THREE.TorusGeometry(0.35, 0.06, 6, 16)];
+const PGEO = [zCapsule(0.05, 0.5, 5), zCapsule(0.035, 0.7, 5), new THREE.SphereGeometry(0.08, 6, 5), zCyl(0.03, 0.03, 1.6, 5), zCapsule(0.16, 0.8, 8), zCapsule(0.2, 1.0, 8), zCapsule(0.07, 1.1, 6), new THREE.TorusGeometry(0.35, 0.06, 6, 16),
+  zCapsule(0.06, 0.5, 5), zCapsule(0.025, 0.45, 4), new THREE.IcosahedronGeometry(0.35, 1), zCapsule(0.06, 0.9, 6)];   // Revolver, Stachel-MG, Netz, Magnet
 // Alle Waffen schießen komprimiertes Wasser: jede Waffe hat ihr eigenes Blau (hell = klein, dunkel/kräftig = groß).
-//               Pistole   Nadler    Splitter  Harpune   Torpedo   Bordtorp. Plasma    Schall
-const SHOT_COL = [0x9fe4ff, 0x6fd6ff, 0xbff0ff, 0xe8f8ff, 0x2f8cff, 0x2f8cff, 0x4dc3ff, 0x1f6bff];
+//               Pistole   Nadler    Splitter  Harpune   Torpedo   Bordtorp. Plasma    Schall    Revolver  Stachel   Netz      Magnet
+const SHOT_COL = [0x9fe4ff, 0x6fd6ff, 0xbff0ff, 0xe8f8ff, 0x2f8cff, 0x2f8cff, 0x4dc3ff, 0x1f6bff, 0xcfefff, 0x8fe0ff, 0xd8ffe0, 0xc28bff];
 const PMAT = SHOT_COL.map(c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 }));
 export function makeProjectile(widx) { return new THREE.Mesh(PGEO[widx] || PGEO[0], PMAT[widx] || PMAT[0]); }
 
@@ -298,6 +299,10 @@ const GUNS = [
   /* 5 Bordtorpedo    */ { kind: 'tube',   L: 0.75, R: 0.075, gills: 5 },
   /* 6 Plasmalanze    */ { kind: 'rifle',  L: 0.4,  H: 0.065, W: 0.05,  barrel: 0.3,  br: 0.016, gills: 4, stock: 'full', scope: true, magK: 1.15 },
   /* 7 Schallkanone   */ { kind: 'tube',   L: 0.85, R: 0.095, gills: 6, dish: true },
+  /* 8 Bolzen-Revolver*/ { kind: 'pistol', L: 0.24, H: 0.04,  W: 0.034, barrel: 0.03, br: 0.011, gills: 3, drum: true },
+  /* 9 Stachel-MG     */ { kind: 'rifle',  L: 0.36, H: 0.055, W: 0.045, barrel: 0.26, br: 0.01,  gills: 5, stock: 'full', magK: 1.35, spikes: true },
+  /*10 Netzwerfer     */ { kind: 'tube',   L: 0.6,  R: 0.085, gills: 4, net: true },
+  /*11 Magnet-Gewehr  */ { kind: 'rifle',  L: 0.42, H: 0.06,  W: 0.05,  barrel: 0.38, br: 0.014, gills: 4, stock: 'full', scope: true, magK: 1.0, coil: true },
 ];
 const GUN_WHITE = 0xf2f7fa, GUN_BLUE = 0x2fa8ff;
 const SIGHT_GLOW = 0x6dff8a;   // Farbe der Leuchtpunkte auf Kimme und Korn (grün wie echte Leuchtvisiere)
@@ -586,6 +591,23 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   const fpShift = P.kind === 'tube' ? [0.07, -0.035, -0.32] : [0, 0, 0];
   Object.assign(g.userData, { muzzle, gripTop, gripW, support, fpShift, mag, cock, sightAt, kind: P.kind });
   g.userData.setGills(0); g.userData.setCharge(1);
+  // Besonderheiten der neuen Waffen
+  const mzp = g.userData.muzzle.position;
+  if (P.drum) {   // Revolver: Trommel mit 6 Kammern vor dem Griff
+    const d = add(g, GUN_CYL, metal, 0, P.H * 0.45, -0.06); d.scale.set(0.024, 0.024, 0.05);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; add(g, GUN_CYL, dark, Math.cos(a) * 0.014, P.H * 0.45 + Math.sin(a) * 0.014, -0.034).scale.set(0.005, 0.005, 0.004); }
+  }
+  if (P.spikes) {   // Stachel-MG: Kranz aus Stacheln um die Mündung und ein Kühlmantel
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU, s = add(g, GEO.zcyl, metal, mzp.x + Math.cos(a) * 0.016, mzp.y + Math.sin(a) * 0.016, mzp.z + 0.01); s.scale.set(0.003, 0.003, 0.03); }
+    for (let i = 0; i < 5; i++) add(g, GUN_CYL, dark, mzp.x, mzp.y, mzp.z + 0.05 + i * 0.022).scale.set(0.013, 0.013, 0.008);
+  }
+  if (P.net) {   // Netzwerfer: zusammengefaltetes Netz sichtbar in der Mündung
+    const n = add(g, new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xd8ffe0, wireframe: true }), 0, 0, mzp.z + 0.05); n.scale.setScalar(P.R * 0.6);
+  }
+  if (P.coil) {   // Magnet-Gewehr: violett leuchtende Spulen um den Lauf
+    const coilM = new THREE.MeshStandardMaterial({ color: 0xb46bff, emissive: 0xb46bff, emissiveIntensity: 1.6 });
+    for (let i = 0; i < 6; i++) add(g, GEO.torus, coilM, mzp.x, mzp.y, mzp.z + 0.06 + i * 0.03).scale.setScalar(0.02);
+  }
   if (mods && mods.length) addGunMods(g, mods, metal, dark);
   return g;
 }

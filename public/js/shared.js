@@ -38,7 +38,8 @@ export const SUITS = {
                sense: 60, desc: 'Elektrosinn: spürt Gegner bis 60 m und sieht sie auf der Minikarte. Startet mit der Harpune.' },
 };
 
-export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp', 'plasma', 'sonic'];
+// Neue Waffen immer HINTEN anhängen (der Server schickt die Nummer in dieser Liste)
+export const WEAPON_IDS = ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'subtorp', 'plasma', 'sonic', 'revolver', 'spikemg', 'netgun', 'magrifle'];
 // range = how far (metres) a shot flies before it is gone. The starter pistol has the shortest.
 // hitscan: true = trifft sofort (kein Flug), schießt einen Wasserstrahl. beam = Dicke des Strahls in Metern.
 // scope: true = mit der rechten Maustaste durchs Zielfernrohr schauen (je weniger Leben, desto wackliger).
@@ -52,6 +53,12 @@ export const WEAPONS = {
   // expedition shop only (not in the Battle Royale loot)
   plasma:  { name: 'Plasmalanze',    dmg: 32, rate: 5,   speed: 170, mag: 25, reload: 3.0, spread: 0.006, range: 75, pellets: 1, splash: 0, hitscan: true, beam: 0.11 },
   sonic:   { name: 'Schallkanone',   dmg: 150, rate: 1.1, speed: 120, mag: 4, reload: 3.6, spread: 0.003, range: 110, pellets: 1, splash: 10 },
+  // ----- neue Waffen (Battle Royale: Beute und Ausrüstungs-Fenster) -----
+  // net = so viele Sekunden ist ein Getroffener langsam (Netz), emp = so viele Sekunden ist ein Mech komplett lahm (Taucher: kurz)
+  revolver: { name: 'Bolzen-Revolver', dmg: 42, rate: 1.6, speed: 120, mag: 6,  reload: 2.9, spread: 0.005, range: 30, pellets: 1, splash: 0, hitscan: true, beam: 0.09 },
+  spikemg:  { name: 'Stachel-MG',      dmg: 7,  rate: 13,  speed: 110, mag: 50, reload: 3.6, spread: 0.035, range: 34, pellets: 1, splash: 0, hitscan: true, beam: 0.04 },
+  netgun:   { name: 'Netzwerfer',      dmg: 12, rate: 0.8, speed: 38,  mag: 3,  reload: 3.2, spread: 0.01,  range: 40, pellets: 1, splash: 0, net: 3 },
+  magrifle: { name: 'Magnet-Gewehr',   dmg: 22, rate: 1.0, speed: 150, mag: 4,  reload: 3.4, spread: 0.003, range: 55, pellets: 1, splash: 0, hitscan: true, beam: 0.1, emp: 3.5, scope: true },
 };
 for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
 // Aufladen vor jedem Schuss (Sekunden): erst baut sich der Druck auf (die Kiemen gehen auf), dann geht der Schuss
@@ -67,7 +74,7 @@ for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight 
 //   holster = so viele Sekunden muss man die Waffe wegstecken, wenn der Schaden mindestens holsterAt × dmg war
 export const HEAT = { start: 1 / 3, minStart: 4, cool: 1, dmg: 20, pause: 0.8, daze: 4, holster: 2, holsterAt: 0.7 };
 export const heatStart = (mag) => Math.max(HEAT.minStart, Math.round(mag * HEAT.start));   // ab so viel Hitze (in Schüssen) tut es weh
-export const SHOT_CHARGE = { pistol: 0.1, needler: 0.08, scatter: 0.15, harpoon: 0.3, torpedo: 0.25, subtorp: 0, plasma: 0.08, sonic: 0.3 };
+export const SHOT_CHARGE = { pistol: 0.1, needler: 0.08, scatter: 0.15, harpoon: 0.3, torpedo: 0.25, subtorp: 0, plasma: 0.08, sonic: 0.3, revolver: 0.12, spikemg: 0.03, netgun: 0.2, magrifle: 0.25 };
 // Kompressor im Rucksack: Jede Waffe hat ein Magazin in der Waffe und "spares" Ersatzmagazine im Rucksack.
 // Der Kompressor füllt die Ersatzmagazine nacheinander wieder auf. fill = Sekunden, bis ein leeres Magazin wieder voll ist.
 // Beim Nachladen kommt das alte Magazin zurück in den Rucksack und wird dort wieder gefüllt.
@@ -75,7 +82,7 @@ export const SHOT_CHARGE = { pistol: 0.1, needler: 0.08, scatter: 0.15, harpoon:
 // Man kann also nicht durchgehend ballern, sondern muss mit der Munition haushalten.
 export const COMPRESSOR = {
   spares: 2,
-  fill: { pistol: 16, needler: 15, scatter: 17, harpoon: 15, torpedo: 13, subtorp: 1, plasma: 23, sonic: 17 },
+  fill: { pistol: 16, needler: 15, scatter: 17, harpoon: 15, torpedo: 13, subtorp: 1, plasma: 23, sonic: 17, revolver: 17, spikemg: 18, netgun: 17, magrifle: 18 },
 };
 
 // Finisher (nur Battle Royale): hat ein Gegner höchstens hp × 100 % Leben und ist nah genug (range in Metern),
@@ -124,21 +131,21 @@ export const gadgetOf = (suit) => GADGETS.findIndex(g => g.suit === suit);   // 
 // Wirkung (malgenommen): mag = Magazin, reload = Nachladezeit, spread = Streuung, range = Reichweite, speed = Geschosstempo,
 // recoil = Rückstoß, sway = Wackeln beim Zielen, scope = Zielfernrohr (rechte Maustaste), dmg = Schaden
 export const ATTACHMENTS = [
-  { k: 'dot',   slot: 'Visier',    name: 'Leuchtpunkt-Visier', price: 200, for: ['pistol', 'needler', 'scatter'], sway: 0.6,
+  { k: 'dot',   slot: 'Visier',    name: 'Leuchtpunkt-Visier', price: 200, for: ['pistol', 'needler', 'scatter', 'revolver', 'spikemg'], sway: 0.6,
     desc: 'Grüner Leuchtpunkt statt Kimme und Korn: Zielen wackelt 40 % weniger.' },
-  { k: 'scope', slot: 'Visier',    name: 'Zielfernrohr 4×',    price: 450, for: ['needler', 'scatter'], scope: true, sway: 0.8,
+  { k: 'scope', slot: 'Visier',    name: 'Zielfernrohr 4×',    price: 450, for: ['needler', 'scatter', 'spikemg'], scope: true, sway: 0.8,
     desc: 'Mit der rechten Maustaste durchs Fernrohr zielen – für weite Schüsse.' },
-  { k: 'mag',   slot: 'Magazin',   name: 'Großes Magazin',     price: 300, for: ['pistol', 'needler', 'scatter', 'harpoon'], mag: 1.5, reload: 1.1,
+  { k: 'mag',   slot: 'Magazin',   name: 'Großes Magazin',     price: 300, for: ['pistol', 'needler', 'scatter', 'harpoon', 'revolver', 'spikemg', 'magrifle', 'netgun'], mag: 1.5, reload: 1.1,
     desc: '50 % mehr Schuss pro Magazin, dafür dauert Nachladen 10 % länger.' },
-  { k: 'drum',  slot: 'Magazin',   name: 'Trommelmagazin',     price: 550, for: ['needler'], mag: 2, reload: 1.35,
+  { k: 'drum',  slot: 'Magazin',   name: 'Trommelmagazin',     price: 550, for: ['needler', 'spikemg'], mag: 2, reload: 1.35,
     desc: 'Doppelt so viele Schuss! Nachladen dauert 35 % länger.' },
-  { k: 'comp',  slot: 'Mündung',   name: 'Kompensator',        price: 250, for: ['pistol', 'needler', 'harpoon'], recoil: 0.6, spread: 0.8,
+  { k: 'comp',  slot: 'Mündung',   name: 'Kompensator',        price: 250, for: ['pistol', 'needler', 'harpoon', 'revolver', 'spikemg'], recoil: 0.6, spread: 0.8,
     desc: 'Lenkt den Druck zur Seite ab: 40 % weniger Rückstoß, etwas genauer.' },
   { k: 'choke', slot: 'Mündung',   name: 'Würgebohrung',       price: 300, for: ['scatter'], spread: 0.55, range: 1.2,
     desc: 'Die Splitter bleiben enger zusammen und fliegen weiter.' },
-  { k: 'laser', slot: 'Unterlauf', name: 'Laservisier',        price: 300, for: ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo'], spread: 0.65,
+  { k: 'laser', slot: 'Unterlauf', name: 'Laservisier',        price: 300, for: ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'revolver', 'spikemg', 'netgun', 'magrifle'], spread: 0.65,
     desc: 'Ein roter Laser zeigt, wohin du triffst: 35 % weniger Streuung.' },
-  { k: 'boost', slot: 'Lauf',      name: 'Druck-Verstärker',   price: 400, for: ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo'], range: 1.3, speed: 1.2,
+  { k: 'boost', slot: 'Lauf',      name: 'Druck-Verstärker',   price: 400, for: ['pistol', 'needler', 'scatter', 'harpoon', 'torpedo', 'revolver', 'spikemg', 'netgun', 'magrifle'], range: 1.3, speed: 1.2,
     desc: 'Mehr Druck im Lauf: 30 % mehr Reichweite, schnellere Geschosse.' },
 ];
 // Werte einer Waffe mit ihren Aufsätzen (mods = ['mag', 'laser', …]). Ohne Aufsätze = die normalen Werte.
@@ -164,6 +171,10 @@ export const BR_WEAPONS = [
   { wid: 'scatter', price: 450 },
   { wid: 'harpoon', price: 700 },
   { wid: 'torpedo', price: 1000 },
+  { wid: 'revolver', price: 550 },
+  { wid: 'netgun',   price: 650 },
+  { wid: 'spikemg',  price: 900 },
+  { wid: 'magrifle', price: 1100 },
 ];
 // Bonus in Prozent für einen Spieler (up = { reload: 2, ... }), 0 = nicht gekauft
 export const upBonus = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), l = (up && up[k]) | 0; return u && l > 0 ? u.bonus[Math.min(l, u.bonus.length) - 1] : 0; };
