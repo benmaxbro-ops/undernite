@@ -178,7 +178,7 @@ function clearDyn() {
   you = null; zone = null; deadInfo = null; specId = 0; endDeath(); document.getElementById('deathFx').style.opacity = '0';
 }
 function onStart(m) {
-  mode = m.mode || 'br'; cling = null; daze.t = 0; daze.burn = 0; holsterUntil = 0;
+  mode = m.mode || 'br'; holster.on = false; cling = null; daze.t = 0; daze.burn = 0; holsterUntil = 0;
   ensureWorld(m.seed, mode); clearDyn();
   phase = 'play'; meta.clear(); hud.setMode(mode);
   torch.on = false; torchBeam.visible = false; torch.bat = LAMPS[torch.lvl].battery;   // Akku zurücksetzen (im Battle Royale war er unendlich)
@@ -620,7 +620,8 @@ addEventListener('keydown', (e) => {
   }
   if (mode === 'exp' && e.code === 'KeyQ') { const n = you.x.bagL.length; held = held + 1 < n ? held + 1 : -1; firing = false; return; }
   if (/^Digit[1-3]$/.test(e.code)) held = -1;
-  if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i]) send({ t: 'slot', i }); }
+  if (e.code === 'KeyH' && mode !== 'exp') { setHolster(!holster.on); return; }   // Waffe wegstecken / rausholen
+  if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { const i = +e.code.slice(5) - 1; if (you.w[i]) send({ t: 'slot', i }); if (holster.on) setHolster(false); }
   else if (e.code === 'KeyR') send({ t: 'r' });
   else if (e.code === 'KeyE') send({ t: 'e' });
   else if (e.code === 'KeyF') { send({ t: 'x' }); env.bubble(me.x, me.y, me.z, 4, 1, 2); }
@@ -672,7 +673,7 @@ function toggleCling() {
 // ---------- local player ----------
 function controlMe(dt) {
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
-  let speed = S.speed * UP('swim'), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
+  let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
   if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
   if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
@@ -867,7 +868,17 @@ let aimAt = null;
 // Aufladen: chargeShot merkt sich, welche Waffe gerade Druck aufbaut. Nach chargeEnd geht der Schuss raus,
 // auch wenn man die Maustaste schon losgelassen hat. Waffe gewechselt, Nachladen oder tot → Schuss fällt aus.
 let chargeShot = null, chargeStart = 0, chargeEnd = 0, holsterUntil = 0;
+// Waffe selbst wegstecken (Taste H): Hände frei, 8 % schneller schwimmen. Rausholen dauert HOLSTER.draw Sekunden.
+const HOLSTER = { draw: 0.45, speed: 1.08 };
+const holster = { on: false, readyAt: 0 };
+function setHolster(on) {
+  if (on === holster.on) return;
+  holster.on = on; chargeShot = null;
+  if (on) { firing = false; sfx.stow(); } else { holster.readyAt = performance.now() + HOLSTER.draw * 1000; sfx.cockBack(); }
+}
 function tryFire(now) {
+  if (holster.on) { if (firing) { setHolster(false); firing = false; } return; }   // Klick holt die Waffe raus (schießt noch nicht)
+  if (now < holster.readyAt) return;
   if (now < holsterUntil || now < gfx.stunUntil) return;   // Waffe weggesteckt (zu heiß) oder gelähmt
   if (chargeShot) {
     if (now < chargeEnd) return;
@@ -1074,8 +1085,8 @@ function updateViewModel(dt) {
   view.charge = def ? (reloading ? Math.max(0, done - RELOAD_STEPS.insert) / (1 - RELOAD_STEPS.insert) : w[2] / def.mag) : 0;
   // Brustschwimmen: in der Ego-Sicht, beim Schwimmen ohne zu schießen/zielen/nachladen → Waffe runter, Arme ziehen
   const spd = Math.hypot(me.vx, me.vy, me.vz), mechNow = !!SUITS[mySuit].mech;
-  const wantSwim = fpOn && !!(you && you.alive) && !you.veh && !mechNow && held < 0 && !firing && aim < 0.1 && !(you.rl > 0) && !chargeShot && !cling
-    && spd > SWIM.minSpeed && performance.now() - (view.lastShotT || 0) > 700;
+  const wantSwim = fpOn && !!(you && you.alive) && !you.veh && !mechNow && held < 0 && !cling
+    && ((!firing && aim < 0.1 && !(you.rl > 0) && !chargeShot && spd > SWIM.minSpeed && performance.now() - (view.lastShotT || 0) > 700) || holster.on);   // weggesteckt: Hände immer frei
   view.swim += ((wantSwim ? 1 : 0) - view.swim) * Math.min(1, dt * (wantSwim ? SWIM.blendIn : SWIM.blendOut));
   if (!view.swimArms || view.swimSuit !== mySuit) { if (view.swimArms) camera.remove(view.swimArms); view.swimArms = makeSwimArms(mySuit); view.swimSuit = mySuit; camera.add(view.swimArms); }
   view.swimArms.visible = view.swim > 0.02 && fpOn;
@@ -1097,7 +1108,7 @@ function updateViewModel(dt) {
     sfx.mechServo(Math.min(1, Math.abs(view.inX) * 25));
   }
   // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
-  view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil && view.swim < 0.9;   // Fernrohr oder weggesteckt: keine Waffe
+  view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil && view.swim < 0.9 && !holster.on;   // Fernrohr oder weggesteckt: keine Waffe
   if (!view.g.visible) return;
   const widx = WEAPON_IDS.indexOf(w[0]);
   const modKey = (w[4] || []).join(",");

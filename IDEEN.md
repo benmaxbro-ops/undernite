@@ -17,7 +17,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 - [ ] **Rückstoß wie im Video:** Waffe und Kamera reißen zusammen hoch, aber das Wasser bremst. Gasblase statt Patronenhülse.
       (Nachschwingen ist schon drin)
 - [ ] **Flüssiger schwimmen:** weniger stockig und eckig, weichere Bewegungen
-- [ ] **Waffe selbst wegstecken** per Taste (bisher nur zwangsweise bei Überhitzung)
 - [ ] **Arme und Hände weniger klobig** (nicht so zylindermäßig), Vorbild Call of Duty
 - [ ] **Grafik noch realistischer:** Tiefenschärfe + Bewegungsunschärfe, bessere Oberflächen, bessere Taucher-Modelle
 - [ ] **Verbesserungen im Shop:** Waffe schneller ziehen, mehr Leben
