@@ -39,7 +39,7 @@ export const bubblePeriod = (W, depth) => 2.11 * Math.cbrt(W) / Math.pow(Math.ma
 const CHARGE = [0.004, 0.003, 0.008, 0.01, 0.03, 0.03, 0.006, 0.015];
 // Schuss-Aufnahme je Waffe (Reihenfolge wie WEAPON_IDS)
 const SHOT_FILES = ['shot_pistol', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic'];
-const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd', 'knock_small', 'knock_big'];
+const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd', 'knock_small', 'knock_big', 'burn_ah1', 'burn_ah2'];
 export class Sfx {
   constructor() { this.ctx = null; this.depth = 30; this.vol = 0.8; }
   // Lautstärke aus den Einstellungen (0 … 1)
@@ -188,6 +188,31 @@ export class Sfx {
     this.cur = this.uw;   // dazu ein tiefer Körper-Schlag, damit es richtig dumpf wird
     this.tone(120 - big * 45, 45, 0.16 + big * 0.18, 0.9 * v * KNOCK.body, 'sine');
     this.cur = null;
+  }
+  // ---------- Hitze ----------
+  // "Ah!" – verbrannt an der überhitzten Waffe (echte Aufnahme, CC0). Eigener Schrei klingt näher (im Helm), fremde dumpf.
+  ah(vol = 1) {
+    if (vol < 0.03) return;
+    this.sample(Math.random() < 0.5 ? 'burn_ah1' : 'burn_ah2', 1.3 * vol, { rate: 1.1 + Math.random() * 0.12, bus: vol > 0.95 ? 'shot' : '' });
+  }
+  // Hitze ablassen: heißes Zischen, das langsam leiser wird, dazu viele aufsteigende Blasen. heat 0…1 = wie lange und laut
+  hiss(vol = 1, heat = 0.5) {
+    if (vol < 0.03) return;
+    const dur = 0.5 + heat * 1.1;
+    this.cur = vol > 0.95 ? this.uwShot : this.uw;
+    this.noise(dur, 5200, 0.8, 0.5 * vol, 'highpass', 2600);                   // Zischen
+    this.noise(dur * 0.8, 1800, 1.2, 0.35 * vol, 'bandpass', 700);             // Brodeln darunter
+    this.tone(90, 40, 0.25, 0.6 * vol, 'sine');                                // dumpfes "Wumpf" beim Ablassen
+    for (let i = 0; i < 6 + heat * 14; i++) { const at = Math.random() * dur, p = 160 + Math.random() * 300; this.tone(p, p * 2.2, 0.05, 0.1 * vol, 'sine', at); }   // Blasen
+    this.cur = null;
+  }
+  // Ohrenpfeifen, wenn man benommen ist: hoher, leiser Ton, der langsam verschwindet (im Kopf, nicht unter Wasser)
+  tinnitus(sec = 1) {
+    const ctx = this.ctx; if (!ctx) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.value = 3600 + Math.random() * 600;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.045, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3 + sec * 2.5);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.4 + sec * 2.5);
   }
   // Aufladen vor dem Schuss: ein Brummen, das lauter und höher wird, dazu Zischen (Druck baut sich auf).
   // Große Waffen brummen tiefer. dur = Sekunden bis zum Schuss.

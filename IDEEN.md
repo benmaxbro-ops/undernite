@@ -51,7 +51,10 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [ ] **Finisher** sauberer (Manta sieht komisch aus; beim Goliath geht der Mech kaputt)
 - [ ] **Schüsse von anderen**: dumpfer Schlag wie gegen eine Holztür, großes Kaliber dumpfer
 - [ ] **Nadler**: längere Lade-/Schockwellen-Zeit
-- [x] **Sichtbare Schockwelle** aus Mündung und Seitenkiemen bei jedem Schuss (shock.js)
+- [x] **Sichtbare Schockwelle** aus Mündung und Seitenkiemen (shock.js) – kommt jetzt beim Hitze-Ablassen
+- [x] **Hitze-System:** zu viel am Stück schießen → verbrennen, „Ah!“, benommen; nach Pause Hitze ablassen
+- [x] **Schüsse wie Schlag gegen Holztür** (echte CC0-Aufnahme, tiefer, mit Wasser-Echo, weit hörbar)
+- [x] **Bodycam-Linse** (lens.js)
 - [ ] **Kimme und Korn leuchten** (wie Leuchtvisiere)
 - [ ] **Schuss-Richtungsanzeige:** kleiner Ring in der Mitte, ein Pfeil zeigt, woher geschossen wird
 - [ ] **Grafik so realistisch wie möglich:** 1. Bodycam-Linse, 2. Unterwasser-Licht (Farben verschwinden mit der Tiefe,

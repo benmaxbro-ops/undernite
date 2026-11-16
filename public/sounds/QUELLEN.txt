@@ -27,3 +27,8 @@ Holztür-Schlag – "100 CC0 metal and wood SFX" (rubberduck, CC0)
 https://opengameart.org/content/100-cc0-metal-and-wood-sfx
   knock_small.wav   (wood_hit_08.ogg)    dumpfer Holzschlag, für kleine Waffen
   knock_big.wav     (wood_close_01.ogg)  zuschlagende Tür, für große Waffen
+
+Verbrennen ("Ah!") – "Pain sounds" (emopreben, CC0)
+https://opengameart.org/content/pain-sounds-by-emopreben
+  burn_ah1.wav   (Painsounds v2 - Track 1 - Arrrch.ogg)
+  burn_ah2.wav   (Painsounds v2 - Track 4 - Arrggh .ogg)

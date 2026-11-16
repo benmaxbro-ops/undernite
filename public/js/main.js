@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT } from './shared.js';
 // gekaufte Verbesserungen aus dem Perlen-Shop (kommen mit der Lobby-Nachricht). Wirken nur im Battle Royale.
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
@@ -152,7 +152,7 @@ function clearDyn() {
   you = null; zone = null; deadInfo = null; specId = 0;
 }
 function onStart(m) {
-  mode = m.mode || 'br'; cling = null;
+  mode = m.mode || 'br'; cling = null; daze.t = 0; daze.burn = 0;
   ensureWorld(m.seed, mode); clearDyn();
   phase = 'play'; meta.clear(); hud.setMode(mode);
   torch.on = false; torchBeam.visible = false; torch.bat = LAMPS[torch.lvl].battery;   // Akku zurücksetzen (im Battle Royale war er unendlich)
@@ -235,11 +235,13 @@ function addBeam(x0, y0, z0, x1, y1, z1, r) {
 }
 // ---------- Schockwelle bei jedem Schuss (Aussehen und Größe: siehe shock.js) ----------
 const shocks = [];
-function addShock(x, y, z, dx, dy, dz, widx, mine) {
-  const s = makeShock(dyn, x, y, z, dx, dy, dz, widx, mine); if (!s) return;
+// scale = größer bei mehr Hitze, heat = 0…1 (färbt die Welle warm)
+function addShock(x, y, z, dx, dy, dz, widx, mine, scale = 1, heat = 0) {
+  const s = makeShock(dyn, x, y, z, dx, dy, dz, widx, mine, scale, heat); if (!s) return;
   shocks.push(s);
-  env.bubble(x, y, z, 5 + Math.round((SHOCK.size[widx] ?? 1) * 5), 0.15 * (SHOCK.size[widx] ?? 1), 1.5);   // Blasenwolke an der Mündung
 }
+// Benommen nach dem Verbrennen: t = Sekunden übrig, max = Anfangswert, burn = roter Hitzeblitz am Rand (0…1)
+const daze = { t: 0, max: 1, burn: 0 };
 function updateShocks(dt) { for (let i = shocks.length - 1; i >= 0; i--) if (!shocks[i].update(dt)) shocks.splice(i, 1); }
 function onEvent(e) {
   switch (e[0]) {
@@ -252,7 +254,6 @@ function onEvent(e) {
         whine: widx === 4 || widx === 5 ? sfx.torpedoWhine() : null });   // Torpedos: hohes, sirrendes Heulen
       if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) {
         sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]), distTo(e[4], e[5], e[6]));
-        addShock(e[4], e[5], e[6], e[7], e[8], e[9], widx, e[3] === myId);   // sichtbare Schockwelle
       }
       projs.lastShot = time;
       if (e[3] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
@@ -269,7 +270,6 @@ function onEvent(e) {
       // Splitterwerfer schießt 7 Strahlen gleichzeitig – das Geräusch nur einmal abspielen
       if (beams.lastShot !== time) {
         sfx.jet(widx, e[2] === myId ? 1 : volAt(e[3], e[4], e[5]), distTo(e[3], e[4], e[5]));
-        addShock(e[3], e[4], e[5], e[6] - e[3], e[7] - e[4], e[8] - e[5], widx, e[2] === myId);   // sichtbare Schockwelle
       }
       beams.lastShot = time;
       if (e[2] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
@@ -286,6 +286,24 @@ function onEvent(e) {
       break;
     }
     case 'kill': { const mine = e[3] === myId || e[4] === myId; hud.feed(`<b>${esc(e[1])}</b> ▸ <i>${esc(e[2])}</i>`, mine); break; }
+    // Hitze: ['burn', Spieler, wie heiß 0…1] – er hat sich an der überhitzten Waffe verbrannt
+    case 'burn': {
+      const pe = players.get(e[1]); if (!pe) break;
+      const now = performance.now(); if (now - (pe.ahT || 0) > 700) { pe.ahT = now; sfx.ah(e[1] === myId ? 1 : volAt(pe.x, pe.y, pe.z)); }   // "Ah!" (nicht bei jedem Schuss)
+      if (e[1] === myId) { daze.t = Math.max(daze.t, HEAT.daze * (0.35 + 0.65 * e[2])); daze.max = Math.max(daze.t, 0.1); daze.burn = 1; sfx.tinnitus(0.4 + e[2]); }
+      env.bubble(pe.x, pe.y + 0.5, pe.z, 3, 0.3, 1.5);
+      break;
+    }
+    // Hitze ablassen: ['vent', Spieler, Waffe, wie viel Hitze 0…1, hält er sie gerade] – Schockwelle, heiße Blasen, Zischen
+    case 'vent': {
+      const pe = players.get(e[1]); if (!pe) break;
+      const mz = e[4] ? muzzleOf(e[1]) : null, P = mz ? mz.clone() : new THREE.Vector3(pe.x, pe.y + 0.3, pe.z);
+      const d = e[1] === myId ? aimDir() : dirFrom(pe.yaw || 0, pe.pitch || 0);
+      addShock(P.x, P.y, P.z, d[0], d[1], d[2], e[2], e[1] === myId, 0.6 + e[3] * 1.1, e[3]);
+      env.bubble(P.x, P.y, P.z, 8 + Math.round(e[3] * 40), 0.25 + e[3] * 0.5, 2.5);   // heiße Blasen steigen auf
+      sfx.hiss(e[1] === myId ? 1 : volAt(P.x, P.y, P.z), e[3]);
+      break;
+    }
     case 'pk+': addPickup(e.slice(1)); break;
     case 'pk-': { const p = pickups.get(e[1]); if (p) { dyn.remove(p.mesh); pickups.delete(e[1]); } break; }
     case 'crate': { const c = crates[e[1]]; if (c) { c.userData.open(); env.bubble(c.position.x, c.position.y + 1, c.position.z, 14, 1, 1); if (volAt(c.position.x, c.position.y, c.position.z) > 0.3) sfx.crate(); } break; }
@@ -769,7 +787,11 @@ function updateScope(dt) {
   const lifeLeft = you && you.mhp ? Math.max(0, Math.min(1, you.hp / you.mhp)) : 1;
   const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * aim * (isScope ? 1 : 0.45) * UP('scope') * (cling ? CLING.sway : 1);   // über Kimme und Korn wackelt es weniger; Ruhiges Visier
   swayT += dt;
-  const nx = (Math.sin(swayT * 0.9) + Math.sin(swayT * 2.3 + 1) * 0.45) * amp, ny = (Math.cos(swayT * 1.1) + Math.sin(swayT * 2.9) * 0.4) * amp;
+  // benommen (verbrannt): das Bild schwankt langsam, auch ohne zu zielen, und Zielen wackelt viel mehr
+  daze.t = Math.max(0, daze.t - dt); daze.burn = Math.max(0, daze.burn - dt * 1.2);
+  const dz = daze.t > 0 ? Math.min(1, daze.t / daze.max * 1.4) : 0;
+  const amp2 = amp * (1 + dz * 3), dw = dz * 0.035;
+  const nx = (Math.sin(swayT * 0.9) + Math.sin(swayT * 2.3 + 1) * 0.45) * amp2 + Math.sin(swayT * 1.7) * dw, ny = (Math.cos(swayT * 1.1) + Math.sin(swayT * 2.9) * 0.4) * amp2 + Math.cos(swayT * 1.3) * dw * 0.7;
   camYaw += nx - swayX; camPitch += ny - swayY; swayX = nx; swayY = ny;
 }
 // Rückstoß: die Kamera springt beim Schuss nach oben (und etwas zur Seite) und federt dann zum Großteil zurück.
@@ -964,7 +986,7 @@ function frame(now) {
     if (mode !== 'exp' && you) updateTorch(dt, SURFACE - fx.y + DEEP.brOffset);
   } else lobbyCamera();
   if (env) env.update(dt, time, camera, phase === 'play' ? zone : null, outside);
-  if (post.on) { if (post.lens.enabled) post.lens.tick(time, camera.aspect); post.composer.render(); } else renderer.render(scene, camera);
+  if (post.on) { if (post.lens.enabled) post.lens.tick(time, camera.aspect, daze.t > 0 ? Math.min(1, daze.t / daze.max * 1.4) : 0, daze.burn); post.composer.render(); } else renderer.render(scene, camera);
   // FPS-Anzeige (Bilder pro Sekunde), zweimal pro Sekunde aktualisiert
   if (settings.fps) { fpsN++; fpsT += dt; if (fpsT >= 0.5) { document.getElementById('fpsBox').textContent = Math.round(fpsN / fpsT) + ' FPS'; fpsN = 0; fpsT = 0; } }
   requestAnimationFrame(frame);

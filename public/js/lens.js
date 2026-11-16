@@ -13,10 +13,11 @@ const LensShader = {
   uniforms: {
     tDiffuse: { value: null }, uTime: { value: 0 }, uAspect: { value: 16 / 9 },
     uDistort: { value: LENS.distort }, uChroma: { value: LENS.chroma }, uVig: { value: LENS.vignette }, uGrain: { value: LENS.grain }, uGlare: { value: LENS.glare },
+    uDaze: { value: 0 }, uBurn: { value: 0 },   // benommen (Doppelbild, verschwommen) und Hitzeblitz am Rand, je 0…1
   },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float uTime, uAspect, uDistort, uChroma, uVig, uGrain, uGlare; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float uTime, uAspect, uDistort, uChroma, uVig, uGrain, uGlare, uDaze, uBurn; varying vec2 vUv;
     // Fischauge: jeder Bildpunkt holt seine Farbe etwas weiter außen → der Rand wird zusammengedrückt (gewölbt)
     vec2 warp(vec2 uv, float k) {
       vec2 p = uv * 2.0 - 1.0; p.x *= uAspect;
@@ -34,12 +35,20 @@ const LensShader = {
       col.r = texture2D(tDiffuse, warp(vUv, uDistort + ca)).r;
       col.g = texture2D(tDiffuse, warp(vUv, uDistort)).g;
       col.b = texture2D(tDiffuse, warp(vUv, uDistort - ca)).b;
+      // benommen: ein schwankendes Doppelbild und etwas Unschärfe
+      if (uDaze > 0.001) {
+        vec2 o = vec2(sin(uTime * 1.9), cos(uTime * 1.4)) * 0.012 * uDaze;
+        vec3 ghost = texture2D(tDiffuse, warp(vUv + o, uDistort)).rgb + texture2D(tDiffuse, warp(vUv - o * 0.7, uDistort)).rgb;
+        col = mix(col, ghost * 0.5, 0.5 * uDaze);
+      }
       // helle Stellen bluten etwas aus (billiger Kamerasensor)
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       col += col * smoothstep(0.55, 1.0, l) * uGlare;
       // runder dunkler Rand
       float v = smoothstep(1.02, 0.5, r);
       col *= mix(1.0, v, uVig);
+      // verbrannt: kurzer orange-roter Hitzeblitz, der vom Rand hereinkommt
+      col += vec3(1.0, 0.35, 0.08) * smoothstep(0.35, 1.0, r) * uBurn * 0.55;
       // Filmkorn, jedes Bild anders
       float n = hash(vUv * vec2(1920.0, 1080.0) + fract(uTime * 7.31) * 100.0) - 0.5;
       col += n * uGrain * (0.6 + 0.4 * (1.0 - l));
@@ -49,9 +58,9 @@ const LensShader = {
 
 export function makeLensPass() {
   const pass = new ShaderPass(LensShader);
-  pass.tick = (t, aspect) => {
+  pass.tick = (t, aspect, daze = 0, burn = 0) => {
     const u = pass.uniforms;
-    u.uTime.value = t; u.uAspect.value = aspect;
+    u.uTime.value = t; u.uAspect.value = aspect; u.uDaze.value = daze; u.uBurn.value = burn;
     u.uDistort.value = LENS.distort; u.uChroma.value = LENS.chroma; u.uVig.value = LENS.vignette; u.uGrain.value = LENS.grain; u.uGlare.value = LENS.glare;
   };
   return pass;

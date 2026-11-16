@@ -49,6 +49,10 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Welt:** bei jeder Runde neu erzeugt – Graben, Seeberg, Wrack, Ruinen, Kelpwälder und ein leuchtendes Netz aus Riff-Adern
   quer über den Boden (feste Hügel: man kann nicht hindurch, Kugeln auch nicht → Deckung).
 - **Schießen:** Vor jedem Schuss baut sich kurz Druck auf (Pistole 0,1 s, Harpune 0,3 s), dann geht er mit einem Wumms raus.
+  Von weitem klingen Schüsse wie ein dumpfer Schlag gegen eine Holztür.
+- **Hitze:** Wer zu viel am Stück schießt, verbrennt sich (ab einem Drittel des Magazins; ein ganzes Pistolen-Magazin = 20 Schaden,
+  kein Schild hilft) und ist ein paar Sekunden benommen. Nach 2,5 s Pause lässt die Waffe die Hitze ab: Schockwelle, heiße Blasen, Zischen.
+  Werte: `HEAT` in `shared.js`.
 - **Perlen 🦪:** Am Rundenende gibt es 50 pro Kill, 10 pro überlebter Minute und 300 / 150 / 75 für Platz 1–3.
   Sie werden unter deinem Namen gespeichert (`saves/battleroyale.json`), getrennt vom Expeditions-Geld.
 - **Perlen-Shop** (Knopf oben rechts in der Lobby): Verbesserungen mit je 3 Stufen – Schnellladen, Rückstoßdämpfer,

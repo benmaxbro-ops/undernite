@@ -42,6 +42,13 @@ export const WEAPONS = {
 for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
 // Aufladen vor jedem Schuss (Sekunden): erst baut sich der Druck auf (die Kiemen gehen auf), dann geht der Schuss
 // mit einer Druckwelle raus, die genauso lange dauert. Je größer das Kaliber, desto länger. 0 = sofort.
+// Hitze (nur Battle Royale): Jeder Schuss heizt die Waffe auf. Wer zu viel am Stück schießt, verbrennt sich.
+//   start = ab diesem Anteil des Magazins tut es weh (1/3 → Pistole mit 12 Schuss: ab dem 5. Schuss)
+//   dmg   = so viel Schaden insgesamt, wenn man ein ganzes Magazin am Stück leerschießt (Pistole: 12 Schuss → 20 Schaden)
+//   pause = so viele Sekunden ohne Schuss, dann lässt die Waffe die Hitze ab: Schockwelle, heiße Blasen, Zischen
+//   daze  = so viele Sekunden ist man höchstens benommen (verschwommen, schwankend, Ohrenpfeifen)
+export const HEAT = { start: 1 / 3, dmg: 20, pause: 2.5, daze: 4 };
+export const heatStart = (mag) => Math.max(1, Math.round(mag * HEAT.start));   // ab so vielen Schüssen am Stück tut es weh
 export const SHOT_CHARGE = { pistol: 0.1, needler: 0.08, scatter: 0.15, harpoon: 0.3, torpedo: 0.25, subtorp: 0, plasma: 0.08, sonic: 0.3 };
 // Kompressor im Rucksack: Jede Waffe hat ein Magazin in der Waffe und "spares" Ersatzmagazine im Rucksack.
 // Der Kompressor füllt die Ersatzmagazine nacheinander wieder auf. fill = Sekunden, bis ein leeres Magazin wieder voll ist.

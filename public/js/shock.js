@@ -8,8 +8,9 @@ import * as THREE from 'three';
 import { SHOT_CHARGE, WEAPON_IDS } from './shared.js';
 
 // size = Größe je Waffe in Metern (Pistole, Nadler, Splitter, Harpune, Torpedo, Bordtorpedo, Plasma, Schall)
-// glow = wie hell (1 = normal, 2 = doppelt), color = Farbe, streaks = wie viele Streifen im Fächer
-export const SHOCK = { size: [1.1, 0.8, 1.5, 1.9, 2.6, 2.2, 1.5, 3.4], glow: 1.0, color: 0xc8f4ff, streaks: 70 };
+// glow = wie hell (1 = normal, 2 = doppelt), color = Farbe, hot = Farbe bei voller Hitze, streaks = Streifen im Fächer
+// Die Welle kommt beim Hitze-Ablassen: nach ein paar Sekunden Pause (HEAT.pause in shared.js)
+export const SHOCK = { size: [1.1, 0.8, 1.5, 1.9, 2.6, 2.2, 1.5, 3.4], glow: 1.0, color: 0xc8f4ff, hot: 0xffa060, streaks: 70 };
 
 const VERT = `
 varying vec3 vN; varying vec3 vV; varying vec2 vUv; varying float vD;
@@ -41,15 +42,17 @@ const Z = new THREE.Vector3(0, 0, 1), UPV = new THREE.Vector3(0, 1, 0);
 
 // Eine Schockwelle starten. group = wo sie hinkommt (Szene), x/y/z = Mündung, dx/dy/dz = Schussrichtung,
 // mine = eigener Schuss (direkt vor der Kamera etwas schwächer). Gibt ein Objekt zurück, das man mit update(dt) bewegt.
-export function makeShock(group, x, y, z, dx, dy, dz, widx, mine) {
+// scale = größer (bei viel Hitze), heat = 0…1: je heißer, desto wärmer die Farbe (hellblau → orange)
+export function makeShock(group, x, y, z, dx, dy, dz, widx, mine, scale = 1, heat = 0) {
   const dir = new THREE.Vector3(dx, dy, dz); if (dir.lengthSq() < 1e-6) return null; dir.normalize();
-  const size = SHOCK.size[widx] ?? 1, dur = Math.max(0.16, (SHOT_CHARGE[WEAPON_IDS[widx]] || 0.1) * 1.8);
+  const size = (SHOCK.size[widx] ?? 1) * scale, dur = Math.max(0.16, (SHOT_CHARGE[WEAPON_IDS[widx]] || 0.1) * 1.8) * (1 + heat * 1.5);
+  const tint = new THREE.Color(SHOCK.color).lerp(new THREE.Color(SHOCK.hot), heat);
   const side = new THREE.Vector3().crossVectors(dir, UPV); if (side.lengthSq() < 1e-4) side.set(1, 0, 0); side.normalize();
   const P = new THREE.Vector3(x, y, z), qF = new THREE.Quaternion().setFromUnitVectors(Z, dir);
   const op = SHOCK.glow * (mine ? 0.55 : 1);
   const parts = [];
   const add = (geo, fan, quat, move, k = 1) => {
-    const m = new THREE.Mesh(geo, material(fan)); m.quaternion.copy(quat); m.scale.setScalar(0.001); m.position.copy(P);
+    const m = new THREE.Mesh(geo, material(fan)); m.material.uniforms.uColor.value.copy(tint); m.quaternion.copy(quat); m.scale.setScalar(0.001); m.position.copy(P);
     m.frustumCulled = false; group.add(m); parts.push({ m, move, k });
   };
   // Druckblase: platzt nach vorne auf, ist dabei etwas flacher als lang

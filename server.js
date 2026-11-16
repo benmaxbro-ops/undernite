@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -202,11 +202,11 @@ function damage(p, amt, src, how, sx, sz) {
   let a = amt;
   p.hurtT = G.time;   // expedition: pauses health regeneration
   const hadShield = p.shield > 0;
-  if (how !== 'zone' && how !== 'bleed') { const s = Math.min(p.shield, a); p.shield -= s; a -= s; }
+  if (how !== 'zone' && how !== 'bleed' && how !== 'burn') { const s = Math.min(p.shield, a); p.shield -= s; a -= s; }   // gegen Verbrennen hilft kein Schild
   const shieldBroke = hadShield && p.shield <= 0;
   if (shieldBroke && !p.bot) p.ye.push(['shb']);   // dein eigenes Schild ist kaputt
   p.hp -= a;
-  if (!p.bot) p.ye.push(['hurt', Math.round(amt), r2(sx ?? p.x), r2(sz ?? p.z), how === 'zone' || how === 'bleed' ? 1 : 0]);
+  if (!p.bot) p.ye.push(['hurt', Math.round(amt), r2(sx ?? p.x), r2(sz ?? p.z), how === 'zone' || how === 'bleed' || how === 'burn' ? 1 : 0]);
   if (src && src.id && !src.bot && src !== p) src.ye.push(['hm', Math.round(amt), p.hp <= 0 ? 1 : 0, +(Math.max(0, p.hp) / p.maxhp).toFixed(2), shieldBroke ? 1 : 0]);
   if (p.bot && src && src.id && src !== p && src.alive && (!src.bot || G.time >= p.peaceUntil) && (!p.target || rnd() < 0.5)) {
     if (src.bot) p.fightUntil = G.time + 5 + rnd() * 4; p.target = { k: 'p', ref: src }; p.reactT = Math.min(p.reactT, 0.25); }
@@ -244,7 +244,7 @@ function kill(p, src, how) {
   for (const w of p.weapons) if (w && !(w.id === 'pistol' && w.rar === 0))
     addPickup('w', p.x + (rnd() - 0.5) * 2, p.y + rnd(), p.z + (rnd() - 0.5) * 2, w.id, w.rar, w.ammo, w.spare);
   if (rnd() < 0.6) addPickup(rnd() < 0.5 ? 'med' : 'sh', p.x, p.y + 0.5, p.z);
-  const label = { zone: 'Schwarzwasser', shark: 'Hai', octo: 'Oktopus', jelly: 'Qualle', left: 'Verbindung', wreck: 'Explosion', coral: 'Koralle', bleed: 'Verblutet' }[how];
+  const label = { zone: 'Schwarzwasser', shark: 'Hai', octo: 'Oktopus', jelly: 'Qualle', left: 'Verbindung', wreck: 'Explosion', coral: 'Koralle', bleed: 'Verblutet', burn: 'Verbrannt' }[how];
   let by = label || '?';
   if (src && src.id && src !== p) { src.kills++; by = src.name; } else if (src && src.id && src === p) by = 'Eigentor';
   ev('kill', by, p.name, p.id, src && src.id && src !== p ? src.id : 0);
@@ -368,7 +368,25 @@ function fire(p, d, aim) {
   w.ammo--; p.nextFire = G.time + 1 / def.rate;
   const o = S.r + 0.5;
   for (let i = 0; i < def.pellets; i++) spawnProj(p, w.id, p.x + d[0] * o, p.y + d[1] * o, p.z + d[2] * o, d, RARITY[w.rar].mul * S.dmg, 0, aim);
+  if (G.mode !== 'exp') heatUp(p, w, def);
   if (w.ammo === 0) startReload(p);
+}
+// Hitze: jeder Schuss am Stück heizt die Waffe auf. Ab heatStart(mag) Schüssen verbrennt man sich bei jedem weiteren Schuss,
+// bis zu HEAT.dmg Schaden für ein ganzes Magazin. Nach HEAT.pause Sekunden Pause lässt die Waffe die Hitze ab (ventHeat).
+function heatUp(p, w, def) {
+  w.heat = (w.heat || 0) + 1; w.shotT = G.time;
+  const s0 = heatStart(def.mag);
+  if (w.heat <= s0) return;
+  const per = HEAT.dmg / Math.max(1, def.mag - s0), hot = Math.min(1, (w.heat - s0) / Math.max(1, def.mag - s0));
+  ev('burn', p.id, +hot.toFixed(2));   // alle hören das "Ah", der Schütze wird benommen
+  damage(p, per, null, 'burn');
+}
+function ventHeat(p) {
+  for (const w of p.weapons) {
+    if (!w || !w.heat || G.time - w.shotT < HEAT.pause) continue;
+    if (p.alive) ev('vent', p.id, WEAPON_IDS.indexOf(w.id), +Math.min(1, w.heat / WEAPONS[w.id].mag).toFixed(2), w === p.weapons[p.slot] ? 1 : 0);
+    w.heat = 0;
+  }
 }
 function explode(pr, x, y, z) {
   const owner = G.players.get(pr.o);
@@ -725,7 +743,10 @@ function botStep(b, dt) {
       const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
       fire(b, [px / pl + (rnd() + rnd() - 1) * e, py / pl + (rnd() + rnd() - 1) * e, pz / pl + (rnd() + rnd() - 1) * e]);
       b.burst++;
-      if (def.rate > 5 && b.burst >= 6 + rnd() * 6) { b.holdT = G.time + 0.5 + rnd(); b.burst = 0; }
+      // Hitze: an der Schmerzgrenze warten, bis die Waffe abgekühlt ist (manchmal übertreiben sie es aber, wie echte Spieler)
+      if (b.greed == null) b.greed = rnd() < 0.25 ? 1 + Math.floor(rnd() * 2) : 0;
+      if ((w.heat || 0) >= heatStart(def.mag) + b.greed) { b.holdT = G.time + HEAT.pause + 0.2 + rnd() * 0.6; b.burst = 0; b.greed = null; }
+      else if (def.rate > 5 && b.burst >= 6 + rnd() * 6) { b.holdT = G.time + 0.5 + rnd(); b.burst = 0; }
       else b.holdT = G.time + rnd() * 0.15;
     }
   } else {
@@ -1106,6 +1127,7 @@ function tick(dt) {
     }
     if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) finishReload(p); }
     compress(p, dt);
+    ventHeat(p);
     coralCut(p, dt);
     if (p.ink > 0) p.ink -= dt;
     if (dist2d(p, z.x, z.z) > z.r) { p.zoneAcc += dps * dt; if (p.zoneAcc >= 1) { const a = Math.floor(p.zoneAcc); p.zoneAcc -= a; damage(p, a, null, 'zone', z.x, z.z); } }
