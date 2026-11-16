@@ -26,7 +26,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | H | Waffe wegstecken / rausholen (weggesteckt: Hände frei, 8 % schneller) |
 | (Schwimmen) | Bewegungen laufen weich an, beim Loslassen gleitest du aus, beim Seitwärtsschwimmen neigt sich die Kamera leicht (Werte: `FLOW` in `main.js`) |
 | Q | Gadget benutzen (Battle Royale) |
-| 4 | Ulti zünden, wenn die goldene Leiste voll ist (Battle Royale). Sie lädt sich langsam von selbst und schneller, wenn du triffst. Manta: **Matrix** – 5 s Zeitlupe, jede Kugel geht daneben, schneller schwimmen. Werte: `ULTI`/`ULTIS` in `shared.js` |
+| 4 | Ulti zünden, wenn die goldene Leiste voll ist (Battle Royale). Sie lädt sich langsam von selbst und schneller, wenn du triffst. Manta: **Matrix** – 5 s Zeitlupe, jede Kugel geht daneben, schneller schwimmen. Goliath: **Zielcomputer** – 6 s lang zielt die Kamera von selbst auf den nächsten Gegner, den du siehst (schießen musst du selbst). Werte: `ULTI`/`ULTIS` in `shared.js` |
 | C (Triton, Manta) | Battle Royale: am Riff-Hügel festhalten = Deckung (ganz still, ruhigeres Zielen). Abwärts dann mit X |
 | Shift | Schub (verbraucht Energie) |
 | Linksklick | feuern |

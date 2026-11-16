@@ -10,7 +10,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 ## Danach
 
 - [ ] **Ulti für jede Klasse (Taste 4):**
-  - [ ] Goliath: kurz automatisches Zielen (gleich viele Schüsse nötig, nur ohne Zielen)
   - [ ] Triton, Bollwerk und die 4 neuen Taucher: noch ausdenken
 - [ ] **Rückstoß wie im Video:** Waffe und Kamera reißen zusammen hoch, aber das Wasser bremst. Gasblase statt Patronenhülse.
       (Nachschwingen ist schon drin)

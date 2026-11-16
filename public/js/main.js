@@ -285,6 +285,26 @@ function useUlti() {
   if (you.ul[0] < 100) { hud.banner(`${U.name} lädt noch (${you.ul[0]} %)`, 1); return; }
   send({ t: 'ult' });
 }
+// Goliath-Zielcomputer: dreht die Kamera von selbst zum nächsten Gegner, den man sieht.
+// range = so weit (Meter) sucht er, cone = nur Gegner ungefähr vor dir (Winkel), turn = wie schnell er nachzieht
+const AUTOAIM = { range: 70, cone: 1.1, turn: 10 };
+let aimLock = 0;   // Nummer des Gegners, auf den der Computer gerade zielt
+function autoAim(dt) {
+  const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z, look = dirFrom(camYaw, camPitch);
+  const ok = (e) => {
+    if (!e || e.id === myId || !e.mesh.visible) return false;
+    const dx = e.x - cx, dy = e.y + 0.3 - cy, dz = e.z - cz, d = Math.hypot(dx, dy, dz);
+    if (d > AUTOAIM.range || d < 0.5) return false;
+    if (Math.acos(Math.max(-1, Math.min(1, (dx * look[0] + dy * look[1] + dz * look[2]) / d))) > AUTOAIM.cone) return false;
+    return W.segmentHit(cx, cy, cz, e.x, e.y + 0.3, e.z) < 0;   // kein Fels dazwischen
+  };
+  let t = ok(players.get(aimLock)) ? players.get(aimLock) : null;
+  if (!t) { let bd = Infinity; for (const e of players.values()) if (ok(e)) { const d = Math.hypot(e.x - cx, e.y - cy, e.z - cz); if (d < bd) { bd = d; t = e; } } }
+  aimLock = t ? t.id : 0; if (!t) return;
+  const dx = t.x - cx, dy = t.y + 0.3 - cy, dz = t.z - cz;
+  camYaw = approachAngle(camYaw, Math.atan2(-dx, -dz), AUTOAIM.turn * dt);
+  const tp = Math.atan2(dy, Math.hypot(dx, dz)); camPitch += Math.max(-AUTOAIM.turn * dt, Math.min(AUTOAIM.turn * dt, tp - camPitch));
+}
 function onUlti(e) {
   const pe = players.get(e[1]), suit = SUIT_ORDER[e[2]], U = ULTIS[suit]; if (!pe || !U) return;
   const mine = e[1] === myId, vol = mine ? 1 : volAt(pe.x, pe.y, pe.z);
@@ -699,6 +719,7 @@ const flow = { f: 0, s: 0, u: 0, roll: 0 };
 // ---------- local player ----------
 function controlMe(dt) {
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
+  if (mySuit === 'goliath' && ultOn()) autoAim(dt);   // Zielcomputer-Ulti
   let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1) * (mySuit === 'manta' && ultOn() ? ULTIS.manta.speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
   if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
@@ -1336,5 +1357,5 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // small hook for automated smoke tests
-window.__un = { get state() { return { phase, myId, you, aliveN, me, players: players.size, creatures: creatures.size, pickups: pickups.size, projs: projs.size }; },
+window.__un = { get state() { return { phase, myId, you, aliveN, me, aimLock, camYaw, mySuit, players: players.size, creatures: creatures.size, pickups: pickups.size, projs: projs.size }; },
   look(y, p) { camYaw = y; camPitch = p; }, key(c, d) { keys[c] = d; }, fire(b) { firing = b; }, send, tp(x, y, z) { me.x = x; me.y = y; me.z = z; }, world: () => W, ents: () => ({ players, creatures, vehicles, crates, pickups }) };
