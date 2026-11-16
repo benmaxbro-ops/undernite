@@ -1449,8 +1449,9 @@ wss.on('connection', (ws) => {
         break;
       case 'start': if (G.phase === 'lobby') { if (G.mode === 'exp') startExp(); else startMatch(); } break;
       case 'buy': if (p && G.mode === 'exp') expBuy(p, m); break;
-      case 'brbuy': if (G.phase === 'lobby') { brBuy(c, m.k); broadcast(lobbyMsg()); } break;
-      case 'load': if (G.phase === 'lobby') { setLoadout(c, m); broadcast(lobbyMsg()); } break;
+      // Einkaufen und Ausrüsten: in der Lobby – oder während der Runde, wenn man schon tot ist (oder nur zuschaut)
+      case 'brbuy': if (G.phase === 'lobby' || !p || !p.alive) { brBuy(c, m.k); send(ws, lobbyMsg()); if (G.phase === 'lobby') broadcast(lobbyMsg()); } break;
+      case 'load': if (G.phase === 'lobby' || !p || !p.alive) { setLoadout(c, m); send(ws, lobbyMsg()); if (G.phase === 'lobby') broadcast(lobbyMsg()); } break;
       case 'gad': if (p && p.alive && G.mode !== 'exp') { try { useGadget(p, m); } catch (err) { console.error('[gadget error]', err); } } break;
       case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':

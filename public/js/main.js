@@ -140,7 +140,7 @@ ws.onmessage = (e) => {
   else if (m.t === 'meta') { for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] }); }
   else if (m.t === 'lobby') { ensureWorld(m.seed, m.mode); if (phase !== 'play') { phase = 'lobby'; clearDyn(); hud.show('lobby'); if (document.pointerLockElement) document.exitPointerLock(); } hud.setLobby(m, myId); const mine = m.players.find(p => p.id === myId); if (mine) { mySuit = mine.suit; myUp = mine.up || {}; } }
   else if (m.t === 'start') onStart(m);
-  else if (m.t === 'end') { phase = 'end'; hud.end(m, myId); hud.show('end'); if (document.pointerLockElement) document.exitPointerLock(); }
+  else if (m.t === 'end') { endDeath(); document.getElementById('deathFx').style.opacity = '0'; phase = 'end'; hud.end(m, myId); hud.show('end'); if (document.pointerLockElement) document.exitPointerLock(); }
 };
 const prefs = hud.buildLobby((c) => {
   sfx.init();
@@ -169,7 +169,7 @@ function clearDyn() {
   for (const p of projs.values()) if (p.whine) p.whine.stop();
   sfx.engine(0); sfx.mechLoop(false);
   dyn.clear(); shocks.length = 0; gfx.shields.clear(); gfx.drones.clear(); gfx.ropes.length = 0; gfx.grapple = null; gfx.sonarUntil = 0; players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
-  you = null; zone = null; deadInfo = null; specId = 0;
+  you = null; zone = null; deadInfo = null; specId = 0; endDeath(); document.getElementById('deathFx').style.opacity = '0';
 }
 function onStart(m) {
   mode = m.mode || 'br'; cling = null; daze.t = 0; daze.burn = 0; holsterUntil = 0;
@@ -472,9 +472,32 @@ function finTarget() {
 function updateFinishers(dt) {
   for (let i = fins.length - 1; i >= 0; i--) if (!fins[i].update(dt)) { if (fins[i] === myFin) myFin = null; fins.splice(i, 1); }
   document.body.classList.toggle("cine", !!myFin);   // Kinobalken während des eigenen Finishers
+  updateDeath(dt);
   // während meines Finishers bewegt die Animation meinen Taucher
   if (myFin && myFin.pose) { const P = myFin.pose; me.x = P.x; me.y = P.y; me.z = P.z; me.vx = me.vy = me.vz = 0; me.byaw = P.yaw; me.bpitch = 0; }
 }
+// ---------- Selbst sterben (Battle Royale) ----------
+// dim = so dunkel wird es zuerst (0…1) in dimTime Sekunden, dann in blackTime Sekunden ganz schwarz, dann "Du bist tot"
+const DEATH = { dim: 0.6, dimTime: 0.9, hold: 0.5, blackTime: 1.1 };
+const death = { on: false, t: 0, shown: false };
+function updateDeath(dt) {
+  const fx = document.getElementById('deathFx');
+  if (!death.on) { if (fx.style.opacity !== '0') fx.style.opacity = '0'; return; }
+  death.t += dt;
+  const D = DEATH, t = death.t, a = t < D.dimTime ? D.dim * t / D.dimTime : t < D.dimTime + D.hold ? D.dim
+    : Math.min(1, D.dim + (1 - D.dim) * (t - D.dimTime - D.hold) / D.blackTime);
+  fx.style.opacity = a.toFixed(3);
+  if (!death.shown && a >= 1) {
+    death.shown = true;
+    document.getElementById('deathInfo').textContent = deadInfo ? `PLATZ ${deadInfo.place} · ERWISCHT VON ${String(deadInfo.by).toUpperCase()}` : '';
+    document.getElementById('deathBox').classList.remove('hidden');
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+}
+function endDeath() { death.on = false; death.shown = false; document.getElementById('deathBox').classList.add('hidden'); }
+document.getElementById('deathWatch').onclick = () => { endDeath(); lock(); };                                   // weiter zuschauen
+document.getElementById('deathLobby').onclick = () => { endDeath(); hud.show('lobby'); };                       // schon den nächsten Taucher wählen
+document.getElementById('deathShop').onclick = () => { endDeath(); hud.show('lobby'); document.getElementById('brShopBtn').click(); };
 function onPrivate(e) {
   switch (e[0]) {
     case 'push': me.vx += e[1]; me.vy += e[2]; me.vz += e[3]; shake = Math.max(shake, 0.4); break;   // weggeschleudert (Bodenstampfer)
@@ -508,7 +531,9 @@ function onPrivate(e) {
     case 'emp': gfx.empUntil = time + e[1]; gfx.stunUntil = performance.now() + e[1] * 1000; chargeShot = null;
       hud.banner(SUITS[mySuit].mech ? 'Magnet-Treffer! Schaltkreise überlastet …' : 'Magnet-Treffer!', Math.min(2.5, e[1])); hud.shock(); sfx.zap(1, 0.9); break;
     case 'got': sfx.pickup(); hud.feed(e[1] === 'w' ? `Aufgenommen: <b style="color:${RARITY[e[3]].color}">${WEAPONS[e[2]].name}</b> · ${RARITY[e[3]].name}` : e[1] === 'med' ? 'Reparaturkit: <b>+50 Leben</b>' : 'Schildzelle: <b>+50 Schild</b>', true); break;
-    case 'dead': held = -1; deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop(); break;
+    case 'dead': held = -1; deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop();
+      if (mode !== 'exp') { death.t = 0; death.on = true; sfx.tinnitus(2); sfx.tone(70, 35, 0.8, 0.9, 'sine'); }   // Battle Royale: Bild wird dunkel, dann "Du bist tot"
+      break;
     case 'spawn': torch.on = false; torch.bat = LAMPS[torch.lvl].battery; me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
     case 'fish': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`${e[2] ? '⭐ <b style="color:#ffd34d">Goldener</b> ' : 'Gefangen: '}<b>${S.name}</b> · +${e[3]} €`, true); break; }
     case 'aqfree': hud.feed(`Freigelassen: <b>${catchName(catchFromNet(e[1]))}</b>`, true); break;

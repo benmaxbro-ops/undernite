@@ -143,6 +143,11 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
 #gadBox.ready{border-color:var(--glow);box-shadow:0 0 12px rgba(94,242,224,.35)}
 #brShopBtn{position:absolute;top:16px;right:16px;cursor:pointer;padding:10px 18px;border:1px solid #ffd36b;border-radius:10px;background:rgba(40,30,8,.85);color:#ffd36b;font:700 16px var(--display);letter-spacing:.08em}
 #brShopBtn:hover{background:rgba(70,52,12,.95)}
+#deathFx{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:16}
+#deathBox{position:fixed;inset:0;z-index:17;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--ink)}
+#deathBox.hidden{display:none} #deathBox h1{font:800 clamp(40px,7vw,84px) var(--display);letter-spacing:.12em;margin:0} #deathBox h1 span{color:var(--warn)}
+#deathBox .place{font:600 18px var(--display);color:var(--mute);letter-spacing:.15em;margin-bottom:14px}
+.deathBtns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center} .deathBtns button{min-width:170px;margin:0;width:auto;padding:12px 18px}
 #cineTop,#cineBot{position:fixed;left:0;right:0;height:0;background:#000;z-index:15;pointer-events:none;transition:height .35s ease}
 #cineTop{top:0} #cineBot{bottom:0} body.cine #cineTop,body.cine #cineBot{height:9vh}
 #loadout{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;background:rgba(2,12,20,.7);padding:20px;overflow:auto;z-index:21}
@@ -273,6 +278,16 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
   </div>
 </div>
 <div id="cineTop"></div><div id="cineBot"></div>
+<div id="deathFx"></div>
+<div id="deathBox" class="hidden">
+  <h1>DU BIST <span>TOT</span></h1>
+  <div class="place" id="deathInfo"></div>
+  <div class="deathBtns">
+    <button class="ghost" id="deathWatch">Zuschauen</button>
+    <button class="go" id="deathLobby">Taucher wählen</button>
+    <button class="ghost" id="deathShop">🦪 Shop</button>
+  </div>
+</div>
 <div id="loadout" class="hidden">
   <div class="shopBox panel">
     <h2 id="loadTitle">AUS<span>RÜSTUNG</span></h2>
