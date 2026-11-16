@@ -28,6 +28,21 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
 - [ ] **8. Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
 - [ ] **9. Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 
+## Realistischer wie im Video „Bodycam“ (Wünsche vom 16.11.)
+
+Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Bodycam!“). Alles umgesetzt für unter Wasser.
+
+- [ ] **Bodycam-Look:** Bild am Rand gewölbt (Fischauge), dunkler runder Rand wie eine Taucherbrille, rot-blaue Farbsäume
+- [ ] **Rückstoß wie im Video:** Waffe und Kamera reißen zusammen hoch, aber das Wasser bremst. Gasblase statt Patronenhülse.
+- [ ] **Flüssiger schwimmen:** weniger stockig und eckig, weichere Bewegungen
+- [ ] **Hände sehen:** beim Schwimmen ab und zu die Hände vorne, wie beim Brustschwimmen
+- [ ] **Waffe wegstecken** können
+- [ ] **Große Waffen mit beiden Händen halten:** eine Hand vorne, eine hinten, mehr in der Mitte vom Bildschirm
+- [ ] **Battle Royale viel heller:** der Boden soll leuchten, damit man sieht, wo unten ist. Riffe größer und spannender.
+- [ ] **Getroffener Gegner:** sackt zusammen und sinkt, Waffe fällt langsam zum Boden, dunkle Wolke im Wasser
+- [ ] **Selbst sterben:** Bild wird langsam dunkler, dann ganz schwarz, dann ein „Du bist tot“-Bildschirm.
+      Von da aus: neue Klasse (Taucher) aussuchen oder in den Shop gehen.
+
 ## Fairness: Ligen
 
 Gekaufte Upgrades machen **voll stark**. Damit das nicht unfair wird, kommen Spieler nach ihrem

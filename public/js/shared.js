@@ -54,6 +54,14 @@ export const COMPRESSOR = {
 // kann man ihn mit G erledigen. Jede Klasse hat ihre eigene Animation (siehe finisher.js).
 export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 10, goliath: 9 } };   // Goliath ist riesig und greift weit
 
+// Perlen (nur Battle Royale): Belohnung am Rundenende, wird unter deinem Namen gespeichert (saves/battleroyale.json).
+// kill = pro Kill, minute = pro Minute überlebt, place = Bonus für Platz 1, 2 und 3.
+export const BR_REWARD = { kill: 50, minute: 10, place: [300, 150, 75] };
+export const brReward = (kills, secs, place) => {
+  const k = kills * BR_REWARD.kill, m = Math.floor(secs / 60) * BR_REWARD.minute, p = BR_REWARD.place[place - 1] || 0;
+  return { k, m, p, sum: k + m + p };
+};
+
 // Tiefsee: Battle Royale spielt in brOffset Metern Tiefe (kein Sonnenlicht, keine Oberfläche).
 // brCeil = so viele Meter unter der alten Oberfläche ist die obere Grenze, höher kann man nicht schwimmen.
 export const DEEP = { brOffset: 380, brCeil: 25 };

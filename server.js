@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,7 @@ function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
   return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, urls: lanUrls(),
-    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit })) };
+    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
 
@@ -238,7 +238,7 @@ function finisher(p, id) {
 }
 function kill(p, src, how) {
   p.alive = false; p.hp = 0;
-  p.place = aliveCount() + 1;
+  p.place = aliveCount() + 1; p.deathT = G.time;
   if (p.veh) { const v = G.vehicles.get(p.veh); if (v) v.driver = 0; p.veh = 0; }
   if (p.grabbed) { const o = G.creatures.find(c => c.id === p.grabbed); if (o) releaseOcto(o); }
   for (const w of p.weapons) if (w && !(w.id === 'pistol' && w.rar === 0))
@@ -756,6 +756,18 @@ function storeProgress(p) {
       fs.writeFile(SAVE_FILE, JSON.stringify(saves, null, 1), (e) => { if (e) console.error('[save]', e.message); }));
   }, 1000);
 }
+// Battle-Royale-Konto: Perlen pro Spielername (getrennt vom Expeditions-Geld)
+const BR_FILE = path.join(DIR, 'saves', 'battleroyale.json');
+let brSaves = {};
+try { brSaves = JSON.parse(fs.readFileSync(BR_FILE, 'utf8')); } catch { brSaves = {}; }
+const pearlsOf = (name) => brSaves[saveKey(name)]?.pearls || 0;
+function addPearls(name, amt) {
+  const s = brSaves[saveKey(name)] ||= { pearls: 0 };
+  s.pearls += amt; s.last = Date.now();
+  fs.mkdir(path.dirname(BR_FILE), { recursive: true }, () =>
+    fs.writeFile(BR_FILE, JSON.stringify(brSaves, null, 1), (e) => { if (e) console.error('[save]', e.message); }));
+  return s.pearls;
+}
 const depthOf = (o) => SURFACE - o.y;
 const nearBoat = (p, r = 16, d = 6) => dist2d(p, EXP_BOAT.x, EXP_BOAT.z) < r && depthOf(p) < d;
 // the underwater base with the aquarium and an air station
@@ -1142,7 +1154,14 @@ function endMatch() {
   if (G.phase !== 'play') return;
   const rest = [...G.players.values()].filter(p => p.alive).sort((a, b) => b.hp + b.shield - a.hp - a.shield);
   rest.forEach((p, i) => { p.place = i + 1; });
-  const rank = [...G.players.values()].sort((a, b) => a.place - b.place).map(p => ({ id: p.id, n: p.name, place: p.place, k: p.kills, bot: p.bot ? 1 : 0, suit: p.suit }));
+  const rank = [...G.players.values()].sort((a, b) => a.place - b.place).map(p => {
+    const r = { id: p.id, n: p.name, place: p.place, k: p.kills, bot: p.bot ? 1 : 0, suit: p.suit };
+    if (!p.bot) {   // Perlen für echte Spieler: Kills + überlebte Minuten + Platz-Bonus
+      r.pearls = brReward(p.kills, p.alive ? G.time : p.deathT || 0, p.place);
+      r.pearls.total = addPearls(p.name, r.pearls.sum);
+    }
+    return r;
+  });
   snapshot();
   G.phase = 'end'; G.endT = 10;
   broadcast({ t: 'end', rank, total: G.players.size });

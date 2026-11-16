@@ -45,7 +45,7 @@ export class Hud {
     return { name: name.value, suit: cur };
   }
   setLobby(m, myId) {
-    $('plist').innerHTML = m.players.map(p => `<li><span>${esc(p.name)}${p.id === myId ? ' <small>(du)</small>' : ''}</span><small>${SUITS[p.suit].name}</small></li>`).join('')
+    $('plist').innerHTML = m.players.map(p => `<li><span>${esc(p.name)}${p.id === myId ? ' <small>(du)</small>' : ''}</span><small>${p.pearls ? `🦪 ${p.pearls} · ` : ''}${SUITS[p.suit].name}</small></li>`).join('')
       + `<li><span><small>+ ${m.bots} Bots</small></span></li>`;
     if (document.activeElement !== $('bots')) { $('bots').value = m.bots; $('botsN').textContent = m.bots; }
     const exp = m.mode === 'exp';
@@ -138,6 +138,8 @@ export class Hud {
     const mine = m.rank.find(r => r.id === myId);
     $('endTitle').innerHTML = mine && mine.place === 1 ? 'SIEG<span>!</span>' : 'AUFGE<span>TAUCHT</span>';
     $('endPlace').textContent = mine ? `PLATZ ${mine.place} VON ${m.total} · ${mine.k} KILLS` : `SIEGER: ${m.rank[0] ? m.rank[0].n : '–'}`;
+    const P = mine && mine.pearls;
+    $('endPearls').innerHTML = P ? `<b>+${P.sum} 🦪 Perlen</b><small>${mine.k} Kills +${P.k} · überlebt +${P.m}${P.p ? ` · Platz ${mine.place} +${P.p}` : ''}</small><small>Jetzt hast du ${P.total} Perlen</small>` : '';
     $('rank').innerHTML = m.rank.slice(0, 8).map(r => `<div class="${r.id === myId ? 'me' : ''}"><span class="num">${r.place}.</span><span>${esc(r.n)} <small>${SUITS[r.suit].name}${r.bot ? ' · Bot' : ''}</small></span><span class="num">${r.k} Kills</span></div>`).join('');
   }
 
