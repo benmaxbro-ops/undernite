@@ -32,3 +32,9 @@ Verbrennen ("Ah!") – "Pain sounds" (emopreben, CC0)
 https://opengameart.org/content/pain-sounds-by-emopreben
   burn_ah1.wav   (Painsounds v2 - Track 1 - Arrrch.ogg)
   burn_ah2.wav   (Painsounds v2 - Track 4 - Arrggh .ogg)
+
+Treffer in Körper – "Impact" (qubodup, CC0) und "37 hits/punches" (Independent.nu, CC0)
+https://opengameart.org/content/impact
+https://opengameart.org/content/37-hitspunches
+  hit_flesh.wav   (qubodupImpactMeat02.flac)  nasser Einschlag
+  hit_body.wav    (hit21.mp3.flac)            dumpfer Körper-Schlag

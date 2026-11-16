@@ -368,7 +368,7 @@ function onEvent(e) {
       if (e[2] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
       break;
     }
-    case 'hit': removeProj(e[1]); env.bubble(e[2], e[3], e[4], 7, 0.4, 2); if (e[5] === 1 || e[5] === 3) env.blood(e[2], e[3], e[4]); sfx.hit(volAt(e[2], e[3], e[4])); break;
+    case 'hit': removeProj(e[1]); env.bubble(e[2], e[3], e[4], 7, 0.4, 2); if (e[5] === 1 || e[5] === 3) env.blood(e[2], e[3], e[4]); sfx.hit(volAt(e[2], e[3], e[4]), e[5] === 1 || e[5] === 3); break;   // Körper: Durchschlag-Sound
     case 'boom': {
       removeProj(e[1]); env.explosion(e[2], e[3], e[4], e[5]);
       // Wasser trägt tiefe Töne sehr weit: das Grollen hört man bis 600 m, das metallische Klicken nur in der Nähe
@@ -488,7 +488,7 @@ function onPrivate(e) {
     case 'hurt': {
       if (e[4]) { hud.hurt(null); break; }
       const rel = Math.atan2(e[2] - me.x, -(e[3] - me.z)) + camYaw;
-      hud.hurt(rel); sfx.hurt(); shake = Math.max(shake, 0.35);
+      hud.hurt(rel); sfx.hurt(); sfx.hitMe(e[1]); shake = Math.max(shake, 0.35);   // die Kugel geht durch dich durch
       // Treffer-Wackler: die Kamera wird kurz zur Seite und nach oben gerissen (stärker bei mehr Schaden)
       const jolt = Math.min(0.08, 0.01 + e[1] * 0.0015);
       camYaw += (Math.random() - 0.5) * jolt * 1.5; camPitch += (Math.random() * 0.6 - 0.2) * jolt; view.kick = Math.max(view.kick, 0.6);

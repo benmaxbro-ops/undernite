@@ -26,6 +26,8 @@ export const SHOT = { crack: 3.0, body: 3.1, boom: 3.0, mech: 4.5, duck: 5.45, w
 // body = zusätzlicher tiefer Bass-Schlag darunter
 // "Ah!" beim Verbrennen: vol = Lautstärke, delay = so viele Sekunden nach der Hitze-Welle
 export const AH = { vol: 2.4, delay: 0.35 };
+// Treffer in einen Körper: crack = scharfes Knacken, flesh = nasser Einschlag, body = dumpfer Schlag (Lautstärken)
+export const HITS = { crack: 0.5, flesh: 1.6, body: 1.4 };
 export const KNOCK = { vol: 1.8, own: 0.5, range: 260, pitchSmall: 0.75, pitchBig: 0.6, body: 1.0 };
 export const PLASMA = {
   ring: 0.12,      // elektrisches Brummen (Ringmodulation): 0 = aus, 1 = stark (zu viel macht den Schuss dünn)
@@ -41,7 +43,7 @@ export const bubblePeriod = (W, depth) => 2.11 * Math.cbrt(W) / Math.pow(Math.ma
 const CHARGE = [0.004, 0.003, 0.008, 0.01, 0.03, 0.03, 0.006, 0.015, 0.009, 0.002, 0.012, 0.012, 0.004, 0.004, 0.004];
 // Schuss-Aufnahme je Waffe (Reihenfolge wie WEAPON_IDS)
 const SHOT_FILES = ['shot_pistol', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic', 'shot_harpoon', 'shot_needler', 'shot_torpedo', 'shot_plasma', 'shot_pistol', 'shot_pistol', 'shot_pistol'];
-const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd', 'knock_small', 'knock_big', 'burn_ah1', 'burn_ah2'];
+const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd', 'knock_small', 'knock_big', 'burn_ah1', 'burn_ah2', 'hit_flesh', 'hit_body'];
 export class Sfx {
   constructor() { this.ctx = null; this.depth = 30; this.vol = 0.8; }
   // Lautstärke aus den Einstellungen (0 … 1)
@@ -446,10 +448,27 @@ export class Sfx {
   headshot() { this.tone(2600, 2400, 0.35, 0.22, 'sine'); this.tone(3900, 3700, 0.25, 0.1, 'sine'); this.noise(0.05, 3000, 1, 0.6, 'highpass'); this.tone(160, 40, 0.25, 0.7, 'sine'); }
   punch() { this.tone(130, 40, 0.22, 0.9, 'sine'); this.noise(0.09, 900, 1.2, 0.7, 'lowpass', 150); this.noise(0.03, 3000, 2, 0.35, 'bandpass'); }
   slam() { this.tone(90, 25, 0.6, 1, 'sine'); this.tone(240, 50, 0.3, 0.5, 'square'); this.noise(0.8, 500, 0.7, 0.8, 'lowpass', 60); this.noise(0.06, 2200, 1, 0.5, 'bandpass'); }
-  hit(vol) {
+  // Einschlag. body = trifft einen Körper (Taucher, Fisch, Hai): dann klingt es wie eine Kugel, die richtig durchschlägt –
+  // 1) scharfes Knacken, 2) nasser Einschlag (echte Aufnahme, CC0), 3) dumpfer Körper-Schlag (echte Aufnahme, CC0).
+  // Sonst (Fels, Sand) nur Klatsch und Blasenzischen. Lautstärken: HITS
+  hit(vol, body = false) {
+    if (vol < 0.02) return;
     this.tone(2100, 1500, 0.012, 0.35 * vol, 'square');                          // Klatsch / Knack
     this.noise(0.03, 2600, 2, 0.4 * vol, 'bandpass');
     this.noise(0.28, 4500, 1.2, 0.16 * vol, 'bandpass', 1800, 0.025);            // Zischen der Blasenspur
+    if (!body) return;
+    this.cur = this.uwShot;
+    this.noise(0.018, 5200, 1.5, HITS.crack * vol, 'highpass', 2500);            // 1) Knacken beim Eindringen
+    this.cur = null;
+    this.sample('hit_flesh', HITS.flesh * vol, { rate: 0.95 + Math.random() * 0.15, bus: 'shot' });   // 2) nasser Einschlag
+    this.sample('hit_body', HITS.body * vol, { rate: 0.85 + Math.random() * 0.1, at: 0.008 });       // 3) dumpfer Schlag
+  }
+  // selbst getroffen: die Kugel geht durch dich durch – lauter, tiefer, direkt im Kopf (nicht durchs Wasser gedämpft)
+  hitMe(amount = 15) {
+    const k = Math.min(1.6, 0.7 + amount / 40);
+    this.sample('hit_flesh', HITS.flesh * 1.3 * k, { rate: 0.8, bus: 'shot' });
+    this.sample('hit_body', HITS.body * 1.5 * k, { rate: 0.7 });
+    this.cur = this.master; this.tone(90, 38, 0.3, 0.9 * k, 'sine'); this.cur = null;   // Wucht im Brustkorb
   }
   hitmark(kill) { this.tone(kill ? 1300 : 950, kill ? 1900 : 950, kill ? 0.22 : 0.05, 0.22, 'triangle'); }
   // far = Lautstärke der tiefen Teile (tragen sehr weit), near = Lautstärke des Klicks (nur in der Nähe), W = Ladung in kg

@@ -72,7 +72,7 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [ ] **Schuss-Richtungsanzeige:** kleiner Ring in der Mitte, ein Pfeil zeigt, woher geschossen wird
 - [ ] **Grafik so realistisch wie möglich:** ✔ 1. Bodycam-Linse, ✔ 2. Unterwasser-Licht (Farben verschwinden mit der Tiefe,
       Lichtstrahlen, Meeresschnee), 3. Tiefenschärfe + Bewegungsunschärfe, 4. bessere Oberflächen, 5. Bodycam-Animationen, 6. bessere Taucher
-- [ ] **Treffer-Sound:** wie eine Kugel, die richtig durchschlägt (im Internet recherchieren)
+- [x] **Treffer-Sound:** wie eine Kugel, die richtig durchschlägt: Knacken + nasser Einschlag + dumpfer Schlag (echte CC0-Aufnahmen); selbst getroffen lauter und tiefer
 - [ ] **Vorbeifliegende Kugeln:** deutliches „Schwusch“
 
 - [x] **Stabwaffen:** Dreizack, Elektro-Speer, Kampfstab (Beute oder Startwaffe)
