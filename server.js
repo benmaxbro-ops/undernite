@@ -59,7 +59,7 @@ const PHASES = [
   { wait: 30, shrink: 25, r: 70, dps: 5 }, { wait: 25, shrink: 20, r: 32, dps: 7 },
   { wait: 20, shrink: 20, r: 10, dps: 10 }, { wait: 10, shrink: 15, r: 0, dps: 14 },
 ];
-const LOOT_W = [['needler', 30], ['scatter', 22], ['harpoon', 22], ['torpedo', 12], ['pistol', 14], ['revolver', 8], ['spikemg', 8], ['netgun', 6], ['magrifle', 5]];
+const LOOT_W = [['needler', 30], ['scatter', 22], ['harpoon', 22], ['torpedo', 12], ['pistol', 14], ['revolver', 8], ['spikemg', 8], ['netgun', 6]];   // das Magnet-Gewehr gibt es nicht als Beute (jeder außer Goliath hat es)
 const W_SCORE = { pistol: 1, needler: 2.2, scatter: 2.0, harpoon: 2.2, torpedo: 2.6 };
 const W_PREF = { pistol: 16, needler: 18, scatter: 8, harpoon: 30, torpedo: 24 };
 
@@ -155,6 +155,8 @@ function startMatch() {
     const p = mkPlayer(nextId++, names[i % names.length], pick(SUIT_ORDER), true);
     G.players.set(p.id, p);
   }
+  // jeder außer dem Goliath hat ein Magnet-Gewehr mit 2 Schuss dabei (Platz 3) – damit kann man einen Mech lahmlegen
+  for (const p of G.players.values()) if (!SUITS[p.suit].mech) p.weapons[2] = newWeapon('magrifle', 0);
   for (const p of G.players.values()) {
     const a = rnd() * 6.283, d = 60 + rnd() * 190;
     p.x = p.lx = Math.cos(a) * d; p.z = p.lz = Math.sin(a) * d; p.y = p.ly = SURFACE - DEEP.brCeil - 4;   // Start unter der Tiefsee-Grenze
@@ -260,7 +262,7 @@ function kill(p, src, how) {
   p.place = aliveCount() + 1; p.deathT = G.time;
   if (p.veh) { const v = G.vehicles.get(p.veh); if (v) v.driver = 0; p.veh = 0; }
   if (p.grabbed) { const o = G.creatures.find(c => c.id === p.grabbed); if (o) releaseOcto(o); }
-  for (const w of p.weapons) if (w && !(w.id === 'pistol' && w.rar === 0))
+  for (const w of p.weapons) if (w && !(w.id === 'pistol' && w.rar === 0) && w.id !== 'magrifle')   // Magnet-Gewehr fällt nicht als Beute
     addPickup('w', p.x + (rnd() - 0.5) * 2, p.y + rnd(), p.z + (rnd() - 0.5) * 2, w.id, w.rar, w.ammo, w.spare);
   if (rnd() < 0.6) addPickup(rnd() < 0.5 ? 'med' : 'sh', p.x, p.y + 0.5, p.z);
   const label = { zone: 'Schwarzwasser', shark: 'Hai', octo: 'Oktopus', jelly: 'Qualle', left: 'Verbindung', wreck: 'Explosion', coral: 'Koralle', bleed: 'Verblutet', burn: 'Verbrannt' }[how];
@@ -288,7 +290,7 @@ function damageCreature(c, amt, src) {
 
 // ---------- weapons ----------
 // mods = Aufsätze (nur an der Startwaffe aus dem Ausrüstungs-Fenster); wdef(w) = Werte der Waffe mit ihren Aufsätzen
-const newWeapon = (id, rar, ammo = null, spare = null, mods = []) => ({ id, rar, mods, ammo: ammo ?? modDef(id, mods).mag, spare: spare ? [...spare] : Array(COMPRESSOR.spares).fill(1) });
+const newWeapon = (id, rar, ammo = null, spare = null, mods = []) => ({ id, rar, mods, ammo: ammo ?? modDef(id, mods).mag, spare: spare ? [...spare] : Array(WEAPONS[id].spares ?? COMPRESSOR.spares).fill(1) });
 const wdef = (w) => modDef(w.id, w.mods);
 // das vollste Ersatzmagazin im Rucksack (Index), -1 wenn es keins gibt
 function bestSpare(w) {
@@ -344,6 +346,7 @@ function coralCut(p, dt) {
 function compress(p, dt) {
   for (const w of p.weapons) {
     if (!w) continue;
+    if (WEAPONS[w.id].noRefill) continue;   // Magnet-Gewehr: kein Nachfüllen
     bestSpare(w);
     let b = -1; for (let i = 0; i < w.spare.length; i++) if (w.spare[i] < 1 && (b < 0 || w.spare[i] > w.spare[b])) b = i;
     if (b >= 0) w.spare[b] = Math.min(1, w.spare[b] + dt / ((COMPRESSOR.fill[w.id] || 8) * upMul(p.up, 'comp') * (SUITS[p.suit].fill || 1)));   // Turbo-Kompressor, Nautilus

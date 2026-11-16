@@ -49,7 +49,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Waffen-Aufsätze (im Ausrüstungs-Fenster, für die Startwaffe):** Leuchtpunkt-Visier, Zielfernrohr 4×, großes Magazin, Trommelmagazin,
   Kompensator, Würgebohrung, Laservisier, Druck-Verstärker – je nach Waffe, einer pro Platz. Werte: `ATTACHMENTS` in `shared.js`.
 - **Waffen:** Bolzenpistole, Nadler, Splitterwerfer, Harpune, Torpedowerfer, Bolzen-Revolver, Stachel-MG, Netzwerfer (macht langsam),
-  Magnet-Gewehr (legt einen Mech 3,5 s lahm) – jeweils in vier Seltenheitsstufen.
+  – jeweils in vier Seltenheitsstufen. Dazu hat jeder außer dem Goliath ein **Magnet-Gewehr** mit nur 2 Schuss (legt einen Mech 3,5 s lahm).
 - **Fahrzeuge:** U-Scooter (schnell, Fahrer ungeschützt) und Mini-U-Boot (450 Rumpfpunkte, Bordtorpedos).
 - **Raubtiere:** Haie wittern Verletzte aus großer Entfernung und greifen im Vorbeischwimmen an,
   Oktopusse lauern an Wrack, Ruinen und Riffen, packen zu und vernebeln die Sicht, Quallenschwärme

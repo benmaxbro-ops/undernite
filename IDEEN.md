@@ -23,8 +23,8 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
   - [ ] mehr Leben
 - [x] **5. Waffen-Aufsätze:** Leuchtpunkt-Visier, Zielfernrohr, großes Magazin, Trommelmagazin, Kompensator, Würgebohrung, Laservisier, Druck-Verstärker
 - [x] **Neue Waffen:** Bolzen-Revolver, Netzwerfer, Stachel-MG, Magnet-Gewehr (legt den Mech 3,5 s lahm)
-- [ ] **Magnet-Gewehr für alle außer Goliath**, nur 2 Schuss; Nachladen = Magnet vom Rücken holen und vorne aufsetzen
-- [ ] **Alle Nachlade-Animationen prüfen und überarbeiten** (Revolver: Trommel klappt raus, neue Trommel rein, zuschlagen)
+- [x] **Magnet-Gewehr für alle außer Goliath**, nur 2 Schuss; Nachladen = Magnet vom Rücken holen und vorne aufsetzen
+- [x] **Alle Nachlade-Animationen prüfen und überarbeiten** (Revolver: Trommel klappt raus, neue Trommel rein, zuschlagen)
 - [x] **6. 8 Taucher:** Zu Manta, Triton, Bollwerk und Goliath kommen 4 neue, jeder mit einer Spezialfähigkeit:
   - [x] **Sepia:** Tintenflucht
   - [x] **Barrakuda:** Sprinter

@@ -996,10 +996,10 @@ function updateViewModel(dt) {
   U.setGills(view.gills);
   U.setCharge(view.charge);
   // Nachladen: zweite Hand und Magazin bewegen, die normale linke Hand ausblenden
-  const rl = reloading && !!U.mag;
+  const rl = reloading && (!!U.mag || !!U.revolver);   // Revolver: Trommel statt Magazin
   if (view.arms.userData.left) view.arms.userData.left.visible = !rl;
   // Kippen: beim Magazinwechsel Boden nach links, beim Durchladen fast gerade
-  const roll = rl ? reloadRoll(done) : 0;
+  const roll = rl ? reloadRoll(done) * (U.revolver ? 0.3 : U.freshOnly ? 0.2 : 1) : 0;   // Revolver und Magnet: nur leicht kippen, damit man Trommel bzw. Magnet sieht
   view.tilt += (roll - view.tilt) * Math.min(1, dt * 14);
   // Zielen über Kimme und Korn: die Waffe wandert in die Bildmitte, so dass die Visierlinie genau im Fadenkreuz liegt
   const ads = aim * (scoped > 0 ? 0 : 1);
@@ -1031,7 +1031,11 @@ function updateViewModel(dt) {
     view.gun.updateMatrix(); IM.copy(view.gun.matrix).invert();
     PL.copy(PACK_CAM).sub(view.g.position).applyMatrix4(IM); EL.copy(ELBOW_CAM).sub(view.g.position).applyMatrix4(IM);
     poseReload(done, U, view.rHand, PL, EL);
-  } else { view.rHand.visible = false; if (U.mag) { U.mag.g.position.copy(U.mag.seat); U.mag.g.visible = true; U.mag.fill.emissiveIntensity = 0.4 + 1.4 * view.charge; } }
+  } else {
+    view.rHand.visible = false;
+    if (U.mag) { U.mag.g.position.copy(U.mag.seat); U.mag.g.visible = !U.freshOnly || view.charge > 0; U.mag.fill.emissiveIntensity = 0.4 + 1.4 * view.charge; }   // Magnet weg, wenn verschossen
+    if (U.revolver) { const R = U.revolver; R.crane.rotation.z = 0; R.cyl.visible = true; R.cyl.rotation.z = 0; R.loose.visible = false; R.fill.emissiveIntensity = 0.4 + 1.4 * view.charge; }
+  }
   // Mündungsblitz: ganz kurz hell an der Mündung, und er beleuchtet die Hände
   const fl = Math.max(0, (view.kick - 0.55) / 0.45);
   if (!U.flash) { U.flash = makeFlash(); U.muzzle.add(U.flash); }

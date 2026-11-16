@@ -371,6 +371,11 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       len = 0.1 * k;
       at(GUN_CYL_Y, glass, -0.045 * k, 0.018 * k, 0.09 * k, 0.018 * k); at(GUN_CYL_Y, magFill, -0.045 * k, 0.012 * k, 0.08 * k, 0.012 * k);
       at(GUN_CYL_Y, metal, -0.095 * k, 0.02 * k, 0.012, 0.02 * k); at(GUN_CYL_Y, blue, -0.088 * k, 0.0205 * k, 0.004, 0.0205 * k);
+    } else if (kind === 'magnet') { // Magnet-Gewehr: Hufeisen-Magnet, der vorne auf den Lauf gesetzt wird (er zeigt nach −y = nach vorne)
+      len = 0.07;
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.008, 10, 20, Math.PI), magFill); arc.position.y = -0.045; arc.rotation.z = Math.PI; m.add(arc);
+      at(RBOX, metal, -0.022, 0.016, 0.03, 0.016); arc.position.x = 0;
+      for (const sx of [-1, 1]) { at(RBOX, glass, -0.02, 0.012, 0.03, 0.012).position.x = sx * 0.022; at(RBOX, blue, -0.006, 0.013, 0.006, 0.013).position.x = sx * 0.022; }
     } else {                          // dicke Patrone für die Werfer
       len = 0.15;
       at(GUN_CYL_Y, glass, -0.065, P.R * 0.62, 0.13, P.R * 0.62); at(GUN_CYL_Y, magFill, -0.065, P.R * 0.45, 0.12, P.R * 0.45);
@@ -452,7 +457,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     cock = { g: slideG, at: new THREE.Vector3(0, H + 0.012, 0.012), travel: 0.032 };   // hinten oben an den Griffrillen anfassen
     sightAt = [0, H + 0.005];
     grip(-0.014, W, 0.1, false);
-    seatMag('pistol', 1, 0, -0.016, -0.014, -0.207);   // schräg wie der Griff
+    if (!P.drum) seatMag('pistol', 1, 0, -0.016, -0.014, -0.207);   // schräg wie der Griff (der Revolver hat stattdessen eine Trommel)
     rear = 0.035;
     muzzleAt = [0, H * 0.5, -(L - 0.015)]; gripTop = -0.014; gripW = W;
   } else if (P.kind === 'rifle') {
@@ -495,7 +500,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     // Druckpatrone (Magazin): durchsichtig, innen leuchtet das Wasser, unten nach vorne geneigt
     const mu = Math.max(0.13, front * 0.5);                                                     // vor dem Abzugsbügel
     box(metal, mu - 0.02, mu + 0.02, -H / 2 - 0.008, -H / 2 + 0.002, W * 0.7);                  // Magazinschacht
-    seatMag('rifle', P.magK || 1, 0, -H / 2 + 0.004, -mu, 0.25);
+    if (!P.coil) seatMag('rifle', P.magK || 1, 0, -H / 2 + 0.004, -mu, 0.25);   // das Magnet-Gewehr hat stattdessen vorne einen Magneten
     // Schaft
     if (fp) rear = back;
     else if (P.stock === 'full') {
@@ -593,9 +598,16 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   g.userData.setGills(0); g.userData.setCharge(1);
   // Besonderheiten der neuen Waffen
   const mzp = g.userData.muzzle.position;
-  if (P.drum) {   // Revolver: Trommel mit 6 Kammern vor dem Griff
-    const d = add(g, GUN_CYL, metal, 0, P.H * 0.45, -0.06); d.scale.set(0.024, 0.024, 0.05);
-    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; add(g, GUN_CYL, dark, Math.cos(a) * 0.014, P.H * 0.45 + Math.sin(a) * 0.014, -0.034).scale.set(0.005, 0.005, 0.004); }
+  if (P.drum) {   // Revolver: Trommel mit 6 Kammern auf einem Schwenkarm (crane), der zum Nachladen nach links ausklappt
+    const crane = new THREE.Group(); crane.position.set(-0.02, P.H * 0.45 - 0.02, -0.06); g.add(crane);
+    add(crane, GEO.box, metal, 0.008, 0.008, 0).scale.set(0.006, 0.02, 0.05);                 // Schwenkarm
+    const makeCyl = () => { const c = new THREE.Group();
+      add(c, GUN_CYL, metal, 0, 0, 0).scale.set(0.024, 0.024, 0.05);
+      for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; add(c, GUN_CYL, magFill, Math.cos(a) * 0.014, Math.sin(a) * 0.014, 0.026).scale.set(0.005, 0.005, 0.003); }   // leuchtende Kammern (voll)
+      return c; };
+    const cyl = makeCyl(); cyl.position.set(0.02, 0.02, 0); crane.add(cyl);
+    const loose = makeCyl(); loose.visible = false; g.add(loose);                              // die Trommel in der Hand beim Nachladen
+    g.userData.revolver = { crane, cyl, loose, fill: magFill, seat: new THREE.Vector3(0, P.H * 0.45, -0.06) };
   }
   if (P.spikes) {   // Stachel-MG: Kranz aus Stacheln um die Mündung und ein Kühlmantel
     for (let i = 0; i < 6; i++) { const a = i / 6 * TAU, s = add(g, GEO.zcyl, metal, mzp.x + Math.cos(a) * 0.016, mzp.y + Math.sin(a) * 0.016, mzp.z + 0.01); s.scale.set(0.003, 0.003, 0.03); }
@@ -604,9 +616,12 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   if (P.net) {   // Netzwerfer: zusammengefaltetes Netz sichtbar in der Mündung
     const n = add(g, new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xd8ffe0, wireframe: true }), 0, 0, mzp.z + 0.05); n.scale.setScalar(P.R * 0.6);
   }
-  if (P.coil) {   // Magnet-Gewehr: violett leuchtende Spulen um den Lauf
+  if (P.coil) {   // Magnet-Gewehr: violett leuchtende Spulen um den Lauf, vorne sitzt der Magnet (= das Magazin)
     const coilM = new THREE.MeshStandardMaterial({ color: 0xb46bff, emissive: 0xb46bff, emissiveIntensity: 1.6 });
     for (let i = 0; i < 6; i++) add(g, GEO.torus, coilM, mzp.x, mzp.y, mzp.z + 0.06 + i * 0.03).scale.setScalar(0.02);
+    seatMag('magnet', 1, mzp.x, mzp.y, mzp.z + 0.005, Math.PI / 2);   // zeigt nach vorne
+    g.userData.mag = mag; g.userData.freshOnly = true;   // Nachladen: es gibt kein altes Magazin, nur einen neuen Magneten vom Rücken
+    mzp.z -= 0.075;                                     // der Schuss kommt vorne aus dem Magneten
   }
   if (mods && mods.length) addGunMods(g, mods, metal, dark);
   return g;
@@ -762,13 +777,39 @@ export function reloadRoll(done) {
 const RV = { hand: new THREE.Vector3(), tmp: new THREE.Vector3(), mag: new THREE.Vector3(), out: new THREE.Vector3() };
 // done = 0…1 Fortschritt, gunUD = userData der Waffe, rHand = makeReloadHand(...),
 // pack / elbow = Rucksack und Ellbogen in Waffen-Koordinaten (beide außerhalb des Bildes)
+// Revolver: Trommel klappt nach links aus, alte Trommel raus und in den Rucksack, neue 6er-Trommel holen,
+// einsetzen, mit einem Ruck zuschlagen (die Trommel dreht sich dabei kurz), Hand zurück an den Griff.
+function poseRevolver(done, U, rHand, pack, elbow) {
+  const R = U.revolver, k = (a, b) => { const x = Math.max(0, Math.min(1, (done - a) / (b - a))); return x * x * (3 - 2 * x); };
+  const open = -1.25;                                        // so weit klappt der Schwenkarm aus (nach links)
+  let swing = 0, inCrane = true, loose = false, fresh = done >= 0.42;
+  R.crane.updateMatrixWorld(true);
+  const cylAt = (s) => { R.crane.rotation.z = s; R.crane.updateMatrix(); return RV.mag.copy(R.cyl.position).applyMatrix4(R.crane.matrix); };
+  if (done < 0.12) { swing = open * k(0.02, 0.12); RV.hand.copy(pack).lerp(cylAt(swing), k(0, 0.12)); }                 // Hand kommt, Trommel klappt aus
+  else if (done < 0.26) { swing = open; inCrane = false; loose = true; RV.hand.copy(cylAt(open)); RV.hand.x -= 0.06 * k(0.12, 0.26); }   // alte Trommel abziehen
+  else if (done < 0.4) { swing = open; inCrane = false; loose = done < 0.38; RV.hand.copy(cylAt(open)).setX(cylAt(open).x - 0.06).lerp(pack, k(0.26, 0.4)); }   // in den Rucksack
+  else if (done < 0.56) { swing = open; inCrane = false; loose = done > 0.42; RV.hand.copy(pack).lerp(cylAt(open).setX(cylAt(open).x - 0.06), k(0.4, 0.56)); }   // neue holen
+  else if (done < 0.66) { swing = open; inCrane = false; loose = true; RV.hand.copy(cylAt(open)); RV.hand.x -= 0.06 * (1 - k(0.56, 0.66)); if (done > 0.65) { inCrane = true; loose = false; } }   // einsetzen
+  else if (done < 0.74) { swing = open * (1 - k(0.66, 0.72)); RV.hand.copy(cylAt(swing)); RV.hand.x -= 0.03; }           // zuschlagen!
+  else { swing = 0; RV.hand.copy(cylAt(0)).lerp(U.support ? RV.tmp.set(...U.support) : pack, k(0.74, 1)); }
+  R.crane.rotation.z = swing;
+  R.cyl.visible = inCrane;
+  R.cyl.rotation.z = done > 0.66 && done < 0.8 ? (done - 0.66) * 30 : 0;                 // Trommel dreht sich beim Zuschlagen
+  R.loose.visible = loose; if (loose) R.loose.position.copy(RV.hand);
+  R.fill.emissiveIntensity = fresh ? 1.8 : 0.3;                                          // alte Trommel leer (dunkel), neue voll (hell)
+  rHand.visible = true;
+  rHand.userData.setArm(RV.hand, elbow);
+}
 export function poseReload(done, gunUD, rHand, pack, elbow) {
+  if (gunUD.revolver) return poseRevolver(done, gunUD, rHand, pack, elbow);
   const M = gunUD.mag, C = gunUD.cock, S = RELOAD_STEPS; if (!M) return;
   const k = (a, b) => { const x = Math.max(0, Math.min(1, (done - a) / (b - a))); return x * x * (3 - 2 * x); };
   const seat = M.seat, out = RV.out.copy(M.out).multiplyScalar(M.len + 0.04).add(seat);
   const bottom = (p, into = RV.hand) => into.copy(M.out).multiplyScalar(M.len).add(p);   // die Hand hält das Magazin unten
   let magPos = seat, showMag = true, newMag = done >= S.stow, cockZ = 0;
-  if (done < S.grab) RV.hand.copy(pack).lerp(bottom(seat, RV.tmp), k(0, S.grab));
+  // Magnet-Gewehr: der Magnet ist beim Schuss verbraucht – kein altes Magazin, die Hand geht gleich zum Rücken
+  if (gunUD.freshOnly && done < S.stow) { RV.hand.copy(bottom(seat, RV.tmp)).lerp(pack, k(0, S.stow)); showMag = false; }
+  else if (done < S.grab) RV.hand.copy(pack).lerp(bottom(seat, RV.tmp), k(0, S.grab));
   else if (done < S.pull) { magPos = RV.mag.copy(seat).lerp(out, k(S.grab, S.pull)); bottom(magPos); }
   else if (done < S.stow) { magPos = RV.mag.copy(out).lerp(pack, k(S.pull, S.stow)); bottom(magPos); showMag = done < S.stow - 0.03; }
   else if (done < S.fetch) { magPos = RV.mag.copy(pack).lerp(out, k(S.stow, S.fetch)); bottom(magPos); showMag = done > S.stow + 0.03; }
