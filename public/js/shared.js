@@ -42,7 +42,7 @@ export const WEAPONS = {
 for (const w of Object.values(WEAPONS)) w.life = w.range / w.speed;   // flight time in seconds
 // Aufladen vor jedem Schuss (Sekunden): erst baut sich der Druck auf (die Kiemen gehen auf), dann geht der Schuss
 // mit einer Druckwelle raus, die genauso lange dauert. Je größer das Kaliber, desto länger. 0 = sofort.
-export const SHOT_CHARGE = { pistol: 0.1, needler: 0.04, scatter: 0.15, harpoon: 0.3, torpedo: 0.25, subtorp: 0, plasma: 0.08, sonic: 0.3 };
+export const SHOT_CHARGE = { pistol: 0.1, needler: 0.08, scatter: 0.15, harpoon: 0.3, torpedo: 0.25, subtorp: 0, plasma: 0.08, sonic: 0.3 };
 // Kompressor im Rucksack: Jede Waffe hat ein Magazin in der Waffe und "spares" Ersatzmagazine im Rucksack.
 // Der Kompressor füllt die Ersatzmagazine nacheinander wieder auf. fill = Sekunden, bis ein leeres Magazin wieder voll ist.
 // Beim Nachladen kommt das alte Magazin zurück in den Rucksack und wird dort wieder gefüllt.
@@ -61,17 +61,21 @@ export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 10, g
 // kill = pro Kill, minute = pro Minute überlebt, place = Bonus für Platz 1, 2 und 3.
 export const BR_REWARD = { kill: 50, minute: 10, place: [300, 150, 75] };
 // Perlen-Shop (Lobby): Verbesserungen fürs Battle Royale, jede hat 3 Stufen. Gilt nur im Battle Royale, nicht für Bots.
-// lv = Wirkung pro Stufe (0.85 = nur noch 85 %, 1.06 = 6 % mehr), price = Preis pro Stufe in Perlen.
+// bonus = Plus in Prozent auf jeder Stufe, gerechnet von 100 % (ohne Verbesserung). +100 % = doppelt so gut.
+//   Beispiel Schnellladen +60 %: man lädt 1,6-mal so schnell nach. price = Preis pro Stufe in Perlen.
 // Eine normale Runde bringt ca. 100–250 Perlen → Stufe 1 nach einer Runde, Stufe 3 nach ein paar Runden.
 export const BR_UPGRADES = [
-  { k: 'reload', name: 'Schnellladen',      desc: 'Nachladen dauert nur noch',     lv: [0.85, 0.72, 0.6],  unit: '%', price: [150, 400, 900] },
-  { k: 'recoil', name: 'Rückstoßdämpfer',   desc: 'Rückstoß nur noch',             lv: [0.8, 0.62, 0.45],  unit: '%', price: [150, 400, 900] },
-  { k: 'scope',  name: 'Ruhiges Visier',    desc: 'Zielen wackelt nur noch',       lv: [0.7, 0.45, 0.25],  unit: '%', price: [120, 350, 800] },
-  { k: 'swim',   name: 'Profi-Flossen',     desc: 'Schwimmtempo',                  lv: [1.06, 1.12, 1.2],  unit: '%', price: [200, 500, 1100] },
-  { k: 'comp',   name: 'Turbo-Kompressor',  desc: 'Magazine füllen sich in',       lv: [0.85, 0.7, 0.55],  unit: '%', price: [150, 400, 900] },
+  { k: 'reload', name: 'Schnellladen',      what: 'Nachladetempo',       bonus: [30, 60, 100],  price: [150, 400, 900] },
+  { k: 'recoil', name: 'Rückstoßdämpfer',   what: 'Rückstoß-Kontrolle',  bonus: [35, 80, 150],  price: [150, 400, 900] },
+  { k: 'scope',  name: 'Ruhiges Visier',    what: 'Zielruhe',            bonus: [50, 120, 250], price: [120, 350, 800] },
+  { k: 'swim',   name: 'Profi-Flossen',     what: 'Schwimmtempo',        bonus: [10, 20, 32],   price: [200, 500, 1100] },
+  { k: 'comp',   name: 'Turbo-Kompressor',  what: 'Füllgeschwindigkeit', bonus: [30, 65, 110],  price: [150, 400, 900] },
 ];
-// Wirkung einer Verbesserung für einen Spieler (up = { reload: 2, ... }); ohne Verbesserung = 1
-export const upMul = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), l = (up && up[k]) | 0; return u && l > 0 ? u.lv[Math.min(l, u.lv.length) - 1] : 1; };
+// Bonus in Prozent für einen Spieler (up = { reload: 2, ... }), 0 = nicht gekauft
+export const upBonus = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), l = (up && up[k]) | 0; return u && l > 0 ? u.bonus[Math.min(l, u.bonus.length) - 1] : 0; };
+// Umrechnung für das Spiel: Schwimmtempo wird mit (1 + Bonus) malgenommen,
+// alles andere (Nachladezeit, Rückstoß, Wackeln, Füllzeit) durch (1 + Bonus) geteilt – es wird kleiner, also besser.
+export const upMul = (up, k) => { const b = 1 + upBonus(up, k) / 100; return k === 'swim' ? b : 1 / b; };
 export const brReward = (kills, secs, place) => {
   const k = kills * BR_REWARD.kill, m = Math.floor(secs / 60) * BR_REWARD.minute, p = BR_REWARD.place[place - 1] || 0;
   return { k, m, p, sum: k + m + p };

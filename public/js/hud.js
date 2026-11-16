@@ -57,13 +57,13 @@ export class Hud {
     if ($('brShop').classList.contains('hidden')) return;
     $('brShopMoney').textContent = `🦪 ${me.pearls || 0} Perlen`;
     $('brShopUps').innerHTML = BR_UPGRADES.map(u => {
-      const l = up[u.k] | 0, next = u.lv[l], price = u.price[l];
-      const now = l ? `${u.desc} ${Math.round(u.lv[l - 1] * 100)} %` : 'Noch nicht gekauft';
-      const pips = '●'.repeat(l) + '○'.repeat(u.lv.length - l);
+      const l = up[u.k] | 0, cur = l ? u.bonus[l - 1] : 0, next = u.bonus[l], price = u.price[l];
+      const pips = '●'.repeat(l) + '○'.repeat(u.bonus.length - l);
       const btn = price == null ? '<button disabled>Max</button>'
         : `<button data-k="${u.k}" ${(me.pearls || 0) < price ? 'disabled' : ''}>🦪 ${price}</button>`;
       return `<div class="item" style="--rar:#ffd36b"><b>${u.name}<span class="pips">${pips}</span></b>`
-        + `<small>${now}${next != null ? ` → Stufe ${l + 1}: ${Math.round(next * 100)} %` : ''}</small>${btn}</div>`;
+        + `<small>${u.what}: <b>${100 + cur} %</b>${cur ? ` (+${cur} %)` : ''}`
+        + `${next != null ? ` → Stufe ${l + 1}: ${100 + next} % (noch +${next - cur} %)` : ' · Maximum erreicht'}</small>${btn}</div>`;
     }).join('');
     for (const b of document.querySelectorAll('#brShopUps button[data-k]')) b.onclick = () => this.brSend && this.brSend(b.dataset.k);
   }

@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX } from './shared.js';
 // gekaufte Verbesserungen aus dem Perlen-Shop (kommen mit der Lobby-Nachricht). Wirken nur im Battle Royale.
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
@@ -12,6 +12,7 @@ import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
 import { settings, onSettings, openSettings, closeSettings, QUALITY } from './settings.js';
 import { setReefQuality } from './reef.js';
+import { makeShock, SHOCK } from './shock.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -142,11 +143,11 @@ hud.initShop((k, i) => send({ t: 'buy', k, i }), closeShop, () => { hud.closeSho
 function clearDyn() {
   for (const p of projs.values()) if (p.whine) p.whine.stop();
   sfx.engine(0);
-  dyn.clear(); players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
+  dyn.clear(); shocks.length = 0; players.clear(); creatures.clear(); vehicles.clear(); pickups.clear(); projs.clear(); crates = [];
   you = null; zone = null; deadInfo = null; specId = 0;
 }
 function onStart(m) {
-  mode = m.mode || 'br';
+  mode = m.mode || 'br'; cling = null;
   ensureWorld(m.seed, mode); clearDyn();
   phase = 'play'; meta.clear(); hud.setMode(mode);
   torch.on = false; torchBeam.visible = false; torch.bat = LAMPS[torch.lvl].battery;   // Akku zurücksetzen (im Battle Royale war er unendlich)
@@ -227,6 +228,14 @@ function addBeam(x0, y0, z0, x1, y1, z1, r) {
   dyn.add(mesh);
   beams.push({ mesh, t: BEAM_TIME });
 }
+// ---------- Schockwelle bei jedem Schuss (Aussehen und Größe: siehe shock.js) ----------
+const shocks = [];
+function addShock(x, y, z, dx, dy, dz, widx, mine) {
+  const s = makeShock(dyn, x, y, z, dx, dy, dz, widx, mine); if (!s) return;
+  shocks.push(s);
+  env.bubble(x, y, z, 5 + Math.round((SHOCK.size[widx] ?? 1) * 5), 0.15 * (SHOCK.size[widx] ?? 1), 1.5);   // Blasenwolke an der Mündung
+}
+function updateShocks(dt) { for (let i = shocks.length - 1; i >= 0; i--) if (!shocks[i].update(dt)) shocks.splice(i, 1); }
 function onEvent(e) {
   switch (e[0]) {
     case 'pj': {
@@ -236,7 +245,10 @@ function onEvent(e) {
       mesh.position.set(e[4], e[5], e[6]); mesh.lookAt(e[4] + e[7], e[5] + e[8], e[6] + e[9]); dyn.add(mesh);
       projs.set(e[1], { mesh, x: e[4], y: e[5], z: e[6], dx: e[7], dy: e[8], dz: e[9], sp: def.speed, life: def.life, trail: widx >= 4 ? 0.03 : 0.09, tt: 0, mine: e[3] === myId,
         whine: widx === 4 || widx === 5 ? sfx.torpedoWhine() : null });   // Torpedos: hohes, sirrendes Heulen
-      if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]));
+      if (def.pellets === 1 || !projs.lastShot || projs.lastShot !== time) {
+        sfx.shot(widx, e[3] === myId ? 1 : volAt(e[4], e[5], e[6]));
+        addShock(e[4], e[5], e[6], e[7], e[8], e[9], widx, e[3] === myId);   // sichtbare Schockwelle
+      }
       projs.lastShot = time;
       if (e[3] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
       break;
@@ -250,7 +262,10 @@ function onEvent(e) {
       // ein paar Blasen entlang des Strahls
       for (let i = 0; i < 4; i++) { const k = Math.random(); env.bubble(e[3] + (e[6] - e[3]) * k, e[4] + (e[7] - e[4]) * k, e[5] + (e[8] - e[5]) * k, 1, 0.15, 0.5); }
       // Splitterwerfer schießt 7 Strahlen gleichzeitig – das Geräusch nur einmal abspielen
-      if (beams.lastShot !== time) sfx.jet(widx, e[2] === myId ? 1 : volAt(e[3], e[4], e[5]));
+      if (beams.lastShot !== time) {
+        sfx.jet(widx, e[2] === myId ? 1 : volAt(e[3], e[4], e[5]));
+        addShock(e[3], e[4], e[5], e[6] - e[3], e[7] - e[4], e[8] - e[5], widx, e[2] === myId);   // sichtbare Schockwelle
+      }
       beams.lastShot = time;
       if (e[2] === myId) { shake = Math.max(shake, widx >= 3 ? 0.25 : 0.08); view.kick = 1; }
       break;
@@ -354,6 +369,7 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (phase !== 'play' || !you || !you.alive) return;
   if (e.code === 'KeyV') { firstPerson = !firstPerson; return; }   // Ego-Perspektive an/aus
+  if (e.code === 'KeyC' && canCling()) { toggleCling(); return; }  // Deckung: am Riff festhalten / loslassen
   if (e.code === 'KeyG') { const t = finTarget(); if (t) send({ t: 'fin', id: t.id }); return; }   // Finisher
   if (e.code === 'KeyL') {
     if (mode === 'exp' && torch.bat <= 0) hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 2);
@@ -402,6 +418,25 @@ addEventListener('wheel', (e) => {
 addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('pointerlockchange', () => { hud.pause(phase === 'play' && document.pointerLockElement !== canvas); if (document.pointerLockElement !== canvas) firing = false; });
 
+// ---------- Deckung: Triton und Manta halten sich mit C an einem Riff-Hügel fest ----------
+// reach = so viele Meter darf man höchstens vom Hügel weg sein, sway = Zielwackeln beim Festhalten (0.35 = nur noch 35 %)
+const CLING = { reach: 1.8, sway: 0.35 };
+let cling = null;   // { x, y, z } = hier hängt man gerade, null = man schwimmt frei
+const canCling = () => mode !== 'exp' && (mySuit === 'triton' || mySuit === 'manta') && you && you.alive && !you.veh;   // nur Battle Royale
+function nearReef() {
+  const R = SUITS[mySuit].r;
+  for (const m of (W && W.reefMounds) || []) {
+    const d = Math.hypot(me.x - m.x, me.y - m.y, me.z - m.z) - m.r * (m.sx + m.sy + m.sz) / 3 * REEF_HITBOX - R;
+    if (d < CLING.reach) return true;
+  }
+  return false;
+}
+function toggleCling() {
+  if (cling) { cling = null; sfx.noise(0.15, 500, 1, 0.25, 'lowpass', 200); return; }
+  if (!nearReef()) { hud.banner('Zu weit weg – schwimm näher an den Riff-Hügel!', 1.2); return; }
+  cling = { x: me.x, y: me.y, z: me.z }; me.vx = me.vy = me.vz = 0;
+  sfx.noise(0.12, 900, 1, 0.35, 'lowpass', 300); sfx.tone(160, 90, 0.08, 0.25, 'sine');   // Hand packt den Fels
+}
 // ---------- local player ----------
 function controlMe(dt) {
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
@@ -411,7 +446,8 @@ function controlMe(dt) {
   if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
   else { me.hyaw = camYaw; me.hpitch = camPitch; }
   const shop = hud.shopOpen;   // no swimming while shopping
-  const f = shop ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = shop ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), u = shop ? 0 : (keys.Space ? 1 : 0) - (keys.KeyC || keys.KeyX ? 1 : 0);
+  const down = canCling() ? keys.KeyX : (keys.KeyC || keys.KeyX);   // Triton/Manta: C = festhalten, also sinken nur mit X
+  const f = shop ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = shop ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), u = shop ? 0 : (keys.Space ? 1 : 0) - (down ? 1 : 0);
   const fw = dirFrom(me.hyaw, me.hpitch), rx = Math.cos(me.hyaw), rz = -Math.sin(me.hyaw);
   let wx = fw[0] * f + rx * s * strafe, wy = fw[1] * f + u, wz = fw[2] * f + rz * s * strafe;
   const wl = Math.hypot(wx, wy, wz); if (wl > 1) { wx /= wl; wy /= wl; wz /= wl; }
@@ -424,6 +460,13 @@ function controlMe(dt) {
   } else {
     me.byaw = approachAngle(me.byaw ?? me.hyaw, me.hyaw, (vt ? 50 : 9) * dt);
     me.bpitch += (me.hpitch - me.bpitch) * Math.min(1, dt * (vt ? 50 : 8));
+  }
+  // am Riff festhalten: ganz still hängen. Wegschwimmen (WASD, Leertaste, X) lässt los.
+  if (cling && (f || s || u || vt || you.grab || !canCling())) cling = null;
+  if (cling) {
+    me.x = cling.x; me.y = cling.y; me.z = cling.z; me.vx = me.vy = me.vz = 0; me.boost = false;
+    me.energy = Math.min(100, me.energy + 13 * dt);
+    return;
   }
   me.boost = canBoost && (keys.ShiftLeft || keys.ShiftRight) && wl > 0.1 && !me.exhaust;
   if (me.boost) { me.energy = Math.max(0, me.energy - 26 * dt); if (me.energy <= 0) me.exhaust = true; speed *= S.boost; }
@@ -601,6 +644,8 @@ function shoot(v, w) {
 function computePrompt() {
   if (!you || !you.alive) return null;
   if (you.grab) return ['F', 'Befreien – mehrfach drücken!'];
+  if (cling) return ['C', 'Loslassen (oder wegschwimmen)'];
+  if (canCling() && nearReef()) return ['C', 'Am Riff festhalten (Deckung)'];
   if (mode === 'exp' && held >= 0 && !hud.shopOpen && nearBase()) { const c = catchFromNet(you.x.bagL[held]); return ['E', `${catchName(c)} ins Aquarium setzen (+${catchRate(c).toLocaleString('de-DE', { maximumFractionDigits: 2 })} €/s)`]; }
   if (mode === 'exp' && !hud.shopOpen && !nearBoat() && !nearBase() && otherBaseOwner()) return ['–', `Basis von ${otherBaseOwner()} · nur Luft tanken`];
   if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
@@ -677,6 +722,7 @@ function updateEntities(dt) {
     if (p.whine) { const d = Math.hypot(p.x - camera.position.x, p.y - camera.position.y, p.z - camera.position.z); p.whine.set(Math.max(0, 1 - d / 140) ** 1.5); }
     if (p.life <= -0.15 || p.y < W.heightAt(p.x, p.z) - 0.5) removeProj(id);
   }
+  updateShocks(dt);
   // Wasserstrahlen verblassen in BEAM_TIME Sekunden und verschwinden dann
   for (let i = beams.length - 1; i >= 0; i--) {
     const b = beams[i]; b.t -= dt;
@@ -716,7 +762,7 @@ function updateScope(dt) {
   hud.scopeKick(view.scopeKick);
   // Wackeln: zwei langsame Wellen übereinander, das sieht aus wie zitternde Hände. Es verschiebt das echte Zielen!
   const lifeLeft = you && you.mhp ? Math.max(0, Math.min(1, you.hp / you.mhp)) : 1;
-  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * aim * (isScope ? 1 : 0.45) * UP('scope');   // über Kimme und Korn wackelt es weniger; Ruhiges Visier
+  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * aim * (isScope ? 1 : 0.45) * UP('scope') * (cling ? CLING.sway : 1);   // über Kimme und Korn wackelt es weniger; Ruhiges Visier
   swayT += dt;
   const nx = (Math.sin(swayT * 0.9) + Math.sin(swayT * 2.3 + 1) * 0.45) * amp, ny = (Math.cos(swayT * 1.1) + Math.sin(swayT * 2.9) * 0.4) * amp;
   camYaw += nx - swayX; camPitch += ny - swayY; swayX = nx; swayY = ny;

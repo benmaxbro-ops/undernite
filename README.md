@@ -22,7 +22,8 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 |---|---|
 | W A S D | schwimmen (in Blickrichtung, volle 3D-Bewegung) |
 | Maus | zielen / umsehen |
-| Leertaste / C | aufwärts / abwärts – ganz oben schaut dein Kopf aus dem Wasser |
+| Leertaste / C | aufwärts / abwärts – ganz oben schaut dein Kopf aus dem Wasser (X geht auch abwärts) |
+| C (Triton, Manta) | Battle Royale: am Riff-Hügel festhalten = Deckung (ganz still, ruhigeres Zielen). Abwärts dann mit X |
 | Shift | Schub (verbraucht Energie) |
 | Linksklick | feuern |
 | 1 2 3 / Mausrad | Waffe wechseln |

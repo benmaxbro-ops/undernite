@@ -46,9 +46,16 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [ ] **Selbst sterben:** Bild wird langsam dunkler, dann ganz schwarz, dann ein „Du bist tot“-Bildschirm.
       Von da aus: neue Klasse (Taucher) aussuchen oder in den Shop gehen.
 
-- [ ] **Deckung mit C** (nur Triton und Manta): hinter den Riff-Bergen in Deckung gehen. Bollwerk und Goliath sinken mit C nur ab.
-      Noch offen: was genau passiert (flach ducken? am Riff festhalten?)
-- [ ] **Sichtbare Schockwelle** aus den Seitenkiemen der Waffe bei jedem Schuss
+- [x] **Deckung mit C** (nur Triton und Manta): am Riff-Hügel festhalten. Bollwerk und Goliath sinken mit C nur ab.
+- [ ] **Löcher im Riff**, in denen man stecken bleibt, reparieren
+- [ ] **Finisher** sauberer (Manta sieht komisch aus; beim Goliath geht der Mech kaputt)
+- [ ] **Schüsse von anderen**: dumpfer Schlag wie gegen eine Holztür, großes Kaliber dumpfer
+- [ ] **Nadler**: längere Lade-/Schockwellen-Zeit
+- [x] **Sichtbare Schockwelle** aus Mündung und Seitenkiemen bei jedem Schuss (shock.js)
+- [ ] **Kimme und Korn leuchten** (wie Leuchtvisiere)
+- [ ] **Schuss-Richtungsanzeige:** kleiner Ring in der Mitte, ein Pfeil zeigt, woher geschossen wird
+- [ ] **Grafik so realistisch wie möglich:** 1. Bodycam-Linse, 2. Unterwasser-Licht (Farben verschwinden mit der Tiefe,
+      Lichtstrahlen, Meeresschnee), 3. Tiefenschärfe + Bewegungsunschärfe, 4. bessere Oberflächen, 5. Bodycam-Animationen, 6. bessere Taucher
 - [ ] **Treffer-Sound:** wie eine Kugel, die richtig durchschlägt (im Internet recherchieren)
 - [ ] **Vorbeifliegende Kugeln:** deutliches „Schwusch“
 
