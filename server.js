@@ -211,6 +211,8 @@ function damage(p, amt, src, how, sx, sz) {
   if (G.time < (p.bubbleT || 0) && src && src.id && src !== p && how !== 'zone') { ev('deflect', p.id); return; }
   // Manta-Ulti (Matrix): weicht jeder Kugel aus – nur Zone, Hitze und Bluten treffen noch
   if (p.suit === 'manta' && G.time < (p.ultT || 0) && src && src !== p && how !== 'zone' && how !== 'burn' && how !== 'bleed') { ev('dodge', p.id); return; }
+  // Bollwerk-Ulti (Festung): nur ein Drittel Schaden kommt durch
+  if (p.suit === 'bulwark' && G.time < (p.ultT || 0) && how !== 'zone') amt *= ULTIS.bulwark.armor;
   if (!p.bot && src && src.bot) amt *= 0.7;        // bots hit humans a little softer
   if (p.bot && (how === 'shark' || how === 'octo' || how === 'jelly')) amt *= 0.5;
   if (p.bot && src && src.bot) amt *= 0.1;   // keep bot-vs-bot fights from emptying the lobby too early
@@ -393,6 +395,7 @@ function fire(p, d, aim) {
   if (!w || p.reload > 0 || G.time < p.nextFire - 0.06 || G.time < (p.holsterT || 0) || G.time < (p.stunT || 0)) return;   // weggesteckt (zu heiß) oder gelähmt: nicht schießen
   if (WEAPONS[w.id].melee) return melee(p, w, d);   // Stabwaffe: Stoß statt Schuss
   if (w.ammo <= 0) { startReload(p); return; }
+  p.invisT = 0;   // wer schießt, ist nicht mehr getarnt (Sepia-Ulti)
   const def = wdef(w), S = SUITS[p.suit];
   w.ammo--; p.nextFire = G.time + 1 / def.rate;
   const o = S.r + 0.5;
@@ -522,11 +525,58 @@ function useGadget(p, m) {
   ev('gad', p.id, p.gad, r2(at.x), r2(at.y), r2(at.z));   // alle sehen und hören es
 }
 // ---------- Ultis (Battle Royale, Taste 4) – Werte in ULTIS (shared.js) ----------
-function useUlti(p) {
+// Blickrichtung: vom Browser mitgeschickt (m.d), bei Bots zum Ziel hin, sonst aus der Körperdrehung
+function ultDir(p, m) {
+  let d = m && Array.isArray(m.d) && m.d.length === 3 && m.d.every(Number.isFinite) ? m.d : null;
+  const t = p.bot && p.target && p.target.ref;
+  if (!d && t) d = [t.x - p.x, t.y - p.y, t.z - p.z];
+  if (!d) { const cp = Math.cos(p.pitch || 0); d = [-Math.sin(p.yaw) * cp, Math.sin(p.pitch || 0), -Math.cos(p.yaw) * cp]; }
+  const l = Math.hypot(...d) || 1; return d.map(v => v / l);
+}
+function useUlti(p, m) {
   const U = ULTIS[p.suit];
   if (!U || (p.ult || 0) < 100 || p.veh || G.time < (p.ultT || 0)) return;
   p.ult = 0; p.ultT = G.time + U.time;
+  const d = ultDir(p, m);
+  switch (p.suit) {
+    case 'triton': p.salvo = { n: U.n, next: G.time, d }; break;                     // Torpedos starten nacheinander (ultTick)
+    case 'sepia': p.invisT = p.ultT; break;                                           // unsichtbar, bis man schießt
+    case 'barrakuda': p.rammed = new Set(); pushAway(p, d[0] * U.speed, d[1] * U.speed, d[2] * U.speed); break;
+    case 'nautilus': p.hp = Math.min(p.maxhp, p.hp + U.heal); p.shield = Math.max(p.shield, U.shield); break;
+  }
   ev('ult', p.id, SUIT_ORDER.indexOf(p.suit));   // alle sehen und hören es
+}
+// was Ultis jede Runde (Tick) tun: Torpedo-Salve, Festung stößt weg, Rammstoß trifft
+function ultTick() {
+  if (G.mode === 'exp') return;
+  for (const p of G.players.values()) {
+    if (!p.alive) { p.salvo = null; continue; }
+    const on = G.time < (p.ultT || 0), U = ULTIS[p.suit];
+    if (p.salvo && G.time >= p.salvo.next) {
+      const T = ULTIS.triton; let best = null, bd = T.range;
+      for (const q of foesNear(p, p.x, p.y, p.z, T.range)) if (G.time >= (q.invisT || 0) && los(p, q)) { const dd = dist(p, q); if (dd < bd) { bd = dd; best = q; } }
+      let d = p.salvo.d;
+      if (best) { const dx = best.x - p.x, dy = best.y + 0.3 - p.y, dz = best.z - p.z, l = Math.hypot(dx, dy, dz) || 1; d = [dx / l, dy / l, dz / l]; }
+      spawnProj(p, 'torpedo', p.x + d[0] * 1.8, p.y + d[1] * 1.8 + 0.3, p.z + d[2] * 1.8, d, 1, 0, null,
+        { ...WEAPONS.torpedo, dmg: T.dmg, speed: T.speed, splash: T.splash, spread: 0.02, life: T.range / T.speed });
+      G.proj[G.proj.length - 1].ult = 1;   // Ulti-Torpedos verletzen dich selbst nicht
+      if (--p.salvo.n <= 0) p.salvo = null; else p.salvo.next = G.time + 0.25;
+    }
+    if (!on) continue;
+    if (p.suit === 'bulwark' && G.time >= (p.pushT || 0)) {   // Festung: alle 0,5 s wegstoßen, wer zu nah ist
+      p.pushT = G.time + 0.5;
+      for (const q of foesNear(p, p.x, p.y, p.z, U.push + SUITS[p.suit].r)) { const dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z, l = Math.hypot(dx, dy, dz) || 1; pushAway(q, dx / l * 16, dy / l * 16 + 2, dz / l * 16); }
+    }
+    if (p.suit === 'barrakuda' && p.rammed) {   // Rammstoß: jeden Gegner, den man berührt, einmal treffen
+      for (const q of foesNear(p, p.x, p.y, p.z, 4)) {
+        if (p.rammed.has(q.id) || dist(p, q) > SUITS[p.suit].r + SUITS[q.suit].r + 0.8) continue;
+        p.rammed.add(q.id);
+        const dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z, l = Math.hypot(dx, dy, dz) || 1;
+        pushAway(q, dx / l * 20, dy / l * 20 + 3, dz / l * 20); damage(q, U.dmg, p, 'ram', p.x, p.z);
+        ev('boom', 0, r2(q.x), r2(q.y), r2(q.z), 2);   // Rumms: kleine Druckwolke
+      }
+    }
+  }
 }
 function gadgetTick() {
   // Köder: Haie in der Nähe stürzen sich auf Gegner am Köder
@@ -560,7 +610,7 @@ function explode(pr, x, y, z) {
   ev('boom', pr.id, r2(x), r2(y), r2(z), pr.splash);
   const fall = (d) => pr.dmg * (1 - 0.7 * d / pr.splash);
   if (G.mode !== 'exp') for (const q of G.players.values()) {   // expedition is co-op: explosions never hurt divers
-    if (!q.alive) continue;
+    if (!q.alive || (pr.ult && q === owner)) continue;
     const d = Math.sqrt((q.x - x) ** 2 + (q.y - y) ** 2 + (q.z - z) ** 2) - SUITS[q.suit].r;
     if (d < pr.splash) damage(q, fall(Math.max(0, d)) * (q === owner ? 0.5 : 1), owner, 'p', x, z);
   }
@@ -796,9 +846,10 @@ function botThink(b) {
   // bots fight each other in short bursts with breaks in between, so rounds last long enough for humans
   const cur = b.target && b.target.k === 'p' ? b.target.ref : null;
   if (cur && cur.bot && G.time > b.fightUntil) { b.target = null; b.peaceUntil = G.time + 7 + rnd() * 9; }
+  if (cur && G.time < (cur.invisT || 0)) b.target = null;   // Ziel hat sich getarnt
   const peace = G.time < b.peaceUntil;
   for (const p of G.players.values()) {
-    if (p === b || !p.alive || (peace && p.bot)) continue;
+    if (p === b || !p.alive || (peace && p.bot) || G.time < (p.invisT || 0)) continue;   // Getarnte sieht der Bot nicht
     const d = dist(b, p);
     if (d < bd && los(b, p)) { bd = d; best = { k: 'p', ref: p }; }
   }
@@ -1348,6 +1399,7 @@ function tick(dt) {
     if (p.alive) autoCollect(p);
   }
   gadgetTick();
+  ultTick();
   for (const v of G.vehicles.values()) {
     const d = v.driver && G.players.get(v.driver);
     if (d && d.alive && d.veh === v.id) { v.x = d.x; v.y = d.y; v.z = d.z; v.yaw = d.yaw; v.pitch = d.pitch; }
@@ -1372,7 +1424,8 @@ function snapshot() {
     tm: r2(G.time), n: aliveCount(),
     z: z ? [r2(z.x), r2(z.z), r2(z.r), r2(z.nx), r2(z.nz), r2(z.nr), z.ph, P ? Math.ceil((z.sh ? P.shrink : P.wait) - z.t) : 0, z.sh ? 1 : 0] : null,
     p: [...G.players.values()].filter(p => p.alive).map(p => [p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.ceil(p.hp), Math.round(p.shield),
-      (p.boost ? 2 : 0) | (p.grabbed ? 4 : 0), p.weapons[p.slot] ? WEAPON_IDS.indexOf(p.weapons[p.slot].id) : -1, p.veh]),
+      (p.boost ? 2 : 0) | (p.grabbed ? 4 : 0) | (G.time < (p.invisT || 0) ? 8 : 0),   // 8 = getarnt (Sepia-Ulti)
+      p.weapons[p.slot] ? WEAPON_IDS.indexOf(p.weapons[p.slot].id) : -1, p.veh]),
     c: G.creatures.map(c => [c.id, CREATURE_IDS.indexOf(c.type), r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.pitch),
       ['hunt', 'lunge', 'chase', 'swing', 'attack', 'flee'].includes(c.state) ? 1 : c.state === 'hold' ? 2 : 0,
       c.sub || 0, c.maxhp ? Math.max(0, Math.ceil(c.hp / c.maxhp * 100)) : 100, c.gold ? 1 : 0]),
@@ -1469,7 +1522,7 @@ wss.on('connection', (ws) => {
       // Einkaufen und Ausrüsten: in der Lobby – oder während der Runde, wenn man schon tot ist (oder nur zuschaut)
       case 'brbuy': if (G.phase === 'lobby' || !p || !p.alive) { brBuy(c, m.k); send(ws, lobbyMsg()); if (G.phase === 'lobby') broadcast(lobbyMsg()); } break;
       case 'load': if (G.phase === 'lobby' || !p || !p.alive) { setLoadout(c, m); send(ws, lobbyMsg()); if (G.phase === 'lobby') broadcast(lobbyMsg()); } break;
-      case 'ult': if (p && p.alive && G.mode !== 'exp') useUlti(p); break;
+      case 'ult': if (p && p.alive && G.mode !== 'exp') useUlti(p, m); break;
       case 'gad': if (p && p.alive && G.mode !== 'exp') { try { useGadget(p, m); } catch (err) { console.error('[gadget error]', err); } } break;
       case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':

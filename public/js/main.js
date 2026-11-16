@@ -283,7 +283,7 @@ function useUlti() {
   const U = ULTIS[mySuit];
   if (you.ul[1] > 0) return;
   if (you.ul[0] < 100) { hud.banner(`${U.name} lädt noch (${you.ul[0]} %)`, 1); return; }
-  send({ t: 'ult' });
+  send({ t: 'ult', d: dirFrom(camYaw, camPitch).map(v => +v.toFixed(3)) });
 }
 // Goliath-Zielcomputer: dreht die Kamera von selbst zum nächsten Gegner, den man sieht.
 // range = so weit (Meter) sucht er, cone = nur Gegner ungefähr vor dir (Winkel), turn = wie schnell er nachzieht
@@ -305,12 +305,31 @@ function autoAim(dt) {
   camYaw = approachAngle(camYaw, Math.atan2(-dx, -dz), AUTOAIM.turn * dt);
   const tp = Math.atan2(dy, Math.hypot(dx, dz)); camPitch += Math.max(-AUTOAIM.turn * dt, Math.min(AUTOAIM.turn * dt, tp - camPitch));
 }
+// Hammerhai-Blutrausch: rote Markierungen über Gegnern, auch durch Felsen hindurch
+const rageMarks = [];
+function drawRage() {
+  const on = mySuit === 'hammerhai' && ultOn() && phase === 'play';
+  let n = 0;
+  if (on) for (const e of players.values()) {
+    if (e.id === myId || (e.fl & 8) || Math.hypot(e.x - me.x, e.y - me.y, e.z - me.z) > ULTIS.hammerhai.range) continue;
+    V.set(e.x, e.y + 0.4, e.z).project(camera); if (V.z > 1) continue;   // hinter dir
+    let d = rageMarks[n]; if (!d) { d = document.createElement('div'); d.className = 'rage'; document.getElementById('hud').appendChild(d); rageMarks.push(d); }
+    d.style.display = ''; d.style.left = ((V.x + 1) / 2 * innerWidth) + 'px'; d.style.top = ((1 - V.y) / 2 * innerHeight) + 'px'; n++;
+  }
+  for (let i = n; i < rageMarks.length; i++) rageMarks[i].style.display = 'none';
+}
 function onUlti(e) {
   const pe = players.get(e[1]), suit = SUIT_ORDER[e[2]], U = ULTIS[suit]; if (!pe || !U) return;
   const mine = e[1] === myId, vol = mine ? 1 : volAt(pe.x, pe.y, pe.z);
   if (mine) hud.banner(`${U.name}!`, 1.4);
   if (suit === 'manta') { sfx.tone(320, 55, 1.1, 0.55 * vol, 'sine'); sfx.noise(1.0, 600, 0.8, 0.3 * vol, 'lowpass', 120); }   // tiefes Wuuumm: die Zeit wird langsam
-  else { for (let i = 0; i < 3; i++) sfx.tone(1300, 1300, 0.07, 0.25 * vol, 'square', i * 0.12); }   // Piep-piep-piep: der Zielcomputer schaltet sich ein
+  else if (suit === 'goliath') { for (let i = 0; i < 3; i++) sfx.tone(1300, 1300, 0.07, 0.25 * vol, 'square', i * 0.12); }   // Piep-piep-piep: der Zielcomputer schaltet sich ein
+  else if (suit === 'triton') { for (let i = 0; i < 3; i++) sfx.tone(700, 1500, 0.12, 0.2 * vol, 'triangle', i * 0.25); }   // drei Torpedos zischen los
+  else if (suit === 'bulwark') { sfx.tone(90, 45, 0.6, 0.6 * vol, 'sine'); sfx.noise(0.4, 300, 1, 0.4 * vol, 'lowpass', 80); }   // dumpfes Wumm: die Panzerung schließt sich
+  else if (suit === 'sepia') { sfx.noise(0.7, 2500, 1, 0.3 * vol, 'bandpass', 600); }   // Pssschhh: sie verschwindet
+  else if (suit === 'barrakuda') { sfx.whoosh(0.9 * vol); sfx.noise(0.5, 900, 1, 0.4 * vol, 'lowpass', 200); }   // Wuuusch nach vorne
+  else if (suit === 'nautilus') { sfx.summon(); }   // Glitzern: Reparatur
+  else if (suit === 'hammerhai') { sfx.tone(140, 60, 0.8, 0.5 * vol, 'sawtooth'); sfx.tone(70, 70, 1.2, 0.3 * vol, 'sine', 0.1); }   // tiefes Knurren
 }
 const SHIELD_GEO = new THREE.SphereGeometry(1, 32, 18), DRONE_GEO = new THREE.SphereGeometry(0.16, 16, 12), DRONE_RING = new THREE.TorusGeometry(0.24, 0.035, 8, 24);
 function onGadget(e) {
@@ -720,7 +739,7 @@ const flow = { f: 0, s: 0, u: 0, roll: 0 };
 function controlMe(dt) {
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
   if (mySuit === 'goliath' && ultOn()) autoAim(dt);   // Zielcomputer-Ulti
-  let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1) * (mySuit === 'manta' && ultOn() ? ULTIS.manta.speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
+  let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1) * ((mySuit === 'manta' || mySuit === 'hammerhai') && ultOn() ? ULTIS[mySuit].speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
   if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
   if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
@@ -998,7 +1017,7 @@ function updateEntities(dt) {
     e.fin = fins.find(f => f.attacker === e.id) || null;
     const veh = e.veh ? vehicles.get(e.veh) : null;
     // im U-Boot sieht man den Taucher nicht, und in der Ego-Perspektive nicht den eigenen Körper
-    e.mesh.visible = !(veh && veh.type === 'sub') && !(e.id === myId && fpOn);
+    e.mesh.visible = !(veh && veh.type === 'sub') && !(e.id === myId && fpOn) && !(e.id !== myId && (e.fl & 8));   // 8 = getarnt (Sepia-Ulti)
     e.mesh.position.set(e.x, e.y, e.z);
     e.mesh.userData.update(dt, e);
     const near = e.mesh.position.distanceToSquared(camera.position);
@@ -1312,6 +1331,7 @@ function frame(now) {
     const sense = mode !== 'exp' && you && you.alive ? Math.max(SUITS[mySuit].sense || 0, sonar) : 0;
     hud.gadget(mode !== 'exp' && you && you.alive ? you.gd : null);
     hud.ulti(mode !== 'exp' && you && you.alive ? you.ul : null, mySuit);
+    drawRage();
     if (sense) for (const e of players.values()) if (e.id !== myId && e.mesh.visible && Math.hypot(e.x - me.x, e.y - me.y, e.z - me.z) < sense) marks.push({ x: e.x, z: e.z, c: '#ff4d4d', s: 3 });
     if (mode === 'exp') {
       // boss health bar for the closest boss nearby, boss dots + boat on the minimap

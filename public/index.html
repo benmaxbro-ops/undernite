@@ -152,6 +152,10 @@ button.go:hover{filter:brightness(1.1)} button.go:active{translate:0 1px}
 #ultBox.hidden{display:none} #ultBox i{display:block;width:70px;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden} #ultBox u{display:block;height:100%;background:#ffc94d}
 #ultBox.ready{border-color:#ffc94d;box-shadow:0 0 14px rgba(255,201,77,.5);animation:ultPulse 1s ease-in-out infinite alternate}
 #ultBox.on u{background:#7dffb0}
+#ultFx[data-k=sepia]{background:radial-gradient(ellipse at center,transparent 45%,rgba(150,80,255,.3) 100%);backdrop-filter:saturate(.6) brightness(.9)}
+#ultFx[data-k=hammerhai]{background:radial-gradient(ellipse at center,transparent 50%,rgba(255,30,30,.28) 100%);backdrop-filter:none}
+/* Blutrausch: rote Raute über jedem Gegner, auch hinter Felsen */
+.rage{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid #ff3b3b;transform:rotate(45deg);box-shadow:0 0 10px #ff3b3b;pointer-events:none}
 @keyframes ultPulse{to{box-shadow:0 0 22px rgba(255,201,77,.85)}}
 /* Matrix-Zeitlupe: Farben fast weg, grüner Schimmer am Rand */
 #ultFx{background:radial-gradient(ellipse at center,transparent 50%,rgba(60,255,140,.22) 100%);backdrop-filter:saturate(.3) contrast(1.15);opacity:0;transition:opacity .35s}

@@ -147,6 +147,22 @@ export const ULTIS = {
              desc: 'Zeitlupe wie in Matrix: 5 Sekunden lang weichst du jeder Kugel aus und schwimmst schneller.' },
   goliath: { name: 'Zielcomputer', time: 6,
              desc: 'Der Mech-Computer zielt 6 Sekunden lang automatisch auf den nächsten Gegner, den du siehst.' },
+  // n = so viele Torpedos, dmg = Schaden pro Torpedo, splash = Explosionsradius, range = so weit sucht er Ziele
+  triton:  { name: 'Torpedo-Salve', time: 0.8, n: 3, dmg: 40, speed: 60, splash: 6, range: 70,
+             desc: '3 kleine Torpedos schießen nacheinander los, jeder auf den nächsten Gegner, den du siehst.' },
+  // armor = so viel Schaden kommt noch durch (0.33 = ein Drittel), push = wer näher kommt (Meter), wird weggestoßen
+  bulwark: { name: 'Festung',     time: 6, armor: 0.33, push: 5,
+             desc: '6 Sekunden lang bekommst du nur ein Drittel Schaden, und wer zu nah kommt, wird weggestoßen.' },
+  sepia:   { name: 'Tarnung',     time: 5,
+             desc: '5 Sekunden unsichtbar wie ein echter Tintenfisch. Wenn du schießt, ist die Tarnung vorbei.' },
+  // speed = so schnell schießt du nach vorne (m/s), dmg = Schaden für jeden, den du rammst
+  barrakuda: { name: 'Rammstoß',  time: 0.6, speed: 45, dmg: 35,
+             desc: 'Du schießt blitzschnell nach vorne. Wen du rammst, der wird weggeschleudert und bekommt 35 Schaden.' },
+  nautilus:  { name: 'Reparatur', time: 0.5, heal: 60, shield: 100,
+             desc: 'Sofort 60 Leben zurück und das Schild wieder voll.' },
+  // range = so weit sieht er Gegner durch Felsen, speed = so viel schneller schwimmt er
+  hammerhai: { name: 'Blutrausch', time: 8, range: 90, speed: 1.2,
+             desc: '8 Sekunden lang siehst du Gegner durch Felsen als rote Markierung und schwimmst schneller.' },
 };
 // Waffen-Aufsätze (Ausrüstungs-Fenster, nur für die Startwaffe). Pro Platz (slot) passt einer drauf.
 // for = auf welche Waffen er passt. Gekauft wird er für jede Waffe einzeln.

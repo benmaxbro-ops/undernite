@@ -462,7 +462,8 @@ export class Hud {
     const key = ul ? ul[0] + ':' + ul[1] : '';
     if (key === this.ultKey) return; this.ultKey = key;
     $('ultBox').classList.toggle('hidden', !ul);
-    $('ultFx').style.opacity = ul && ul[1] > 0 && suit === 'manta' ? 1 : 0;   // Matrix-Zeitlupe: Bild wird fast farblos
+    // Bild-Effekt während der Ulti: Manta fast farblos (Matrix), Sepia lila (getarnt), Hammerhai rot (Blutrausch)
+    const fx = $('ultFx'); fx.dataset.k = suit; fx.style.opacity = ul && ul[1] > 0 && ['manta', 'sepia', 'hammerhai'].includes(suit) ? 1 : 0;
     if (!ul) return;
     const U = ULTIS[suit], on = ul[1] > 0, ready = !on && ul[0] >= 100;
     $('ultName').textContent = on ? `${U.name} ${Math.ceil(ul[1])} s` : ready ? `${U.name} bereit!` : `${U.name} ${ul[0]} %`;
