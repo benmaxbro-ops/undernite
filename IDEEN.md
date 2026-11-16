@@ -76,7 +76,7 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [ ] **Vorbeifliegende Kugeln:** deutliches „Schwusch“
 
 - [x] **Stabwaffen:** Dreizack, Elektro-Speer, Kampfstab (Beute oder Startwaffe)
-- [ ] **Waffen schöner und realistischer** (alle)
+- [x] **Waffen schöner und realistischer:** taktische Farben (Graphit, Stahl, Gummi), Metall spiegelt die Umgebung (Farben in GUN_LOOK, models.js)
 - [ ] **Brustschwimmen** mit Händen in der Ego-Sicht
 
 ## Fairness: Ligen

@@ -6,7 +6,7 @@ import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREAT
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
 import { buildEnvironment } from './world.js';
-import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy } from './models.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy, makeGunEnv } from './models.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
@@ -28,6 +28,7 @@ const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+makeGunEnv(renderer);   // Spiegel-Umgebung für das Metall der Waffen
 const scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0x2b8fb0, 0.01);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.25, 900);
 camera.rotation.order = 'YXZ'; scene.add(camera);

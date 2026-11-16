@@ -310,6 +310,27 @@ const GUNS = [
 ];
 const GUN_WHITE = 0xf2f7fa, GUN_BLUE = 0x2fa8ff;
 const SIGHT_GLOW = 0x6dff8a;   // Farbe der Leuchtpunkte auf Kimme und Korn (grün wie echte Leuchtvisiere)
+// Aussehen der Waffen: body = Gehäuse (Kunststoff), metal = Stahlteile, grip = Gummigriff, bodyGlow = wie stark das Gehäuse
+// von selbst leuchtet (damit man es im Dunkeln noch erahnt). Die alten weißen Waffen: body 0xf2f7fa, bodyGlow 0.45
+export const GUN_LOOK = { body: 0x353c42, metal: 0x5d676f, grip: 0x1d2226, bodyGlow: 0.12 };
+// Spiegel-Umgebung für Metall (wird in main.js einmal erzeugt): oben helles Wasser, unten dunkel,
+// dazu zwei weiche helle Flecken (wie Lampen), damit Kanten und Rundungen Glanzlichter bekommen
+export const GUN_ENV = { tex: null };
+export function makeGunEnv(renderer) {
+  const sc = new THREE.Scene();
+  const mat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false,
+    vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `varying vec3 vP; void main(){
+      vec3 d = normalize(vP); float y = d.y;
+      vec3 top = vec3(0.62, 0.8, 0.92), mid = vec3(0.08, 0.2, 0.28), bot = vec3(0.015, 0.03, 0.045);
+      vec3 c = y > 0.0 ? mix(mid, top, pow(y, 1.4)) : mix(mid, bot, pow(-y, 0.6));
+      c += vec3(1.0, 0.97, 0.9) * 2.2 * pow(max(0.0, dot(d, normalize(vec3(0.3, 0.75, -0.6)))), 40.0);    // Lampe vorne oben
+      c += vec3(0.6, 0.85, 1.0) * 0.9 * pow(max(0.0, dot(d, normalize(vec3(-0.8, 0.3, 0.4)))), 16.0);    // Streulicht seitlich
+      gl_FragColor = vec4(c, 1.0); }` });
+  sc.add(new THREE.Mesh(new THREE.SphereGeometry(10, 48, 24), mat));
+  const pm = new THREE.PMREMGenerator(renderer);
+  GUN_ENV.tex = pm.fromScene(sc, 0.02).texture; pm.dispose();
+}
 // Profile werden pro Waffe nur einmal gebaut und dann wiederverwendet (spart Speicher)
 const GUN_GEO = new Map();
 // Würfel mit abgerundeten Kanten (1 × 1 × 1), damit nichts mehr kantig aussieht
@@ -341,12 +362,13 @@ function profileGeo(key, pts, depth, holes = []) {
 export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsätze (nur Ego-Sicht)
   const P = GUNS[widx] || GUNS[0], K = 'g' + widx + ':';
   const g = new THREE.Group();
-  // Materialien (jede Waffe eigene, weil Kiemen und Druckanzeige leuchten)
-  // weißer Kunststoff mit feiner Körnung, gebürstetes Metall, Griff mit Noppen
-  const white = new THREE.MeshStandardMaterial({ color: GUN_WHITE, emissive: 0x55606a, emissiveIntensity: 0.45, roughness: 0.32, metalness: 0.05, bumpMap: polymer(), bumpScale: 0.3 });
-  const metal = new THREE.MeshStandardMaterial({ color: 0x7d8b96, emissive: 0x1c252c, emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.75, bumpMap: brushed(), bumpScale: 0.5 });
-  const gripM = new THREE.MeshStandardMaterial({ color: 0x5f6d78, emissive: 0x1a232a, emissiveIntensity: 0.6, roughness: 0.75, metalness: 0.1, bumpMap: stipple(), bumpScale: 1.5 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x1a2229, emissive: 0x0a1218, emissiveIntensity: 0.5, roughness: 0.7 });
+  // Materialien (jede Waffe eigene, weil Kiemen und Druckanzeige leuchten). Farben: GUN_LOOK oben.
+  // Gehäuse: matter Kunststoff mit feiner Körnung · Metall: gebürsteter Stahl, spiegelt die Umgebung · Griff: Gummi mit Noppen
+  const L = GUN_LOOK, env = GUN_ENV.tex;
+  const white = new THREE.MeshStandardMaterial({ color: L.body, emissive: L.body, emissiveIntensity: L.bodyGlow, roughness: 0.6, metalness: 0.2, bumpMap: polymer(), bumpScale: 0.5, roughnessMap: polymer(), envMap: env, envMapIntensity: 0.35 });
+  const metal = new THREE.MeshStandardMaterial({ color: L.metal, emissive: 0x0c1014, emissiveIntensity: 0.4, roughness: 0.28, metalness: 0.9, bumpMap: brushed(), bumpScale: 0.5, envMap: env, envMapIntensity: 1.1 });
+  const gripM = new THREE.MeshStandardMaterial({ color: L.grip, emissive: 0x0a0d10, emissiveIntensity: 0.4, roughness: 0.85, metalness: 0.05, bumpMap: stipple(), bumpScale: 1.8, envMap: env, envMapIntensity: 0.15 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x15191d, emissive: 0x06090c, emissiveIntensity: 0.4, roughness: 0.6, metalness: 0.4, envMap: env, envMapIntensity: 0.4 });
   const blue = new THREE.MeshStandardMaterial({ color: GUN_BLUE, emissive: GUN_BLUE, emissiveIntensity: 1.3, roughness: 0.3 });
   const gillIn = new THREE.MeshStandardMaterial({ color: 0x08233d, emissive: GUN_BLUE, emissiveIntensity: 0.15, roughness: 0.5 });
   const glass = new THREE.MeshStandardMaterial({ color: 0x9fe4ff, emissive: GUN_BLUE, emissiveIntensity: 0.25, transparent: true, opacity: 0.55, roughness: 0.05 });
