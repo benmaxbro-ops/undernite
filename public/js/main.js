@@ -1,7 +1,10 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul } from './shared.js';
+// gekaufte Verbesserungen aus dem Perlen-Shop (kommen mit der Lobby-Nachricht). Wirken nur im Battle Royale.
+let myUp = {};
+const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
 import { buildEnvironment } from './world.js';
 import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy } from './models.js';
 import { Hud } from './hud.js';
@@ -109,7 +112,7 @@ ws.onmessage = (e) => {
   if (m.t === 's') onSnap(m);
   else if (m.t === 'welcome') { myId = m.id; send({ t: 'set', name: prefs.name, suit: prefs.suit }); }
   else if (m.t === 'meta') { for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] }); }
-  else if (m.t === 'lobby') { ensureWorld(m.seed, m.mode); if (phase !== 'play') { phase = 'lobby'; clearDyn(); hud.show('lobby'); if (document.pointerLockElement) document.exitPointerLock(); } hud.setLobby(m, myId); const mine = m.players.find(p => p.id === myId); if (mine) mySuit = mine.suit; }
+  else if (m.t === 'lobby') { ensureWorld(m.seed, m.mode); if (phase !== 'play') { phase = 'lobby'; clearDyn(); hud.show('lobby'); if (document.pointerLockElement) document.exitPointerLock(); } hud.setLobby(m, myId); const mine = m.players.find(p => p.id === myId); if (mine) { mySuit = mine.suit; myUp = mine.up || {}; } }
   else if (m.t === 'start') onStart(m);
   else if (m.t === 'end') { phase = 'end'; hud.end(m, myId); hud.show('end'); if (document.pointerLockElement) document.exitPointerLock(); }
 };
@@ -386,6 +389,7 @@ const lock = () => { sfx.init(); if (phase === 'play' && document.pointerLockEle
 canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !== canvas) { lock(); return; } if (e.button === 2) { scoping = true; return; } if (e.button !== 0) return; if (held >= 0) { if (nearBase()) placeHeld(); return; } firing = true; });
 document.getElementById('pause').addEventListener('click', lock);
 // Einstellungen: aus der Lobby und aus dem Pause-Bildschirm (Esc) erreichbar
+hud.initBrShop((k) => send({ t: 'brbuy', k }));   // Perlen-Shop in der Lobby
 for (const id of ['setBtnLobby', 'setBtnPause']) document.getElementById(id).addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
 addEventListener('keydown', (e) => { if (e.code === 'Escape') closeSettings(); });
 
@@ -401,7 +405,7 @@ document.addEventListener('pointerlockchange', () => { hud.pause(phase === 'play
 // ---------- local player ----------
 function controlMe(dt) {
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
-  let speed = S.speed, accel = 5, r = S.r, strafe = 1, canBoost = true;
+  let speed = S.speed * UP('swim'), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
   if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
   if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
@@ -712,7 +716,7 @@ function updateScope(dt) {
   hud.scopeKick(view.scopeKick);
   // Wackeln: zwei langsame Wellen übereinander, das sieht aus wie zitternde Hände. Es verschiebt das echte Zielen!
   const lifeLeft = you && you.mhp ? Math.max(0, Math.min(1, you.hp / you.mhp)) : 1;
-  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * aim * (isScope ? 1 : 0.45);   // über Kimme und Korn wackelt es weniger
+  const amp = (SWAY_MIN + (SWAY_MAX - SWAY_MIN) * (1 - lifeLeft)) * aim * (isScope ? 1 : 0.45) * UP('scope');   // über Kimme und Korn wackelt es weniger; Ruhiges Visier
   swayT += dt;
   const nx = (Math.sin(swayT * 0.9) + Math.sin(swayT * 2.3 + 1) * 0.45) * amp, ny = (Math.cos(swayT * 1.1) + Math.sin(swayT * 2.9) * 0.4) * amp;
   camYaw += nx - swayX; camPitch += ny - swayY; swayX = nx; swayY = ny;
@@ -722,7 +726,7 @@ function updateScope(dt) {
 let recoilBack = 0;
 const RECOIL = 0.0006, RECOIL_BACK = 0.75;
 function recoil(def) {
-  const k = Math.min(0.09, 0.006 + def.dmg * def.pellets * RECOIL);
+  const k = Math.min(0.09, 0.006 + def.dmg * def.pellets * RECOIL) * UP('recoil');   // Rückstoßdämpfer
   camPitch = Math.min(1.45, camPitch + k);
   camYaw += (Math.random() - 0.5) * k * 0.6;
   recoilBack += k * RECOIL_BACK;

@@ -1,5 +1,5 @@
 // Undernite - DOM based HUD, lobby and result screen.
-import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue } from './shared.js';
+import { SUITS, SUIT_ORDER, WEAPONS, RARITY, HALF, FLOORS, floorAt, TANKS, LUNGS, LAMPS, SHOP_WEAPONS, airUse, AQUARIUM, BOSSES, catchFromNet, catchName, catchRate, fishValue, BR_UPGRADES } from './shared.js';
 const perSec = (v) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €/s';
 const money = (v) => Math.round(v).toLocaleString('de-DE') + ' €';
 
@@ -44,7 +44,32 @@ export class Hud {
     for (const b of $('modes').children) b.addEventListener('click', () => cb({ mode: b.dataset.mode }));
     return { name: name.value, suit: cur };
   }
+  // ----- Perlen-Shop in der Lobby (Battle Royale) -----
+  // send(k) schickt einen Kauf an den Server; der antwortet mit einer neuen Lobby-Nachricht → brShopDraw
+  initBrShop(send) {
+    $('brShopBtn').onclick = () => { $('brShop').classList.remove('hidden'); this.brShopDraw(); };
+    $('brShopClose').onclick = () => $('brShop').classList.add('hidden');
+    this.brSend = send;
+  }
+  brShopDraw() {
+    const me = this.brMe || { pearls: 0, up: {} }, up = me.up || {};
+    $('brShopBtn').textContent = `🦪 SHOP · ${me.pearls || 0}`;
+    if ($('brShop').classList.contains('hidden')) return;
+    $('brShopMoney').textContent = `🦪 ${me.pearls || 0} Perlen`;
+    $('brShopUps').innerHTML = BR_UPGRADES.map(u => {
+      const l = up[u.k] | 0, next = u.lv[l], price = u.price[l];
+      const now = l ? `${u.desc} ${Math.round(u.lv[l - 1] * 100)} %` : 'Noch nicht gekauft';
+      const pips = '●'.repeat(l) + '○'.repeat(u.lv.length - l);
+      const btn = price == null ? '<button disabled>Max</button>'
+        : `<button data-k="${u.k}" ${(me.pearls || 0) < price ? 'disabled' : ''}>🦪 ${price}</button>`;
+      return `<div class="item" style="--rar:#ffd36b"><b>${u.name}<span class="pips">${pips}</span></b>`
+        + `<small>${now}${next != null ? ` → Stufe ${l + 1}: ${Math.round(next * 100)} %` : ''}</small>${btn}</div>`;
+    }).join('');
+    for (const b of document.querySelectorAll('#brShopUps button[data-k]')) b.onclick = () => this.brSend && this.brSend(b.dataset.k);
+  }
   setLobby(m, myId) {
+    this.brMe = m.players.find(p => p.id === myId);
+    this.brShopDraw();
     $('plist').innerHTML = m.players.map(p => `<li><span>${esc(p.name)}${p.id === myId ? ' <small>(du)</small>' : ''}</span><small>${p.pearls ? `🦪 ${p.pearls} · ` : ''}${SUITS[p.suit].name}</small></li>`).join('')
       + `<li><span><small>+ ${m.bots} Bots</small></span></li>`;
     if (document.activeElement !== $('bots')) { $('bots').value = m.bots; $('botsN').textContent = m.bots; }
@@ -130,6 +155,7 @@ export class Hud {
   }
   show(which) {
     $('lobby').classList.toggle('hidden', which !== 'lobby');
+    if (which !== 'lobby') $('brShop').classList.add('hidden');   // Shop zu, sobald die Runde startet
     $('hud').classList.toggle('hidden', which !== 'game');
     $('end').classList.toggle('hidden', which !== 'end');
     if (which !== 'game') $('pause').classList.add('hidden');

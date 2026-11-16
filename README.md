@@ -45,7 +45,13 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Raubtiere:** Haie wittern Verletzte aus großer Entfernung und greifen im Vorbeischwimmen an,
   Oktopusse lauern an Wrack, Ruinen und Riffen, packen zu und vernebeln die Sicht, Quallenschwärme
   verteilen Stromschläge. Alle lassen sich erlegen und hinterlassen Beute.
-- **Welt:** bei jeder Runde neu erzeugt – Graben, Seeberg, Wrack, Ruinen, Kelpwälder, Korallenriffe.
+- **Welt:** bei jeder Runde neu erzeugt – Graben, Seeberg, Wrack, Ruinen, Kelpwälder und ein leuchtendes Netz aus Riff-Adern
+  quer über den Boden (feste Hügel: man kann nicht hindurch, Kugeln auch nicht → Deckung).
+- **Schießen:** Vor jedem Schuss baut sich kurz Druck auf (Pistole 0,1 s, Harpune 0,3 s), dann geht er mit einem Wumms raus.
+- **Perlen 🦪:** Am Rundenende gibt es 50 pro Kill, 10 pro überlebter Minute und 300 / 150 / 75 für Platz 1–3.
+  Sie werden unter deinem Namen gespeichert (`saves/battleroyale.json`), getrennt vom Expeditions-Geld.
+- **Perlen-Shop** (Knopf oben rechts in der Lobby): Verbesserungen mit je 3 Stufen – Schnellladen, Rückstoßdämpfer,
+  Ruhiges Visier, Profi-Flossen, Turbo-Kompressor. Gelten nur im Battle Royale.
 
 ## Modus: Tiefsee-Expedition (v0.2)
 

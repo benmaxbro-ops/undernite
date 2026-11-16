@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,7 @@ function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
   return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, urls: lanUrls(),
-    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name) })) };
+    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
 
@@ -139,7 +139,7 @@ function startMatch() {
       hp: CREATURES.jelly.hp, state: 'drift', sw: s, sph: ph, ox: (rnd() - 0.5) * 12, oy: (rnd() - 0.5) * 7, oz: (rnd() - 0.5) * 12, ph: rnd() * 6.28 });
   }
   // participants
-  for (const c of clients.values()) { const p = mkPlayer(c.id, c.name, c.suit, false); G.players.set(p.id, p); c.playing = true; }
+  for (const c of clients.values()) { const p = mkPlayer(c.id, c.name, c.suit, false); p.up = upsOf(c.name); G.players.set(p.id, p); c.playing = true; }
   const names = [...BOT_NAMES].sort(() => rnd() - 0.5);
   for (let i = 0; i < G.bots; i++) {
     const p = mkPlayer(nextId++, names[i % names.length], pick(SUIT_ORDER), true);
@@ -286,7 +286,7 @@ function startReload(p) {
     if (!p.bot && G.time > (p.noMagT || 0)) { p.noMagT = G.time + 2; p.ye.push(['warn', 'Keine vollen Magazine – der Kompressor füllt nach …']); }
     return;
   }
-  p.reload = p.reloadT = d.reload;
+  p.reload = p.reloadT = d.reload * upMul(p.up, 'reload');   // Schnellladen aus dem Perlen-Shop
 }
 // Nachladen fertig: das alte Magazin (mit dem Rest darin) kommt in den Rucksack, das vollste kommt in die Waffe
 function finishReload(p) {
@@ -325,7 +325,7 @@ function compress(p, dt) {
     if (!w) continue;
     bestSpare(w);
     let b = -1; for (let i = 0; i < w.spare.length; i++) if (w.spare[i] < 1 && (b < 0 || w.spare[i] > w.spare[b])) b = i;
-    if (b >= 0) w.spare[b] = Math.min(1, w.spare[b] + dt / (COMPRESSOR.fill[w.id] || 8));
+    if (b >= 0) w.spare[b] = Math.min(1, w.spare[b] + dt / ((COMPRESSOR.fill[w.id] || 8) * upMul(p.up, 'comp')));   // Turbo-Kompressor
   }
 }
 // Lag-Ausgleich: Im Browser sieht man alles ca. 0,1 s zu spät. Hat der Spieler genau auf ein Ziel gezielt
@@ -761,12 +761,24 @@ const BR_FILE = path.join(DIR, 'saves', 'battleroyale.json');
 let brSaves = {};
 try { brSaves = JSON.parse(fs.readFileSync(BR_FILE, 'utf8')); } catch { brSaves = {}; }
 const pearlsOf = (name) => brSaves[saveKey(name)]?.pearls || 0;
+const upsOf = (name) => ({ ...(brSaves[saveKey(name)]?.up || {}) });   // gekaufte Verbesserungen { reload: 2, ... }
+const saveBr = () => fs.mkdir(path.dirname(BR_FILE), { recursive: true }, () =>
+  fs.writeFile(BR_FILE, JSON.stringify(brSaves, null, 1), (e) => { if (e) console.error('[save]', e.message); }));
 function addPearls(name, amt) {
   const s = brSaves[saveKey(name)] ||= { pearls: 0 };
   s.pearls += amt; s.last = Date.now();
-  fs.mkdir(path.dirname(BR_FILE), { recursive: true }, () =>
-    fs.writeFile(BR_FILE, JSON.stringify(brSaves, null, 1), (e) => { if (e) console.error('[save]', e.message); }));
+  saveBr();
   return s.pearls;
+}
+// Verbesserung im Perlen-Shop kaufen (nur in der Lobby): nächste Stufe, wenn genug Perlen da sind
+function brBuy(c, k) {
+  const u = BR_UPGRADES.find(x => x.k === k); if (!u) return;
+  const s = brSaves[saveKey(c.name)] ||= { pearls: 0 };
+  s.up ||= {};
+  const lvl = s.up[k] | 0, price = u.price[lvl];
+  if (price == null || (s.pearls || 0) < price) return;
+  s.pearls -= price; s.up[k] = lvl + 1; s.last = Date.now();
+  saveBr();
 }
 const depthOf = (o) => SURFACE - o.y;
 const nearBoat = (p, r = 16, d = 6) => dist2d(p, EXP_BOAT.x, EXP_BOAT.z) < r && depthOf(p) < d;
@@ -1214,6 +1226,7 @@ wss.on('connection', (ws) => {
         break;
       case 'start': if (G.phase === 'lobby') { if (G.mode === 'exp') startExp(); else startMatch(); } break;
       case 'buy': if (p && G.mode === 'exp') expBuy(p, m); break;
+      case 'brbuy': if (G.phase === 'lobby') { brBuy(c, m.k); broadcast(lobbyMsg()); } break;
       case 'quit': if (G.phase === 'play' && G.mode === 'exp') quitExp(); break;
       case 'm':
         if (p && p.alive && [m.x, m.y, m.z, m.yaw, m.pitch].every(Number.isFinite)) {

@@ -9,15 +9,18 @@ Ziel: Im **Battle Royale** verdient man Geld und kauft sich damit Verbesserungen
 (In der **Tiefsee-Expedition** gibt es schon einen Laden am Boot: Waffen, Flaschen, Atemtraining, Lampen.)
 
 - [x] **1. Grafik fertig + Handy-Stufe:** Bloom, weiche Schatten, Ultra mit Warnung, Handy startet automatisch mit „Handy“-Grafik
-- [ ] **2. Geld verdienen im Battle Royale:** Geld pro Kill, pro überlebter Minute, Bonus für Platz 1, 2 und 3.
+- [x] **2. Geld verdienen im Battle Royale:** (heißt jetzt „Perlen“ 🦪) Geld pro Kill, pro überlebter Minute, Bonus für Platz 1, 2 und 3.
       Wird unter deinem Namen gespeichert. Am Rundenende sieht man, wofür man wie viel bekommen hat.
-- [ ] **3. Shop-Menü in der Lobby:** Waffen kaufen und aussuchen, mit welchen man startet
-- [ ] **4. Verbesserungen** (jeweils mehrere Stufen):
-  - [ ] schneller nachladen
+- [x] **3a. Perlen-Shop oben rechts in der Lobby**
+- [ ] **3b. Startwaffen** im Shop kaufen und aussuchen, mit welcher man startet
+- [ ] **4. Verbesserungen** (jeweils 3 Stufen):
+  - [x] schneller nachladen (Schnellladen)
+  - [x] weniger Rückstoß (Rückstoßdämpfer)
+  - [x] ruhigeres Zielfernrohr (Ruhiges Visier)
+  - [x] schneller schwimmen (Profi-Flossen)
+  - [x] besserer Kompressor (Turbo-Kompressor)
   - [ ] Waffe schneller ziehen
-  - [ ] schneller schwimmen
   - [ ] mehr Leben
-  - [ ] besserer Kompressor (füllt Gas-Magazine schneller, mehr Ersatzmagazine)
 - [ ] **5. Waffen-Aufsätze:** Zielfernrohr, größeres Magazin, Mündungsaufsatz gegen Rückstoß, Laservisier …
 - [ ] **6. 8 Taucher:** Zu Manta, Triton, Bollwerk und Goliath kommen 4 neue, jeder mit einer Spezialfähigkeit:
   - [ ] **Sepia:** Tarnung mit Tinte
@@ -42,6 +45,12 @@ Vorbild: das Spiel „Bodycam“ (YouTube: „Das ist nicht echt! - Das ist Body
 - [ ] **Getroffener Gegner:** sackt zusammen und sinkt, Waffe fällt langsam zum Boden, dunkle Wolke im Wasser
 - [ ] **Selbst sterben:** Bild wird langsam dunkler, dann ganz schwarz, dann ein „Du bist tot“-Bildschirm.
       Von da aus: neue Klasse (Taucher) aussuchen oder in den Shop gehen.
+
+- [ ] **Deckung mit C** (nur Triton und Manta): hinter den Riff-Bergen in Deckung gehen. Bollwerk und Goliath sinken mit C nur ab.
+      Noch offen: was genau passiert (flach ducken? am Riff festhalten?)
+- [ ] **Sichtbare Schockwelle** aus den Seitenkiemen der Waffe bei jedem Schuss
+- [ ] **Treffer-Sound:** wie eine Kugel, die richtig durchschlägt (im Internet recherchieren)
+- [ ] **Vorbeifliegende Kugeln:** deutliches „Schwusch“
 
 ## Fairness: Ligen
 

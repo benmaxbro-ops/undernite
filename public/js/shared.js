@@ -60,6 +60,18 @@ export const FINISHER = { hp: 0.3, range: { manta: 4, triton: 14, bulwark: 10, g
 // Perlen (nur Battle Royale): Belohnung am Rundenende, wird unter deinem Namen gespeichert (saves/battleroyale.json).
 // kill = pro Kill, minute = pro Minute überlebt, place = Bonus für Platz 1, 2 und 3.
 export const BR_REWARD = { kill: 50, minute: 10, place: [300, 150, 75] };
+// Perlen-Shop (Lobby): Verbesserungen fürs Battle Royale, jede hat 3 Stufen. Gilt nur im Battle Royale, nicht für Bots.
+// lv = Wirkung pro Stufe (0.85 = nur noch 85 %, 1.06 = 6 % mehr), price = Preis pro Stufe in Perlen.
+// Eine normale Runde bringt ca. 100–250 Perlen → Stufe 1 nach einer Runde, Stufe 3 nach ein paar Runden.
+export const BR_UPGRADES = [
+  { k: 'reload', name: 'Schnellladen',      desc: 'Nachladen dauert nur noch',     lv: [0.85, 0.72, 0.6],  unit: '%', price: [150, 400, 900] },
+  { k: 'recoil', name: 'Rückstoßdämpfer',   desc: 'Rückstoß nur noch',             lv: [0.8, 0.62, 0.45],  unit: '%', price: [150, 400, 900] },
+  { k: 'scope',  name: 'Ruhiges Visier',    desc: 'Zielen wackelt nur noch',       lv: [0.7, 0.45, 0.25],  unit: '%', price: [120, 350, 800] },
+  { k: 'swim',   name: 'Profi-Flossen',     desc: 'Schwimmtempo',                  lv: [1.06, 1.12, 1.2],  unit: '%', price: [200, 500, 1100] },
+  { k: 'comp',   name: 'Turbo-Kompressor',  desc: 'Magazine füllen sich in',       lv: [0.85, 0.7, 0.55],  unit: '%', price: [150, 400, 900] },
+];
+// Wirkung einer Verbesserung für einen Spieler (up = { reload: 2, ... }); ohne Verbesserung = 1
+export const upMul = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), l = (up && up[k]) | 0; return u && l > 0 ? u.lv[Math.min(l, u.lv.length) - 1] : 1; };
 export const brReward = (kills, secs, place) => {
   const k = kills * BR_REWARD.kill, m = Math.floor(secs / 60) * BR_REWARD.minute, p = BR_REWARD.place[place - 1] || 0;
   return { k, m, p, sum: k + m + p };
