@@ -20,7 +20,7 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 ## Neue Modi (Ideen von Ben, 17.11.)
 
 - [ ] **U-Boot zum Begehen:** fertig bis auf Bens Test (sitzen, aufstehen, laufen, Periskop, Details)
-- [ ] **Duo-Modus:** zu zweit in einem U-Boot. Einer fährt am Steuerpult, der andere sitzt unten in einer Glaskugel mit MGs und schießt.
+- [ ] **Duo-Modus:** Zweier-Teams sind fertig. Noch offen: zu zweit in einem U-Boot – einer fährt am Steuerpult, der andere sitzt unten in einer Glaskugel mit MGs und schießt.
       Beide können aufstehen und im U-Boot herumlaufen, der Schütze klettert aus der Kugel direkt ins U-Boot.
 - [ ] **Wellen-Überleben (Wave Survival):** zu viert gegen immer stärkere Wellen von Kreaturen überleben.
 

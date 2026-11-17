@@ -80,12 +80,12 @@ function buildDiver(suit, accent) {
 // Der Goliath-Mech steht jetzt in mech.js (buildMech)
 
 // Returns a group with userData.update(dt, {yaw, pitch, speed, t, weapon})
-export function makePlayerModel(suit, id, name) {
+export function makePlayerModel(suit, id, name, tagColor) {   // tagColor: Farbe des Namensschilds (grün = Teamkamerad)
   const accent = new THREE.Color().setHSL((id * 0.137) % 1, 0.9, 0.6).getHex();
   const root = new THREE.Group();
   const parts = suit === 'goliath' ? buildMech(accent) : buildRealDiver(suit, accent);
   const inner = parts.g; inner.rotation.order = 'YXZ'; root.add(inner);
-  if (name) { const tag = makeTag(name); tag.position.y = suit === 'goliath' ? 3.0 : 1.5; root.add(tag); root.userData.tag = tag; }
+  if (name) { const tag = makeTag(name, tagColor); tag.position.y = suit === 'goliath' ? 3.0 : 1.5; root.add(tag); root.userData.tag = tag; }
   let phase = Math.random() * 6, lastW = -2, tilt = 0, heldKey = '', heldMesh = null, gunModel = null;
   root.userData.inner = inner;
   // wo die Mündung der Waffe gerade ist (null, wenn keine Waffe sichtbar ist)

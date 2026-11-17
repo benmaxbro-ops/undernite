@@ -184,7 +184,7 @@ ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.t === 's') onSnap(m);
   else if (m.t === 'welcome') { myId = m.id; send({ t: 'set', name: prefs.name, suit: prefs.suit }); }
-  else if (m.t === 'meta') { for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] }); }
+  else if (m.t === 'meta') { for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3], team: p[4] || 0 }); }
   else if (m.t === 'lobby') { ensureWorld(m.seed, m.mode); if (phase !== 'play') { phase = 'lobby'; clearDyn(); hud.show('lobby'); if (document.pointerLockElement) document.exitPointerLock(); } hud.setLobby(m, myId); const mine = m.players.find(p => p.id === myId); if (mine) { mySuit = mine.suit; myUp = mine.up || {}; } }
   else if (m.t === 'start') onStart(m);
   else if (m.t === 'end') { endDeath(); document.getElementById('deathFx').style.opacity = '0'; phase = 'end'; hud.end(m, myId); hud.show('end'); if (document.pointerLockElement) document.exitPointerLock(); }
@@ -223,7 +223,9 @@ function onStart(m) {
   ensureWorld(m.seed, mode); clearDyn();
   phase = 'play'; meta.clear(); hud.setMode(mode);
   torch.on = false; torchBeam.visible = false; torch.bat = LAMPS[torch.lvl].battery;   // Akku zurücksetzen (im Battle Royale war er unendlich)
-  for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3] });
+  for (const p of m.players) meta.set(p[0], { name: p[1], suit: p[2], bot: !!p[3], team: p[4] || 0 });
+  const mine = meta.get(myId), mate = mine && mine.team ? [...meta.entries()].find(([id, x]) => id !== myId && x.team === mine.team) : null;
+  if (mate) setTimeout(() => hud.banner(`Duo: dein Teamkamerad ist ${mate[1].name}`, 3), 1200);
   if (meta.has(myId)) mySuit = meta.get(myId).suit;
   if (mode === 'br') crates = W.crates.map((c, i) => { const g = makeCrate(); g.position.set(c.x, c.y, c.z); g.rotation.y = c.yaw; if (m.crates[i]) g.userData.open(); dyn.add(g); return g; });
   for (const p of m.pickups) addPickup(p);
@@ -236,9 +238,11 @@ function addPickup(p) {
   const mesh = makePickup(p[1], p[2], p[3]); mesh.position.set(p[4], p[5], p[6]); dyn.add(mesh);
   pickups.set(p[0], { id: p[0], k: p[1], wid: p[2], rar: p[3], x: p[4], y: p[5], z: p[6], mesh });
 }
+// Duo: ist das mein Teamkamerad?
+function isMate(id) { const a = meta.get(myId), b = meta.get(id); return id !== myId && !!(a && b && a.team && a.team === b.team); }
 function spawnPlayer(id) {
   const m = meta.get(id) || { name: '?', suit: 'triton' };
-  const mesh = makePlayerModel(m.suit, id, id === myId ? null : m.name); dyn.add(mesh);
+  const mesh = makePlayerModel(m.suit, id, id === myId ? null : m.name, isMate(id) ? '#7dff9a' : undefined); dyn.add(mesh);   // Teamkamerad: grünes Namensschild
   const e = { id, mesh, suit: m.suit, name: m.name, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, tx: 0, ty: 0, tz: 0, tyaw: 0, tpitch: 0, hp: 0, fl: 0, w: 0, veh: 0, fresh: true, speed: 0, seen: 0, bubT: 0 };
   players.set(id, e); return e;
 }
@@ -333,7 +337,7 @@ let aimLock = 0;   // Nummer des Gegners, auf den der Computer gerade zielt
 function autoAim(dt) {
   const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z, look = dirFrom(camYaw, camPitch);
   const ok = (e) => {
-    if (!e || e.id === myId || !e.mesh.visible) return false;
+    if (!e || e.id === myId || !e.mesh.visible || isMate(e.id)) return false;
     const dx = e.x - cx, dy = e.y + 0.3 - cy, dz = e.z - cz, d = Math.hypot(dx, dy, dz);
     if (d > AUTOAIM.range || d < 0.5) return false;
     if (Math.acos(Math.max(-1, Math.min(1, (dx * look[0] + dy * look[1] + dz * look[2]) / d))) > AUTOAIM.cone) return false;
@@ -1519,8 +1523,13 @@ function frame(now) {
       // Im U-Boot: das Bord-Sonar zeigt durchgehend ALLE Gegner in Reichweite (auch getarnte und welche in anderen U-Booten)
       const sv = you && you.alive && you.veh ? vehicles.get(you.veh) : null, mySub = !!(sv && sv.type === 'sub');
       const hear = mySub ? SONAR.range : Math.max(SONAR.hear, sense), blips = [];
-      for (const e of players.values()) if (e.id !== myId && (mySub || e.mesh.visible) && Math.hypot(e.x - fx.x, e.y - fx.y, e.z - fx.z) < hear) blips.push({ id: e.id, x: e.x, z: e.z });
-      const hits = hud.drawSonar(env.sonar, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, [], blips, time, mySub);
+      const mates = [];   // Teamkamerad: immer als grüner Punkt, nie als Gegner
+      for (const e of players.values()) {
+        if (e.id === myId) continue;
+        if (isMate(e.id)) { mates.push({ x: e.x, z: e.z, c: '#7dff9a', s: 4 }); continue; }
+        if ((mySub || e.mesh.visible) && Math.hypot(e.x - fx.x, e.y - fx.y, e.z - fx.z) < hear) blips.push({ id: e.id, x: e.x, z: e.z });
+      }
+      const hits = hud.drawSonar(env.sonar, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, mates, blips, time, mySub);
       if (you && you.alive && !mySub) {   // Taucher: leises Ping bei jeder Umdrehung, "Ding" für jeden erwischten Gegner
         if (hud.sweepWrapped) sfx.sonar(SONAR_SND.radar, 1.12);
         if (hits) sfx.sonarBlip(SONAR_SND.blip);

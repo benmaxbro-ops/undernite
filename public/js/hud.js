@@ -50,6 +50,7 @@ export class Hud {
       suits.appendChild(b);
     }
     $('bots').addEventListener('input', (e) => { $('botsN').textContent = e.target.value; cb({ bots: +e.target.value }); });
+    $('duo').addEventListener('change', (e) => cb({ duo: e.target.checked }));   // Duo-Modus an/aus
     $('go').addEventListener('click', () => cb({ start: true }));
     for (const b of $('modes').children) b.addEventListener('click', () => cb({ mode: b.dataset.mode }));
     return { name: name.value, suit: cur };
@@ -165,6 +166,7 @@ export class Hud {
     const exp = m.mode === 'exp';
     for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === m.mode);
     $('botsRow').classList.toggle('hidden', exp);
+    $('duoRow').classList.toggle('hidden', exp); $('duo').checked = !!m.duo;
     $('plist').lastElementChild.classList.toggle('hidden', exp);
     $('go').textContent = exp ? 'EXPEDITION STARTEN' : 'ABTAUCHEN';
     $('lan').innerHTML = m.urls && m.urls.length

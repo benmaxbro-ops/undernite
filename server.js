@@ -77,7 +77,7 @@ G.world = new World(G.seed, G.mode);
 function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string' ? obj : JSON.stringify(obj)); }
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
-  return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, urls: lanUrls(),
+  return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, duo: G.duo ? 1 : 0, urls: lanUrls(),
     players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name), gads: gadsOf(c.name), weps: wepsOf(c.name), atts: attsOf(c.name), load: loadOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
@@ -158,10 +158,17 @@ function startMatch() {
   }
   // jeder außer dem Goliath hat ein Magnet-Gewehr mit 2 Schuss dabei (Platz 3) – damit kann man einen Mech lahmlegen
   for (const p of G.players.values()) if (!SUITS[p.suit].mech) p.weapons[2] = newWeapon('magrifle', 0);
-  for (const p of G.players.values()) {
+  // Duo: je zwei Spieler bilden ein Team (zuerst die Menschen, dann die Bots). team 0 = kein Team (Solo)
+  const all = [...G.players.values()];
+  all.forEach((p, i) => { p.team = G.duo ? Math.floor(i / 2) + 1 : 0; });
+  const mates = new Map();
+  for (const p of all) {
+    const m = p.team && mates.get(p.team);
+    if (m) { p.x = p.lx = m.x + 3; p.z = p.lz = m.z + 2; p.y = p.ly = m.y; p.yaw = m.yaw; p.pitch = m.pitch; continue; }   // Teamkamerad startet direkt daneben
     const a = rnd() * 6.283, d = 60 + rnd() * 190;
     p.x = p.lx = Math.cos(a) * d; p.z = p.lz = Math.sin(a) * d; p.y = p.ly = SURFACE - DEEP.brCeil - 4;   // Start unter der Tiefsee-Grenze
     p.yaw = Math.atan2(p.x, p.z); p.pitch = -0.6;
+    if (p.team) mates.set(p.team, p);
   }
   // floor loot
   for (let i = 0; i < 24; i++) {
@@ -178,7 +185,7 @@ function startMatch() {
 function startMsg(c) {
   const me = G.players.get(c.id);
   return { t: 'start', seed: G.seed, mode: G.mode, you: c.id, spectator: !me, spawn: me ? [r2(me.x), r2(me.y), r2(me.z), r2(me.yaw)] : null,
-    players: [...G.players.values()].map(p => [p.id, p.name, p.suit, p.bot ? 1 : 0]),
+    players: [...G.players.values()].map(p => [p.id, p.name, p.suit, p.bot ? 1 : 0, p.team || 0]),
     crates: G.crates.map(c => c.open ? 1 : 0),
     pickups: [...G.pickups.values()].map(p => [p.id, p.k, p.wid, p.rar, r2(p.x), r2(p.y), r2(p.z)]) };
 }
@@ -203,12 +210,16 @@ function updateZone(dt) {
 }
 const zoneDps = () => PHASES[Math.min(G.zone.ph, PHASES.length - 1)].dps;
 const aliveCount = () => { let n = 0; for (const p of G.players.values()) if (p.alive) n++; return n; };
+// Duo: wie viele Teams noch jemanden am Leben haben (Solo: wie viele Spieler)
+const aliveTeams = () => { const t = new Set(); for (const p of G.players.values()) if (p.alive) t.add(p.team || -p.id); return t.size; };
 
 // ---------- damage ----------
 function damage(p, amt, src, how, sx, sz) {
   if (!p.alive || amt <= 0) return;
   // Schild-Generator (Bollwerk): Schüsse von Gegnern prallen ab
   if (G.time < (p.bubbleT || 0) && src && src.id && src !== p && how !== 'zone') { ev('deflect', p.id); return; }
+  // Duo: Teamkameraden können sich nicht verletzen (auch nicht mit Explosionen)
+  if (p.team && src && src !== p && src.team === p.team && how !== 'zone') return;
   // Manta-Ulti (Matrix): weicht jeder Kugel aus – nur Zone, Hitze und Bluten treffen noch
   if (p.suit === 'manta' && G.time < (p.ultT || 0) && src && src !== p && how !== 'zone' && how !== 'burn' && how !== 'bleed') { ev('dodge', p.id); return; }
   // Bollwerk-Ulti (Festung): nur ein Drittel Schaden kommt durch
@@ -266,7 +277,7 @@ function finisher(p, id) {
 }
 function kill(p, src, how) {
   p.alive = false; p.hp = 0;
-  p.place = aliveCount() + 1; p.deathT = G.time;
+  p.place = p.team ? aliveTeams() + ([...G.players.values()].some(q => q.alive && q !== p && q.team === p.team) ? 0 : 1) : aliveCount() + 1; p.deathT = G.time;
   if (p.veh) { const v = G.vehicles.get(p.veh); if (v) v.driver = 0; p.veh = 0; }
   if (p.grabbed) { const o = G.creatures.find(c => c.id === p.grabbed); if (o) releaseOcto(o); }
   for (const w of p.weapons) if (w && !(w.id === 'pistol' && w.rar === 0) && w.id !== 'magrifle')   // Magnet-Gewehr fällt nicht als Beute
@@ -489,7 +500,7 @@ function aimPoint(p, d, range) {
   const k = t > 0 ? t * range - 0.8 : range;
   return { x: p.x + d[0] * k, y: p.y + d[1] * k, z: p.z + d[2] * k, hit: t > 0 };
 }
-const foesNear = (p, x, y, z, r) => [...G.players.values()].filter(q => q !== p && q.alive && Math.hypot(q.x - x, q.y - y, q.z - z) < r);
+const foesNear = (p, x, y, z, r) => [...G.players.values()].filter(q => q !== p && q.alive && !(p.team && q.team === p.team) && Math.hypot(q.x - x, q.y - y, q.z - z) < r);
 // jemanden wegstoßen: Bots direkt, echte Spieler bekommen den Stoß geschickt (ihre Position steuert der Browser)
 function pushAway(q, vx, vy, vz) { if (q.bot) { q.vx += vx; q.vy += vy; q.vz += vz; } else q.ye.push(['push', r2(vx), r2(vy), r2(vz)]); }
 function useGadget(p, m) {
@@ -849,7 +860,7 @@ function botThink(b) {
   if (cur && G.time < (cur.invisT || 0)) b.target = null;   // Ziel hat sich getarnt
   const peace = G.time < b.peaceUntil;
   for (const p of G.players.values()) {
-    if (p === b || !p.alive || (peace && p.bot) || G.time < (p.invisT || 0)) continue;   // Getarnte sieht der Bot nicht
+    if (p === b || !p.alive || (peace && p.bot) || G.time < (p.invisT || 0) || (b.team && p.team === b.team)) continue;   // nie den Teamkameraden   // Getarnte sieht der Bot nicht
     const d = dist(b, p);
     if (d < bd && los(b, p)) { bd = d; best = { k: 'p', ref: p }; }
   }
@@ -1100,7 +1111,7 @@ function expJoin(c) {
   G.players.set(p.id, p); c.playing = true;
   return p;
 }
-const metaMsg = () => ({ t: 'meta', players: [...G.players.values()].map(p => [p.id, p.name, p.suit, p.bot ? 1 : 0]) });
+const metaMsg = () => ({ t: 'meta', players: [...G.players.values()].map(p => [p.id, p.name, p.suit, p.bot ? 1 : 0, p.team || 0]) });
 
 function startExp() {
   const W = G.world;
@@ -1415,7 +1426,7 @@ function tick(dt) {
   const alive = [...G.players.values()].filter(p => p.alive);
   const humansAlive = alive.filter(p => !p.bot).length;
   if (clients.size === 0) { toLobby(); return; }
-  if (alive.length <= 1) endMatch();
+  if (alive.length <= 1 || (G.duo && aliveTeams() <= 1)) endMatch();   // Duo: das letzte Team gewinnt
   else if (humansAlive === 0) { G.noHumanT += dt; if (G.noHumanT > 6) endMatch(); }
 }
 function snapshot() {
@@ -1457,7 +1468,11 @@ function snapshot() {
 function endMatch() {
   if (G.phase !== 'play') return;
   const rest = [...G.players.values()].filter(p => p.alive).sort((a, b) => b.hp + b.shield - a.hp - a.shield);
-  rest.forEach((p, i) => { p.place = i + 1; });
+  if (G.duo) {   // Duo: Teams nach ihrem gemeinsamen Leben sortieren, beide im Team bekommen denselben Platz
+    const tl = new Map(); for (const p of rest) tl.set(p.team, (tl.get(p.team) || 0) + p.hp + p.shield);
+    const order = [...tl.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+    for (const p of rest) p.place = order.indexOf(p.team) + 1;
+  } else rest.forEach((p, i) => { p.place = i + 1; });
   const rank = [...G.players.values()].sort((a, b) => a.place - b.place).map(p => {
     const r = { id: p.id, n: p.name, place: p.place, k: p.kills, bot: p.bot ? 1 : 0, suit: p.suit };
     if (!p.bot) {   // Perlen für echte Spieler: Kills + überlebte Minuten + Platz-Bonus
@@ -1510,6 +1525,7 @@ wss.on('connection', (ws) => {
         if (SUITS[m.suit] && suitOwned(suitsOf(c.name), m.suit)) c.suit = m.suit;   // nur freie oder gekaufte Taucher
         if (!suitOwned(suitsOf(c.name), c.suit)) c.suit = 'triton';                 // anderer Name: Taucher evtl. nicht gekauft
         if (Number.isFinite(m.bots)) G.bots = clamp(Math.round(m.bots), 0, 23);
+        if (typeof m.duo === 'boolean' && G.phase === 'lobby') G.duo = m.duo;   // Duo-Modus: Zweier-Teams
         if ((m.mode === 'br' || m.mode === 'exp') && m.mode !== G.mode && G.phase === 'lobby') { G.mode = m.mode; G.world = new World(G.seed, G.mode); }
         if (G.phase === 'lobby') broadcast(lobbyMsg());
         else if (G.phase === 'play' && G.mode === 'exp' && !G.players.has(c.id)) {
