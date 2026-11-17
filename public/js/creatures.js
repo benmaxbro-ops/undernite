@@ -316,8 +316,10 @@ export function makeRealShark(look = {}) {
     return TMP.multiplyScalar(0.94 + 0.06 * hash(t * 97, u * 13 + v * 7));
   };
   const finC = new THREE.Color(look.back ?? 0x5b6b78).multiplyScalar(0.85);
-  const geos = [loft(P, st, color, 40, 20)];
+  const geos = [loft(P, st, color, 60, 26)];
   const yz = (a, b) => [0, b, a];
+  // Schwanzkiele: kleine waagerechte Leisten vor der Schwanzflosse (wie beim Weißen Hai)
+  for (const s of [-1, 1]) geos.push(fin([[tz(0.88), 0], [tz(0.93), 0.06], [tz(0.98), 0.03], [tz(0.98), 0]], (a, b) => [s * (W(0.93) + b * 0.8), Yc(0.93), a], finC));
   // first dorsal: tall, swept back
   geos.push(fin([[tz(0.36), top(0.36) - 0.03], [tz(0.42), top(0.42) + 0.35], [tz(0.5) + 0.12, top(0.47) + 0.62], [tz(0.5), top(0.5) - 0.03]], yz, finC));
   geos.push(fin([[tz(0.74), top(0.74) - 0.02], [tz(0.79) + 0.05, top(0.78) + 0.16], [tz(0.79), top(0.79) - 0.02]], yz, finC));   // second dorsal
@@ -332,68 +334,135 @@ export function makeRealShark(look = {}) {
   }
   const mat = swimMat({ amp: 0.38, k: 2.2, z0: tz(0.25), len: tz(1) - tz(0.25) + 1, rough: 0.55, metal: 0.05 });
   const g = new THREE.Group(); g.rotation.order = 'YXZ'; g.add(new THREE.Mesh(merge(geos), mat));
-  for (const s of [-1, 1]) put(g, SPH, std(0x030303, { roughness: 0.05, metalness: 0.4 }), s * W(0.11) * 0.92, Yc(0.11) + H(0.11) * 0.25, tz(0.11), 0.045, 0.045, 0.045);
+  // Augen: schwarzer Augapfel mit dunkelgrauer Iris und einem Lichtpunkt
+  for (const s of [-1, 1]) {
+    const ex = s * W(0.11) * 0.92, ey = Yc(0.11) + H(0.11) * 0.25;
+    put(g, SPH, std(0x2a3036, { roughness: 0.2, metalness: 0.3 }), ex, ey, tz(0.11), 0.05, 0.05, 0.05);
+    put(g, SPH, std(0x020202, { roughness: 0.02, metalness: 0.5 }), ex + s * 0.02, ey, tz(0.11), 0.035, 0.04, 0.035);
+    put(g, SPH, new THREE.MeshBasicMaterial({ color: 0xffffff }), ex + s * 0.045, ey + 0.012, tz(0.11) - 0.012, 0.006, 0.006, 0.006);
+  }
+  // Nasenlöcher unter der Schnauze
+  for (const s of [-1, 1]) put(g, SPH, std(0x0c0f12, { roughness: 0.9 }), s * W(0.05) * 0.62, bot(0.05) + 0.015, tz(0.05), 0.028, 0.01, 0.045);
+  // Maul: Gaumen und obere Zahnreihe fest am Kopf, der Unterkiefer klappt beim Angriff auf
+  const toothM = std(0xf4f0e4, { roughness: 0.25, metalness: 0.05 }), gumM = std(0x5c1c22, { roughness: 0.6 }), jawM = std(look.belly ?? 0xe6eaed, { roughness: 0.55 });
+  const mz = tz(0.085), my = bot(0.085) + 0.035, mw = W(0.085) * 0.9, arc = (i, n) => (i / (n - 1) - 0.5) * 2.5;
+  put(g, SPH, gumM, 0, my + 0.005, mz + 0.06, mw * 0.85, 0.03, 0.15);
+  for (let i = 0; i < 15; i++) { const a = arc(i, 15), tt = put(g, CONE, toothM, Math.sin(a) * mw * 0.86, my - 0.012, mz + 0.06 - Math.cos(a) * 0.13, 0.011, 0.05 - Math.abs(a) * 0.012, 0.011); tt.rotation.x = Math.PI; }
+  const jaw = new THREE.Group(); jaw.position.set(0, my - 0.005, mz + 0.2); g.add(jaw);    // Drehpunkt hinten im Maulwinkel
+  put(jaw, SPH, jawM, 0, -0.03, -0.14, mw * 0.95, 0.04, 0.17);
+  put(jaw, SPH, gumM, 0, -0.004, -0.14, mw * 0.8, 0.018, 0.14);
+  for (let i = 0; i < 15; i++) { const a = arc(i, 15); put(jaw, CONE, toothM, Math.sin(a) * mw * 0.8, 0.012, -0.14 - Math.cos(a) * 0.12, 0.01, 0.042 - Math.abs(a) * 0.01, 0.01); }
   const root = new THREE.Group(); root.add(g);
-  let ph = Math.random() * 6;
-  root.userData.update = (dt, s) => { ph += dt * (s.state ? 10 : 4.5); mat.userData.u.uPh.value = ph; g.rotation.y = s.yaw - Math.sin(ph) * 0.04; g.rotation.x = s.pitch; };
+  let ph = Math.random() * 6, open = 0;
+  root.userData.update = (dt, s) => {
+    ph += dt * (s.state ? 10 : 4.5); mat.userData.u.uPh.value = ph; g.rotation.y = s.yaw - Math.sin(ph) * 0.04; g.rotation.x = s.pitch;
+    const want = s.state ? 0.25 + 0.75 * Math.max(0, Math.sin(ph * 0.35)) ** 2 : 0.06;   // greift an: Maul schnappt auf und zu
+    open += (want - open) * Math.min(1, dt * 8); jaw.rotation.x = -open * 0.55;
+  };
   return root;
 }
 
 // ---------- octopus ----------
+// Die 8 Arme sind EIN weicher Schlauch pro Arm (keine einzelnen Glieder mehr): jedes Bild wird der Schlauch neu gebogen.
+// Unten an jedem Arm zwei Reihen helle Saugnäpfe, zwischen den Armen die Schwimmhaut, oben warzige, fleckige Haut.
+const ARM = { joints: 22, ring: 10, seg: 0.15, r: 0.17 };
 export function makeRealOcto(color = 0xb8432c) {
-  const base = new THREE.Color(color), pale = base.clone().lerp(new THREE.Color(0xffe2cc), 0.55);
-  // mottled mantle: lighter underneath, darker spots on top
-  const mg = new THREE.SphereGeometry(1, 28, 20), mp = mg.attributes.position, mc = [];
+  const base = new THREE.Color(color), pale = base.clone().lerp(new THREE.Color(0xffe2cc), 0.55), cream = new THREE.Color(0xfff0e4);
+  // Mantel: fleckig, mit kleinen Warzen (Papillen)
+  const mg = new THREE.SphereGeometry(1, 40, 28), mp = mg.attributes.position, mc = [];
   for (let i = 0; i < mp.count; i++) {
     const x = mp.getX(i), y = mp.getY(i), z = mp.getZ(i);
-    const bump = 1 + 0.05 * Math.sin(x * 9 + z * 7) * Math.cos(y * 8);
+    const wart = hash((x * 11 + 20) | 0, ((y + z) * 11 + 20) | 0) > 0.88 && y > -0.3 ? 0.05 : 0;
+    const bump = 1 + 0.05 * Math.sin(x * 9 + z * 7) * Math.cos(y * 8) + wart;
     mp.setXYZ(i, x * bump, y * bump, z * bump);
     TMP.copy(pale).lerp(base, sst(-0.6, 0.2, y));
     if (hash((x * 6) | 0, ((y + z) * 6) | 0) > 0.7) dark(TMP, 0.7);
-    if (hash((x * 14) | 0, ((y - z) * 14) | 0) > 0.86) TMP.lerp(new THREE.Color(0xfff0e0), 0.35);
+    if (wart) TMP.lerp(cream, 0.3);
+    if (hash((x * 14) | 0, ((y - z) * 14) | 0) > 0.86) TMP.lerp(cream, 0.35);
     mc.push(TMP.r, TMP.g, TMP.b);
   }
   mg.setAttribute('color', new THREE.Float32BufferAttribute(mc, 3)); mg.computeVertexNormals();
-  const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.65, metalness: 0.05 });
+  const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide, emissive: base, emissiveIntensity: 0 });
   const root = new THREE.Group(), g = new THREE.Group(); g.rotation.order = 'YXZ'; root.add(g);
   const mantle = put(g, mg, skin, 0, 0.35, 0.35, 0.8, 0.75, 1.15); mantle.rotation.x = -0.35;
-  put(g, mg, skin, 0, 0.05, -0.35, 0.62, 0.5, 0.55);   // head
-  for (const s of [-1, 1]) {   // eyes with a horizontal pupil
-    put(g, SPH, std(0xd9b44a, { metalness: 0.6, roughness: 0.3 }), s * 0.5, 0.18, -0.45, 0.14, 0.14, 0.14);
-    put(g, new THREE.BoxGeometry(1, 1, 1), std(0x020202), s * 0.62, 0.18, -0.45, 0.04, 0.05, 0.16);
+  put(g, mg, skin, 0, 0.05, -0.35, 0.62, 0.5, 0.55);   // Kopf
+  const plain = std(base.clone().multiplyScalar(0.9), { roughness: 0.6 });
+  for (const s of [-1, 1]) {   // Augen auf Hügeln, mit waagerechter Pupille und einem Hautwulst darüber
+    put(g, SPH, plain, s * 0.47, 0.22, -0.45, 0.2, 0.17, 0.2);
+    put(g, SPH, std(0xd9b44a, { metalness: 0.6, roughness: 0.25 }), s * 0.55, 0.2, -0.47, 0.13, 0.13, 0.13);
+    put(g, new THREE.BoxGeometry(1, 1, 1), std(0x020202, { roughness: 0.05 }), s * 0.675, 0.2, -0.47, 0.03, 0.045, 0.15);
+    put(g, SPH, plain, s * 0.52, 0.33, -0.47, 0.17, 0.05, 0.16).rotation.z = -s * 0.3;
+    for (let k = 0; k < 2; k++) put(g, CONE, plain, s * (0.5 + k * 0.06), 0.4, -0.5 + k * 0.06, 0.025, 0.08, 0.025);   // kleine Hörnchen über dem Auge
   }
-  // arms: tapered segments, suckers on the underside
-  const segG = new THREE.CylinderGeometry(0.8, 1, 1, 10, 1).translate(0, 0.5, 0).rotateX(Math.PI / 2), sc = [], sp = segG.attributes.position;
-  for (let i = 0; i < sp.count; i++) { const y = sp.getY(i); TMP.copy(y < -0.2 ? pale : base); sc.push(TMP.r, TMP.g, TMP.b); }
-  segG.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
-  const sucker = std(0xffe8d8, { roughness: 0.5 });
+  const siphon = put(g, CYL, plain, 0.48, -0.05, 0.05, 0.07, 0.3, 0.07); siphon.rotation.set(0.4, 0, -1.1);   // Trichter (Sipho) an der Seite
+  // Arme: ein Schlauch pro Arm, Punkte werden jedes Bild neu berechnet
+  const AJ = ARM.joints, AR = ARM.ring, perArm = (AJ + 1) * AR, nV = 8 * perArm;
+  const pos = new Float32Array(nV * 3), nor = new Float32Array(nV * 3), col = new Float32Array(nV * 3), idx = [];
+  const cosA = [], sinA = [];
+  for (let j = 0; j < AR; j++) { cosA.push(Math.cos(j / AR * TAU)); sinA.push(Math.sin(j / AR * TAU)); }
   const arms = [];
   for (let i = 0; i < 8; i++) {
-    const a = i / 8 * TAU + 0.2, b0 = new THREE.Group();
-    b0.position.set(Math.cos(a) * 0.38, Math.sin(a) * 0.3 - 0.15, -0.2);
-    b0.rotation.set(-Math.sin(a) * 0.7 + 0.5, Math.cos(a) * 0.7, 0);
-    g.add(b0);
-    let parent = b0; const chain = [];
-    for (let k = 0; k < 10; k++) {
-      const j = new THREE.Group(); j.position.z = k ? 0.32 : 0; parent.add(j);
-      const r = 0.15 * (1 - k * 0.088);
-      const m = new THREE.Mesh(segG, skin); m.scale.set(r, r, 0.34); j.add(m);
-      if (k % 2 === 0 && k < 9) put(j, SPH, sucker, 0, -r * 0.85, 0.16, r * 0.45, r * 0.2, r * 0.45);
-      chain.push(j); parent = j;
+    const a = i / 8 * TAU + 0.2, o = i * perArm;
+    arms.push({ a, p0: new THREE.Vector3(Math.cos(a) * 0.38, Math.sin(a) * 0.3 - 0.15, -0.2), q0: new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.sin(a) * 0.7 + 0.5, Math.cos(a) * 0.7, 0)), centers: [] });
+    for (let k = 0; k <= AJ; k++) for (let j = 0; j < AR; j++) {
+      const n = (o + k * AR + j) * 3, under = sinA[j];   // unten am Arm = lokales −y
+      TMP.copy(under < -0.3 ? pale : base);
+      if (under > -0.3 && hash(i * 31 + k, j) > 0.75) dark(TMP, 0.75);
+      if (under < -0.8 && k % 2 === 0 && k < AJ - 1) TMP.copy(cream);                      // Saugnapf (Mitte)
+      else if (under < -0.55 && k % 2 === 0 && k < AJ - 1) TMP.copy(pale).multiplyScalar(0.7);   // Rand des Saugnapfs
+      col[n] = TMP.r; col[n + 1] = TMP.g; col[n + 2] = TMP.b;
     }
-    arms.push({ chain, a });
+    for (let k = 0; k < AJ; k++) for (let j = 0; j < AR; j++) {
+      const A = o + k * AR + j, B = o + k * AR + (j + 1) % AR, Cc = A + AR, D = B + AR;
+      idx.push(A, B, Cc, B, D, Cc);
+    }
   }
+  const armG = new THREE.BufferGeometry();
+  armG.setAttribute('position', new THREE.BufferAttribute(pos, 3)); armG.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); armG.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  armG.setIndex(idx); armG.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 1.5), 4.5);
+  g.add(new THREE.Mesh(armG, skin));
+  // Schwimmhaut zwischen den Armen (die ersten Stücke jedes Arms werden miteinander verbunden)
+  const WEB = 6, wpos = new Float32Array(8 * WEB * 2 * 3), wcol = new Float32Array(8 * WEB * 2 * 3), widx = [];
+  for (let i = 0; i < 8; i++) for (let k = 0; k < WEB; k++) for (let e = 0; e < 2; e++) {
+    const n = ((i * WEB + k) * 2 + e) * 3; TMP.copy(pale).lerp(base, 0.4); wcol[n] = TMP.r; wcol[n + 1] = TMP.g; wcol[n + 2] = TMP.b;
+  }
+  for (let i = 0; i < 8; i++) for (let k = 0; k < WEB - 1; k++) { const A = (i * WEB + k) * 2, B = A + 1, Cc = A + 2, D = A + 3; widx.push(A, B, Cc, B, D, Cc); }
+  const webG = new THREE.BufferGeometry();
+  webG.setAttribute('position', new THREE.BufferAttribute(wpos, 3)); webG.setAttribute('color', new THREE.BufferAttribute(wcol, 3)); webG.setIndex(widx);
+  webG.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0.5), 2);
+  const web = new THREE.Mesh(webG, skin); g.add(web);
+  const q = new THREE.Quaternion(), qs = new THREE.Quaternion(), eu = new THREE.Euler(), v = new THREE.Vector3(), p = new THREE.Vector3();
   let ph = Math.random() * 6;
   root.userData.update = (dt, s) => {
     ph += dt * (s.state === 1 ? 6 : 1.8);
     g.rotation.y = s.yaw; g.rotation.x = s.pitch;
-    mantle.scale.y = 0.75 + Math.sin(ph * 0.8) * 0.04;   // breathing
-    const curl = s.state === 2 ? 0.42 : s.state === 1 ? 0.04 : 0.17;
-    for (const arm of arms) for (let k = 0; k < arm.chain.length; k++) {
-      const w = Math.sin(ph + arm.a * 2 + k * 0.6) * 0.16;
-      arm.chain[k].rotation.x = Math.sin(arm.a) * (curl + w) + 0.05; arm.chain[k].rotation.y = -Math.cos(arm.a) * (curl + w);
+    mantle.scale.y = 0.75 + Math.sin(ph * 0.8) * 0.04;   // atmen
+    skin.emissiveIntensity = s.state ? 0.12 + 0.12 * Math.sin(ph * 3) : 0;   // greift an: die Haut flackert (Farbzellen)
+    const curl = s.state === 2 ? 0.42 : s.state === 1 ? 0.04 : 0.17, half = 10 / AJ;
+    for (let i = 0; i < 8; i++) {
+      const arm = arms[i], o = i * perArm; p.copy(arm.p0); q.copy(arm.q0);
+      for (let k = 0; k <= AJ; k++) {
+        const r = ARM.r * (1 - k / AJ * 0.94);
+        for (let j = 0; j < AR; j++) {
+          v.set(cosA[j], sinA[j], 0).applyQuaternion(q); const n = (o + k * AR + j) * 3;
+          pos[n] = p.x + v.x * r; pos[n + 1] = p.y + v.y * r; pos[n + 2] = p.z + v.z * r; nor[n] = v.x; nor[n + 1] = v.y; nor[n + 2] = v.z;
+        }
+        if (k < WEB) { const c = arm.centers[k] || (arm.centers[k] = new THREE.Vector3()); c.copy(p); }
+        const w = Math.sin(ph + arm.a * 2 + k * 0.6 * half) * 0.16;
+        eu.set((Math.sin(arm.a) * (curl + w) + 0.05) * half, -Math.cos(arm.a) * (curl + w) * half, 0); qs.setFromEuler(eu); q.multiply(qs);
+        v.set(0, 0, ARM.seg).applyQuaternion(q); p.add(v);
+      }
     }
+    for (let i = 0; i < 8; i++) for (let k = 0; k < WEB; k++) {   // Schwimmhaut: Mitte zwischen zwei Nachbararmen, außen etwas eingebuchtet
+      const A = arms[i].centers[k], B = arms[(i + 1) % 8].centers[k], sag = 1 - 0.18 * k / WEB;
+      const n = (i * WEB + k) * 6;
+      wpos[n] = A.x; wpos[n + 1] = A.y; wpos[n + 2] = A.z;
+      wpos[n + 3] = (A.x + B.x) / 2 * sag; wpos[n + 4] = (A.y + B.y) / 2 * sag; wpos[n + 5] = (A.z + B.z) / 2;
+    }
+    armG.attributes.position.needsUpdate = true; armG.attributes.normal.needsUpdate = true;
+    webG.attributes.position.needsUpdate = true; webG.computeVertexNormals();
   };
+  root.userData.update(0, { yaw: 0, pitch: 0, state: 0 });
   return root;
 }
 

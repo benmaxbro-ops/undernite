@@ -270,20 +270,75 @@ export function makeScooter() {
 // ---------- creatures (realistic versions live in creatures.js) ----------
 export function makeShark(tint) { return makeRealShark(tint ? { back: tint } : {}); }
 export function makeOcto(color) { return makeRealOcto(color); }
-const JELLY = { bell: new THREE.SphereGeometry(0.75, 14, 8, 0, TAU, 0, Math.PI / 2), skirt: new THREE.CylinderGeometry(0.5, 0.22, 1.7, 9, 3, true).translate(0, -0.85, 0) };
+// Qualle: durchsichtige Glocke mit Leuchtkanälen und gewelltem Rand, innen 4 leuchtende Ringe (Keimdrüsen),
+// darunter 4 gerüschte Mundarme und viele dünne Fangfäden, die im Wasser nachschwingen.
+// JELLY_LOOK: tentacles = Anzahl Fangfäden, len = ihre Länge (Meter)
+const JELLY_LOOK = { tentacles: 28, len: 2.6, pts: 14 };
+const JELLY = (() => {
+  const prof = [];   // Umriss der Glocke (von oben in der Mitte bis zum Rand), wird rundherum gedreht
+  for (let i = 0; i <= 14; i++) { const t = i / 14, a = t * Math.PI * 0.52; prof.push(new THREE.Vector2(Math.sin(a) * 0.78 + t * t * 0.04, Math.cos(a) * 0.62 - 0.1 * t * t)); }
+  const bell = new THREE.LatheGeometry(prof, 32);
+  const rim = new THREE.TorusGeometry(0.8, 0.035, 6, 64); const rp = rim.attributes.position;
+  for (let i = 0; i < rp.count; i++) { const x = rp.getX(i), y = rp.getY(i), a = Math.atan2(y, x), k = 1 + 0.035 * Math.sin(a * 16); rp.setXY(i, x * k, y * k); rp.setZ(i, rp.getZ(i) + 0.03 * Math.sin(a * 16)); }
+  rim.rotateX(Math.PI / 2); rim.translate(0, -0.1, 0);
+  // Leuchtkanäle: 16 Linien von oben bis zum Rand, auf der Glocke
+  const cp = [];
+  for (let c = 0; c < 16; c++) { const az = c / 16 * TAU; for (let i = 0; i < 14; i++) for (const ii of [i, i + 1]) { const pt = prof[ii]; cp.push(Math.cos(az) * pt.x * 1.01, pt.y + 0.005, Math.sin(az) * pt.x * 1.01); } }
+  const canals = new THREE.BufferGeometry(); canals.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3));
+  const gonad = new THREE.TorusGeometry(0.13, 0.035, 6, 16, Math.PI * 1.5);
+  return { bell, rim, canals, gonad };
+})();
 export function makeJelly(id) {
-  const root = new THREE.Group();
-  const c = [0xff7ad9, 0x7ae6ff, 0xb48cff][id % 3];
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const c = [0xff7ad9, 0x7ae6ff, 0xb48cff][id % 3], col = new THREE.Color(c);
   root.userData.glowColor = c;   // so leuchtet die Qualle (main.js setzt dort ein schwaches Licht hin)
-  const bell = add(root, JELLY.bell, new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, roughness: 0.3 }));
-  const core = add(root, GEO.sph, glow(c, 2.0), 0, 0.15, 0); core.scale.setScalar(0.2);
-  const skirt = add(root, JELLY.skirt, new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.45, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
+  const bellM = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.45, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, roughness: 0.15 });
+  const bell = add(body, JELLY.bell, bellM);
+  const inner = add(body, JELLY.bell, new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: c, emissiveIntensity: 0.25, transparent: true, opacity: 0.18, side: THREE.BackSide, depthWrite: false })); inner.scale.setScalar(0.82);
+  const rim = add(body, JELLY.rim, new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.2, transparent: true, opacity: 0.85, depthWrite: false }));
+  const add_ = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
+  const canals = new THREE.LineSegments(JELLY.canals, new THREE.LineBasicMaterial({ color: col.clone().lerp(new THREE.Color(0xffffff), 0.4), opacity: 0.55, ...add_ })); body.add(canals);
+  for (let i = 0; i < 4; i++) { const gd = add(body, JELLY.gonad, glow(c, 2.2), Math.cos(i / 4 * TAU) * 0.2, 0.32, Math.sin(i / 4 * TAU) * 0.2); gd.rotation.set(Math.PI / 2, 0, i / 4 * TAU); }   // 4 Leuchtringe
+  const core = add(body, GEO.sph, glow(c, 1.6), 0, 0.15, 0); core.scale.set(0.16, 0.1, 0.16);
+  // Fangfäden: dünne Linien, jedes Bild neu gebogen
+  const JL = JELLY_LOOK, NT = JL.tentacles, NP = JL.pts, tp = new Float32Array(NT * (NP - 1) * 2 * 3);
+  const tGeo = new THREE.BufferGeometry(); tGeo.setAttribute('position', new THREE.BufferAttribute(tp, 3)); tGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, -JL.len / 2, 0), JL.len + 1);
+  const tent = new THREE.LineSegments(tGeo, new THREE.LineBasicMaterial({ color: col.clone().lerp(new THREE.Color(0xffffff), 0.25), opacity: 0.6, ...add_ })); root.add(tent);
+  // Mundarme: 4 gerüschte Bänder in der Mitte
+  const NA = 4, AP = 12, ap = new Float32Array(NA * AP * 2 * 3), ai = [];
+  for (let a = 0; a < NA; a++) for (let k = 0; k < AP - 1; k++) { const o = (a * AP + k) * 2; ai.push(o, o + 1, o + 2, o + 1, o + 3, o + 2); }
+  const aGeo = new THREE.BufferGeometry(); aGeo.setAttribute('position', new THREE.BufferAttribute(ap, 3)); aGeo.setIndex(ai); aGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, -1, 0), 2.5);
+  const oral = new THREE.Mesh(aGeo, new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.7, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false })); root.add(oral);
   let ph = (id * 1.7) % 6;
   root.userData.update = (dt) => {
     ph += dt * 2.4; const k = Math.sin(ph);
-    bell.scale.set(1 + k * 0.14, 1 - k * 0.18, 1 + k * 0.14);
-    skirt.scale.set(1 - k * 0.2, 1 + k * 0.12, 1 - k * 0.2);
+    body.scale.set(1 + k * 0.14, 1 - k * 0.18, 1 + k * 0.14);
+    const rr = 0.8 * (1 + k * 0.14), ry = -0.1 * (1 - k * 0.18);
+    let n = 0;
+    for (let t = 0; t < NT; t++) {
+      const az = t / NT * TAU, sx = Math.cos(az), sz = Math.sin(az);
+      let px = sx * rr * 0.97, py = ry, pz = sz * rr * 0.97;
+      for (let i = 1; i < NP; i++) {
+        const f = i / (NP - 1), sway = Math.sin(ph * 0.8 - f * 3.2 + t) * 0.18 * f;   // die Welle läuft nach unten durch den Faden
+        const nx = sx * rr * (0.97 - f * 0.25 * (1 - k * 0.6)) + sway * -sz, ny = ry - f * JL.len * (0.9 + 0.1 * Math.sin(t * 7.3)), nz = sz * rr * (0.97 - f * 0.25 * (1 - k * 0.6)) + sway * sx;
+        tp[n++] = px; tp[n++] = py; tp[n++] = pz; tp[n++] = nx; tp[n++] = ny; tp[n++] = nz;
+        px = nx; py = ny; pz = nz;
+      }
+    }
+    n = 0;
+    for (let a = 0; a < NA; a++) {
+      const az = a / NA * TAU + 0.4;
+      for (let i = 0; i < AP; i++) {
+        const f = i / (AP - 1), y = -0.05 - f * 1.5, ruff = 0.07 * Math.sin(f * 14 + ph * 1.5 + a) * (0.4 + f), sw = Math.sin(ph * 0.7 - f * 2.5 + a) * 0.12 * f;
+        const cx = Math.cos(az) * (0.08 + f * 0.12) + sw, cz = Math.sin(az) * (0.08 + f * 0.12), w = 0.1 + f * 0.06;
+        const px = -Math.sin(az), pz = Math.cos(az);   // Richtung quer zum Band
+        ap[n++] = cx - px * w + ruff; ap[n++] = y; ap[n++] = cz - pz * w;
+        ap[n++] = cx + px * w - ruff; ap[n++] = y + ruff * 0.5; ap[n++] = cz + pz * w;
+      }
+    }
+    tGeo.attributes.position.needsUpdate = true; aGeo.attributes.position.needsUpdate = true; aGeo.computeVertexNormals();
   };
+  root.userData.update(0);
   return root;
 }
 
