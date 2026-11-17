@@ -17,6 +17,7 @@ import { makeShock, makeBlast, SHOCK } from './shock.js';
 const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6, 0.16, 0.24, 0.4, 0.32, 0.3, 0.3, 0.3];
 import { makeLensPass } from './lens.js';
 import { makeMechViewArms, makeCockpit } from './mech.js';
+import { makeSubInterior, SUBROOM } from './subint.js';
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -49,6 +50,14 @@ const torchBeam = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).trans
     fragmentShader: 'uniform vec3 c; uniform float o; varying float vz; varying vec3 vN; varying vec3 vV; void main() { float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.6); gl_FragColor = vec4(c, o * pow(1.0 - vz, 2.2) * edge); }',
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
 torchBeam.rotation.order = 'YXZ'; torchBeam.visible = false; scene.add(torchBeam);
+// Goliath: zwei Scheinwerfer links und rechts an der Kuppel, die schräg zur Mitte leuchten (statt einer Lampe aus der Brust).
+// side = so weit links/rechts, up = Höhe, fwd = nach vorne, focus = in so vielen Metern treffen sich die Lichtkegel, power = Helligkeit je Lampe (× normale Lampe)
+const MECH_LAMPS = { side: 1.05, up: 1.45, fwd: 0.6, focus: 16, power: 0.6, haze: 0.018 };   // haze = wie sichtbar der Lichtkegel im Wasser ist
+const mechLamps = [-1, 1].map(s => {
+  const l = new THREE.SpotLight(LAMP_COLOR, 0, 90, 0.3, 0.4, 1.6); scene.add(l); scene.add(l.target);
+  const b = torchBeam.clone(); b.material = torchBeam.material.clone(); b.material.uniforms.o.value = MECH_LAMPS.haze; b.visible = false; scene.add(b);
+  return { s, l, b };
+});
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   if (post.composer) { post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(innerWidth, innerHeight); }
@@ -104,6 +113,25 @@ const FREELOOK = { yaw: 1.9, pitchUp: 1.3, pitchDown: 0.7, turn: 7 };
 const head = { yaw: 0, pitch: 0 };   // so weit ist der Kopf gerade gegenüber dem Mech gedreht
 const mechFrame = new THREE.Group(); camera.add(mechFrame);   // Cockpit und Waffe hängen hier dran und drehen gegen den Kopf
 const cockpit = makeCockpit(); cockpit.visible = false; mechFrame.add(cockpit);
+// ---------- U-Boot von innen (Ego-Sicht mit V): sitzen am Steuerpult, mit B aufstehen und herumlaufen ----------
+const subIn = { stand: false, x: SUBROOM.seat[0], z: SUBROOM.seat[1] };   // x, z = wo man im U-Boot steht
+let subRoom = null;   // der Innenraum (wird beim ersten Einsteigen gebaut)
+// bist du gerade in der Ego-Sicht in deinem U-Boot? Dann gibt es das U-Boot zurück, sonst null
+function inSubFP() { const v = you && you.alive && you.veh ? vehicles.get(you.veh) : null; return v && v.type === 'sub' && firstPerson ? v : null; }
+const nearSeat = () => Math.hypot(subIn.x - SUBROOM.seat[0], subIn.z - SUBROOM.seat[1]) < 0.8;
+function toggleStand() {
+  if (!subIn.stand) { subIn.stand = true; subIn.x = SUBROOM.seat[0]; subIn.z = SUBROOM.seat[1] + 0.5; sfx.noise(0.2, 400, 1, 0.3, 'lowpass', 150); return; }
+  if (!nearSeat()) { hud.banner('Geh zum Sitz vorne, um dich hinzusetzen', 1.2); return; }
+  subIn.stand = false; subIn.x = SUBROOM.seat[0]; subIn.z = SUBROOM.seat[1]; sfx.noise(0.25, 300, 1, 0.35, 'lowpass', 100);
+}
+// Laufen im U-Boot: W/A/S/D in Blickrichtung, aber nur waagrecht und nur innerhalb des Raums
+function updateSubWalk(dt, v) {
+  const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  const rel = camYaw - v.yaw, sp = SUBROOM.walkSpeed * dt;   // Blick relativ zum U-Boot
+  subIn.x += (-Math.sin(rel) * f + Math.cos(rel) * s) * sp; subIn.z += (-Math.cos(rel) * f - Math.sin(rel) * s) * sp;
+  const Wk = SUBROOM.walk; subIn.x = Math.max(-Wk.x, Math.min(Wk.x, subIn.x)); subIn.z = Math.max(Wk.z0, Math.min(Wk.z1, subIn.z));
+  const pd = Math.hypot(subIn.x, subIn.z - 0.45); if (pd < 0.3) { subIn.x = subIn.x / (pd || 1) * 0.3; subIn.z = 0.45 + (subIn.z - 0.45) / (pd || 1) * 0.3; }   // nicht durchs Periskop
+}
 // Mündungsblitz: zwei gekreuzte leuchtende Scheiben und ein heller Kern (blau-weiß, wie ein Druckstoß aus Wasser)
 function makeFlash() {
   const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -119,7 +147,7 @@ const SWIM = { minSpeed: 2.5, rate: 0.35, rateSpeed: 0.035, blendIn: 3, blendOut
 // Pistole beidhändig unten in der Mitte, Gewehre etwas rechts, Werfer rechts.
 // inertia = wie stark sie beim Drehen nachschwingt, inertiaMax = höchstens so weit, inertiaBack = wie schnell sie zurückkommt
 // breathe = wie stark sie beim Atmen auf und ab geht, hands = Licht der Helmlampe auf Händen und Waffe (an / aus)
-const VIEW = { hip: { pistol: [0.03, -0.112, 0.04], rifle: [0.1, -0.13, 0.02], tube: [0.15, -0.13, 0] },
+const VIEW = { mechGun: [0.34, -0.2, -0.05], hip: { pistol: [0.03, -0.112, 0.04], rifle: [0.1, -0.13, 0.02], tube: [0.15, -0.13, 0] },
   inertia: 0.35, inertiaMax: 0.05, inertiaBack: 9, breathe: 0.0025, hands: [0.35, 0.06] };
 view.g.position.set(0.15, -0.13, 0);   // rechts, unten (die Tiefe kommt von der Waffe selbst, siehe updateViewModel)
 mechFrame.add(view.g);   // normal (ohne Freelook) ist mechFrame genau die Kamera
@@ -664,7 +692,8 @@ addEventListener('keydown', (e) => {
   if (e.repeat) return;
   keys[e.code] = true;
   if (phase !== 'play' || !you || !you.alive) return;
-  if (e.code === 'KeyV') { firstPerson = !firstPerson; return; }   // Ego-Perspektive an/aus
+  if (e.code === 'KeyV') { firstPerson = !firstPerson; if (!firstPerson) subIn.stand = false; return; }   // Ego-Perspektive an/aus
+  if (e.code === 'KeyB' && inSubFP()) { toggleStand(); return; }   // im U-Boot aufstehen / hinsetzen
   if (e.code === 'KeyC' && canCling()) { toggleCling(); return; }  // Deckung: am Riff festhalten / loslassen
   if (e.code === 'KeyQ' && mode !== 'exp') { useGadget(); return; } // Gadget
   if (e.code === 'Digit4' && mode !== 'exp') { useUlti(); return; } // Ulti
@@ -768,9 +797,9 @@ function controlMe(dt) {
   let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1) * ((mySuit === 'manta' || mySuit === 'hammerhai') && ultOn() ? ULTIS[mySuit].speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
   if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
-  if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
+  if (vt === 'sub' && !subIn.stand) { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
   else { me.hyaw = camYaw; me.hpitch = camPitch; }
-  const shop = hud.shopOpen;   // no swimming while shopping
+  const shop = hud.shopOpen || (vt === 'sub' && subIn.stand);   // im Shop nicht schwimmen; wer im U-Boot steht, steuert nicht (es bremst ab)
   const down = canCling() ? keys.KeyX : (keys.KeyC || keys.KeyX);   // Triton/Manta: C = festhalten, also sinken nur mit X
   const f = shop ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = shop ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), u = shop ? 0 : (keys.Space ? 1 : 0) - (down ? 1 : 0);
   // Tasten weich anlaufen lassen (zu Fuß), damit Richtungswechsel nicht eckig sind; Fahrzeuge reagieren direkt
@@ -928,7 +957,20 @@ function updateTorch(dt, depth) {
     if (torch.bat <= 0) { torch.on = false; hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 3); }
   }
   if (!torch.hinted && !torch.on && depth > (exp ? 70 : 30) && torch.bat > 0) { torch.hinted = true; hud.banner('Zu dunkel? Drück L für die Taschenlampe!', 3.5); }
-  lamp.intensity = torch.on && you.alive ? L.power : 0; lamp.distance = L.range; lamp.angle = L.angle;
+  const on = torch.on && you.alive, isMech = !!SUITS[mySuit].mech;
+  // Goliath: zwei Lampen an der Kuppel, die mittlere (Brust-)Lampe bleibt aus
+  for (const M of mechLamps) {
+    M.l.intensity = on && isMech ? L.power * MECH_LAMPS.power : 0; M.b.visible = M.l.intensity > 0;
+    if (!M.b.visible) continue;
+    const yaw = me.hyaw ?? camYaw, d = dirFrom(yaw, camPitch), rx = Math.cos(yaw), rz = -Math.sin(yaw), Ls = MECH_LAMPS;
+    M.l.distance = L.range;
+    M.l.position.set(me.x + rx * Ls.side * M.s + d[0] * Ls.fwd, me.y + Ls.up + d[1] * Ls.fwd, me.z + rz * Ls.side * M.s + d[2] * Ls.fwd);
+    M.l.target.position.set(me.x + d[0] * Ls.focus, me.y + Ls.up + d[1] * Ls.focus, me.z + d[2] * Ls.focus);
+    const tx = M.l.target.position.x - M.l.position.x, ty = M.l.target.position.y - M.l.position.y, tz = M.l.target.position.z - M.l.position.z;
+    const len = L.range * 0.5, r = len * Math.tan(0.3) * 0.7;
+    M.b.scale.set(r, r, len); M.b.position.copy(M.l.position); M.b.rotation.set(Math.atan2(ty, Math.hypot(tx, tz)), Math.atan2(-tx, -tz), 0);
+  }
+  lamp.intensity = on && !isMech ? L.power : 0; lamp.distance = L.range; lamp.angle = L.angle;
   // die Lampe sitzt vorne am Helm und zeigt dorthin, wo du hinschaust
   const dir = dirFrom(camYaw, camPitch), up = SUITS[mySuit].mech ? 1.4 : 0.15, fwd = SUITS[mySuit].mech ? 0.5 : 0.65;
   lamp.position.set(me.x + dir[0] * fwd, me.y + up + dir[1] * fwd, me.z + dir[2] * fwd);
@@ -974,6 +1016,7 @@ function setHolster(on) {
   if (on) { firing = false; sfx.stow(); } else { holster.readyAt = performance.now() + DRAW_TIME * UP('draw') * 1000; sfx.cockBack(); }
 }
 function tryFire(now) {
+  if (subIn.stand) return;   // im U-Boot herumlaufen: nicht schießen
   if (holster.on) { if (firing) { setHolster(false); firing = false; } return; }   // Klick holt die Waffe raus (schießt noch nicht)
   if (now < holster.readyAt) return;
   if (now < holsterUntil || now < gfx.stunUntil) return;   // Waffe weggesteckt (zu heiß) oder gelähmt
@@ -1016,6 +1059,7 @@ function computePrompt() {
   if (mode === 'exp' && !hud.shopOpen && !nearBoat() && !nearBase() && otherBaseOwner()) return ['–', `Basis von ${otherBaseOwner()} · nur Luft tanken`];
   if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
   const ft = finTarget(); if (ft) return ['G', `Finisher: ${ft.name}`];
+  if (inSubFP()) return subIn.stand ? (nearSeat() ? ['B', 'Hinsetzen und steuern'] : null) : ['B', 'Aufstehen und im U-Boot umsehen'];
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
   const S = SUITS[mySuit]; let best = null, bd = 1e9;
@@ -1118,7 +1162,7 @@ const BREATH_SPRINT = 2.8; // so viel schneller atmet man beim Sprinten
 function updateScope(dt) {
   const w = you && you.alive && !you.veh && held < 0 ? you.w[you.slot] : null;
   const def = w ? modDef(w[0], w[4]) : null, isScope = !!(def && def.scope);   // Werte mit Aufsätzen (Zielfernrohr-Aufsatz!)
-  const can = scoping && def && !myFin && !(you.rl > 0);          // beim Nachladen kann man nicht zielen
+  const can = scoping && def && !myFin && !(you.rl > 0) && !SUITS[mySuit].mech;   // Goliath: Rechtsklick dreht nur den Mech (kein Zielen über Kimme und Korn)          // beim Nachladen kann man nicht zielen
   aim += ((can ? 1 : 0) - aim) * Math.min(1, dt * 12);
   scoped = isScope ? aim : 0;
   const fov = FOV + ((isScope ? SCOPE_FOV : ADS_FOV) - FOV) * aim;
@@ -1238,7 +1282,7 @@ function updateViewModel(dt) {
     sfx.mechServo(Math.min(1, Math.abs(view.inX) * 25));
   }
   // die Waffe vor der Kamera nur in der Ego-Perspektive, mit Waffe in der Hand (nicht mit Fisch)
-  view.g.visible = fpOn && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil && view.swim < 0.9 && !holster.on;   // Fernrohr oder weggesteckt: keine Waffe
+  view.g.visible = fpOn && !you.veh && !!w && held < 0 && scoped < 0.5 && performance.now() >= holsterUntil && view.swim < 0.9 && !holster.on;   // Fernrohr oder weggesteckt: keine Waffe
   if (!view.g.visible) return;
   const widx = WEAPON_IDS.indexOf(w[0]);
   const modKey = (w[4] || []).join(",");
@@ -1275,6 +1319,7 @@ function updateViewModel(dt) {
   const breathe = Math.sin(time * 1.5) * VIEW.breathe * (1 - ads * 0.7);            // ganz leichtes Atmen
   const hip = VIEW.hip[U.kind] || VIEW.hip.rifle;                                    // wo die Waffe ohne Zielen sitzt
   view.g.position.set(hip[0] * (1 - ads), hip[1] * (1 - ads) - view.swim * 0.4, view.swim * 0.1);   // beim Brustschwimmen nach unten weg
+  if (SUITS[mySuit].mech) view.g.position.set(...VIEW.mechGun);   // Goliath: Waffe hängt rechts außen am Roboter, neben der Kuppel
   view.gun.position.set(
     sx - U.sightAt[0] * ads + Math.cos(view.bob) * sway - view.tilt * 0.08 + view.inX * 0.5,
     sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.012 + rspring.p * 0.35 + view.inY * 0.5 + breathe,   // reißt mit der Kamera hoch
@@ -1337,6 +1382,7 @@ function updateCamera(dt) {
     if (SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
     // Ego-Perspektive: Kamera fährt in den Kopf (Abstand 0), nicht zur Seite, nicht nach oben
     if ((firstPerson || aim > 0.5) && !v) { fpOn = true; want = 0; side = 0; up = 0; }
+    else if (inSubFP()) { want = 0; side = 0; up = 0; }   // im U-Boot: Kamera im Innenraum (siehe unten)
     else ty += headUp * 2.2;
   } else {
     let e = players.get(specId);
@@ -1351,6 +1397,20 @@ function updateCamera(dt) {
   if (t > 0) { const q = Math.max(0.15, t - 0.08); px = tx + (px - tx) * q; py = ty + (py - ty) * q; pz = tz + (pz - tz) * q; }
   py = Math.min(headUp > 0.5 ? SURFACE + 14 : SURFACE - 0.6, Math.max(py, W.heightAt(px, pz) + 0.5));
   if (headUp > 0.5 && py < SURFACE + 0.8 && py > SURFACE - 0.8) py = SURFACE + 0.8;   // never sit exactly in the water plane
+  // U-Boot innen: Kamera auf Augenhöhe am Sitz bzw. dort, wo man steht; Innenraum einblenden
+  const sv = inSubFP();
+  if (!sv) { subIn.stand = false; if (subRoom) subRoom.visible = false; }
+  else {
+    const body = sv.mesh.userData.body;
+    if (!subRoom) subRoom = makeSubInterior();
+    if (subRoom.parent !== body) body.add(subRoom);
+    subRoom.visible = true;
+    if (subIn.stand) updateSubWalk(dt, sv);
+    sv.mesh.updateMatrixWorld(true);
+    V.set(subIn.x, subIn.stand ? SUBROOM.eyeStand + Math.sin(time * 1.3) * 0.01 : SUBROOM.eyeSit, subIn.z); body.localToWorld(V);
+    px = V.x; py = V.y; pz = V.z;
+    subRoom.userData.update(dt, subIn.stand ? 0 : flow.f || ((keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0)), (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), time, sv.speed || 0);
+  }
   shake = Math.max(0, shake - dt * 2.2);
   camera.position.set(px + (Math.random() - 0.5) * shake, py + (Math.random() - 0.5) * shake, pz + (Math.random() - 0.5) * shake);
   updateHead(dt);

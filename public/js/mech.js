@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { brushed, polymer, neoprene } from './textures.js';
 
 // paint = Lackfarbe, foam = Auftriebsblock, glass = Kuppel (opacity = wie durchsichtig), cabin = Licht innen in der Kuppel
-export const MECH = { scale: 0.75, paint: 0xe3a51b, foam: 0xf0c02a, steel: 0x9aa5ae, rubber: 0x17191c, cabin: 0xffd49a, glassOpacity: 0.22 };
+export const MECH = { scale: 0.75, paint: 0xe3a51b, foam: 0xf0c02a, steel: 0x9aa5ae, rubber: 0x17191c, cabin: 0xffd49a, cockpitLight: 0xff3a2a, glassOpacity: 0.22 };
 
 const SPH = new THREE.SphereGeometry(1, 40, 28), CYL = new THREE.CylinderGeometry(1, 1, 1, 32), ZCYL = new THREE.CylinderGeometry(1, 1, 1, 32).rotateX(Math.PI / 2);
 const RING = new THREE.TorusGeometry(1, 0.16, 14, 40), THIN = new THREE.TorusGeometry(1, 0.06, 10, 40), BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -265,7 +265,7 @@ export function makeCockpit() {
     needles.push(needle);
   }
   // warmes Licht innen (beleuchtet Kragen, Arme und Waffe)
-  const light = new THREE.PointLight(MECH.cabin, 0.9, 2.2, 2); light.position.set(0, 0.3, 0.15); g.add(light);
+  const light = new THREE.PointLight(MECH.cockpitLight, 0.7, 2.4, 2); light.position.set(0, 0.3, 0.15); g.add(light);   // leicht rote Beleuchtung innen
   g.userData.light = light;
   // jedes Bild: f = vor/zurück, s = links/rechts (−1…1), t = Zeit. Linker Hebel = Schwimmen, rechter = Drehen/Zielen.
   const tilt = { lx: 0, lz: 0, rx: 0, rz: 0 };
