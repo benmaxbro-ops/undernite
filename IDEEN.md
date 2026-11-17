@@ -10,7 +10,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 ## Danach
 
 
-- [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 
 
 ## Neue Modi (Ideen von Ben, 17.11.)

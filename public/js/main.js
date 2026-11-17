@@ -18,6 +18,7 @@ const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6, 0.16, 0.24, 0.4,
 import { makeLensPass } from './lens.js';
 import { makeMechViewArms, makeCockpit, makeMechReloadHand } from './mech.js';
 import { makeSubInterior, SUBROOM } from './subint.js';
+import { initTouch, isTouch } from './touch.js';
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -237,7 +238,7 @@ function onStart(m) {
   if (m.spawn) { me.x = m.spawn[0]; me.y = m.spawn[1]; me.z = m.spawn[2]; me.vx = me.vy = me.vz = 0; camYaw = m.spawn[3]; camPitch = -0.55; me.energy = 100; }
   hud.show('game'); hud.spec(null);
   hud.banner(mode === 'exp' ? 'Tiefsee-Expedition! Jag Fische und verkauf sie am Boot.' : m.spectator ? 'Runde läuft – du schaust zu' : 'Abtauchen! Such dir Ausrüstung.', 4);
-  hud.pause(!document.pointerLockElement);
+  hud.pause(!document.pointerLockElement && !isTouch());   // auf dem Handy gibt es keine Maus-Sperre – also auch keine Pause-Anzeige
 }
 function addPickup(p) {
   const mesh = makePickup(p[1], p[2], p[3]); mesh.position.set(p[4], p[5], p[6]); dyn.add(mesh);
@@ -787,7 +788,15 @@ addEventListener('wheel', (e) => {
   for (let k = 1; k <= 3; k++) { const i = (you.slot + dir * k + 6) % 3; if (you.w[i]) { if (i !== you.slot) send({ t: 'slot', i }); break; } }
 }, { passive: true });
 addEventListener('contextmenu', (e) => e.preventDefault());
-document.addEventListener('pointerlockchange', () => { hud.pause(phase === 'play' && document.pointerLockElement !== canvas); if (document.pointerLockElement !== canvas) firing = false; });
+document.addEventListener('pointerlockchange', () => { if (isTouch()) return; hud.pause(phase === 'play' && document.pointerLockElement !== canvas); if (document.pointerLockElement !== canvas) firing = false; });
+// Handy-Steuerung (nur mit Touchscreen): Joystick, Wischen zum Umschauen, Knöpfe (touch.js)
+const touch = initTouch({
+  lookBy(dx, dy) { if (phase !== 'play') return; if (mechFree() && !scoping) { head.yaw = Math.max(-FREELOOK.yaw, Math.min(FREELOOK.yaw, head.yaw - dx)); head.pitch = Math.max(-FREELOOK.pitchDown, Math.min(FREELOOK.pitchUp, head.pitch - dy)); return; }
+    camYaw -= dx; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - dy)); },
+  fire(on) { sfx.init(); firing = on && phase === 'play'; },
+  scope(on) { scoping = on; },
+  playing: () => phase === 'play',
+});
 
 // ---------- Deckung: Triton und Manta halten sich mit C an einem Riff-Hügel fest ----------
 // reach = so viele Meter darf man höchstens vom Hügel weg sein, sway = Zielwackeln beim Festhalten (0.35 = nur noch 35 %)
@@ -1501,6 +1510,7 @@ function lobbyCamera() {
 const blurCam = { x: 0, y: 0 };   // Bewegungsunschärfe (lens.js)
 let last = performance.now();
 function frame(now) {
+  if (touch) { const on = phase === 'play'; if (touch.on !== on) { touch.on = on; touch.show(on); } }   // Handy-Knöpfe nur während einer Runde
   const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
   let outside = false;
   if (phase === 'play' && W) {

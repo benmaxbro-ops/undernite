@@ -29,6 +29,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | V im U-Boot | Ego-Sicht **im** U-Boot: du sitzt am Steuerpult (Sonar-Bildschirm, Steuerhorn, Gashebel) und schaust durch die Glaskuppel. **B** = aufstehen: dann bleibt das U-Boot stehen, du läufst mit W/A/S/D herum (Periskop, Leiter, Rohre, Ventile, Koje) und schaust dich um. Vorne am Sitz wieder **B** = hinsetzen. Neben dem Periskop **P** = durchs Periskop schauen (Zoom, Gradzahl). Werte: `SUBROOM` in `subint.js`, `PERI` in `main.js` |
 | E am Jetski | **Jetski-Scooter** (rot, 4 Stück neben den Scootern): viel schneller als der Scooter, aber nur vorwärts und mit weiten Kurven. Werte: `jetski` in `VEHICLES` (shared.js) |
 | E am Rochen | **Torpedo-Rochen** (3 Stück neben Scootern): gleitet mit schlagenden Flügeln, nur vorwärts, **Linksklick = Torpedo** (40 Schaden, Explosion). Werte: `ray` in `VEHICLES` (shared.js) |
+| (Handy) | Auf Geräten mit Touchscreen erscheint eine **Handy-Steuerung**: links Joystick (schwimmen), rechts wischen (umschauen), Knöpfe für Feuer, Zielen, Hoch/Runter, R, E, Q, 4, Waffe wechseln, Ego-Sicht, Sprint. Werte: `TOUCH` in `touch.js` |
 | Leertaste / C | aufwärts / abwärts – ganz oben schaut dein Kopf aus dem Wasser (X geht auch abwärts) |
 | H | Waffe wegstecken / rausholen (weggesteckt: Hände frei, 8 % schneller) |
 | (Schwimmen) | Bewegungen laufen weich an, beim Loslassen gleitest du aus, beim Seitwärtsschwimmen neigt sich die Kamera leicht (Werte: `FLOW` in `main.js`) |
