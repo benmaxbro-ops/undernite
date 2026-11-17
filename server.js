@@ -66,19 +66,39 @@ const W_PREF = { pistol: 16, needler: 18, scatter: 8, harpoon: 30, torpedo: 24 }
 // ---------- state ----------
 const clients = new Map();   // ws -> client
 let nextId = 1;
-const G = {
-  phase: 'lobby', mode: 'br', seed: (rnd() * 1e9) | 0, world: null, bots: 11, time: 0,
-  players: new Map(), creatures: [], vehicles: new Map(), pickups: new Map(), crates: [], proj: [],
-  zone: null, events: [], endT: 0, noHumanT: 0,
-  bossT: [], fishT: [],                 // expedition: boss respawn timers, fish spawn timers per floor
-};
-G.world = new World(G.seed, G.mode);
+// ---------- Räume: einer pro Liga ----------
+// Jeder Raum ist eine eigene Lobby mit eigener Runde und eigener Welt. G ist immer der Raum, an dem der Server gerade arbeitet
+// (vor jeder Nachricht und jedem Tick wird G auf den richtigen Raum gestellt). So spielen Anfänger mit Anfängern, Profis mit Profis.
+function makeRoom(league) {
+  const g = {
+    league, phase: 'lobby', mode: 'br', seed: (rnd() * 1e9) | 0, world: null, bots: 11, time: 0,
+    players: new Map(), creatures: [], vehicles: new Map(), pickups: new Map(), crates: [], proj: [],
+    zone: null, events: [], endT: 0, noHumanT: 0,
+    bossT: [], fishT: [],                 // expedition: boss respawn timers, fish spawn timers per floor
+  };
+  g.world = new World(g.seed, g.mode);
+  return g;
+}
+const rooms = new Map();   // Liga (1–4) -> Raum
+const roomFor = (league) => { if (!rooms.has(league)) rooms.set(league, makeRoom(league)); return rooms.get(league); };
+let G = roomFor(1);
+// alle Verbindungen, die im aktuellen Raum G sind
+const roomClients = () => [...clients.values()].filter(c => c.room === G);
+// Spieler in den Raum seiner Liga setzen (nur in der Lobby – mitten in einer Runde wird niemand verschoben)
+function placeClient(c) {
+  const L = leagueOf(upsOf(c.name)), old = c.room;
+  if (old && old.league === L) return;
+  if (old && old.phase !== 'lobby' && old.players.has(c.id)) return;
+  c.room = roomFor(L);
+  if (old) { G = old; broadcast(lobbyMsg()); }
+  G = c.room; broadcast(lobbyMsg());
+}
 
 function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string' ? obj : JSON.stringify(obj)); }
-function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
+function broadcast(obj) { const s = JSON.stringify(obj); for (const c of roomClients()) send(c.ws, s); }   // nur an den aktuellen Raum
 function lobbyMsg() {
   return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, duo: G.duo ? 1 : 0, urls: lanUrls(),
-    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), league: leagueOf(upsOf(c.name)), suits: suitsOf(c.name), gads: gadsOf(c.name), weps: wepsOf(c.name), atts: attsOf(c.name), load: loadOf(c.name) })) };
+    league: G.league, players: roomClients().map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), league: leagueOf(upsOf(c.name)), suits: suitsOf(c.name), gads: gadsOf(c.name), weps: wepsOf(c.name), atts: attsOf(c.name), load: loadOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
 
@@ -139,7 +159,7 @@ function startMatch() {
       hp: CREATURES.jelly.hp, state: 'drift', sw: s, sph: ph, ox: (rnd() - 0.5) * 12, oy: (rnd() - 0.5) * 7, oz: (rnd() - 0.5) * 12, ph: rnd() * 6.28 });
   }
   // participants
-  for (const c of clients.values()) {
+  for (const c of roomClients()) {
     const p = mkPlayer(c.id, c.name, c.suit, false); p.up = upsOf(c.name);
     p.hp = p.maxhp = Math.round(p.maxhp * upMul(p.up, 'hp'));   // Zäher Anzug: mehr Leben
     // Ausrüstung aus dem Ausrüstungs-Fenster: Gadget (wenn gekauft und nicht abgelegt) und Startwaffe
@@ -152,7 +172,7 @@ function startMatch() {
   }
   G.baits = []; G.drones = [];
   const names = [...BOT_NAMES].sort(() => rnd() - 0.5);
-  const nBots = G.mode === 'wave' ? Math.max(0, WAVE.team - clients.size) : G.bots;   // Wellen: immer zu viert (Bots füllen auf)
+  const nBots = G.mode === 'wave' ? Math.max(0, WAVE.team - roomClients().length) : G.bots;   // Wellen: immer zu viert (Bots füllen auf)
   for (let i = 0; i < nBots; i++) {
     const p = mkPlayer(nextId++, names[i % names.length], pick(SUIT_ORDER), true);
     G.players.set(p.id, p);
@@ -188,8 +208,8 @@ function startMatch() {
   G.zone = { x: 0, z: 0, r: 430, fx: 0, fz: 0, fr: 430, nx: 0, nz: 0, nr: 430, ph: 0, t: 0, sh: false };
   pickNextZone();
   G.wave = G.mode === 'wave' ? { n: 0, state: 'break', t: WAVE.firstBreak } : null;
-  for (const c of clients.values()) send(c.ws, startMsg(c));
-  console.log(`[match] started: ${clients.size} human(s), ${G.bots} bot(s), seed ${G.seed}`);
+  for (const c of roomClients()) send(c.ws, startMsg(c));
+  console.log(`[match] Liga ${G.league} started: ${roomClients().length} human(s), ${G.bots} bot(s), seed ${G.seed}`);
 }
 function startMsg(c) {
   const me = G.players.get(c.id);
@@ -1152,9 +1172,9 @@ function startExp() {
   G.bossT = BOSSES.map(() => 0); G.fishT = FLOORS.map(() => 0);
   for (let i = 0; i < BOSSES.length; i++) spawnBoss(i);
   for (let f = 0; f < FLOORS.length; f++) for (let k = 0; k < FLOORS[f].fish; k++) spawnFish(f, true);
-  for (const c of clients.values()) expJoin(c);
-  for (const c of clients.values()) send(c.ws, startMsg(c));
-  console.log(`[expedition] started with ${clients.size} diver(s), seed ${G.seed}`);
+  for (const c of roomClients()) expJoin(c);
+  for (const c of roomClients()) send(c.ws, startMsg(c));
+  console.log(`[expedition] Liga ${G.league} started with ${roomClients().length} diver(s), seed ${G.seed}`);
 }
 function spawnBoss(i) {
   const B = BOSSES[i], L = G.world.bossLairs[i];
@@ -1408,7 +1428,7 @@ function tickExp(dt) {
   for (const c of G.creatures) if (c.type === 'fish') counts[FISH[c.sub].floor]++;
   for (let f = 0; f < FLOORS.length; f++) if (counts[f] < FLOORS[f].fish && (G.fishT[f] -= dt) <= 0) { G.fishT[f] = 1.2; spawnFish(f, false); }
   stepProjectiles(dt);
-  if (clients.size === 0) toLobby();
+  if (roomClients().length === 0) toLobby();
 }
 function quitExp() {
   for (const p of G.players.values()) storeProgress(p);
@@ -1496,7 +1516,7 @@ function tick(dt) {
   // end conditions
   const alive = [...G.players.values()].filter(p => p.alive);
   const humansAlive = alive.filter(p => !p.bot).length;
-  if (clients.size === 0) { toLobby(); return; }
+  if (roomClients().length === 0) { toLobby(); return; }
   if (G.wave) { if (alive.length === 0) endMatch(); }   // Wellen: erst vorbei, wenn alle gleichzeitig tot sind
   else if (alive.length <= 1 || (G.duo && aliveTeams() <= 1)) endMatch();   // Duo: das letzte Team gewinnt
   else if (humansAlive === 0) { G.noHumanT += dt; if (G.noHumanT > 6) endMatch(); }
@@ -1519,7 +1539,7 @@ function snapshot() {
     b: G.mode === 'exp' ? [...G.players.values()].filter(p => p.baseIdx != null).map(p => [p.baseIdx, p.id, p.name, p.aq.map(catchToNet)]) : undefined,
   };
   const cs = JSON.stringify(common);
-  for (const c of clients.values()) {
+  for (const c of roomClients()) {
     const p = G.players.get(c.id);
     let you = null, ye = [];
     if (p) {
@@ -1569,18 +1589,22 @@ function toLobby() {
 }
 
 setInterval(() => {
-  try {
-    if (G.phase === 'play') {
-      for (let i = 0; i < SPEED && G.phase === 'play'; i++) tick(DT);
-      if (G.phase === 'play') snapshot();
-    } else if (G.phase === 'end') { G.endT -= DT * SPEED; if (G.endT <= 0) toLobby(); }
-  } catch (e) { console.error('[tick error]', e); }
+  for (const room of rooms.values()) {   // jeden Liga-Raum nacheinander berechnen
+    G = room;
+    try {
+      if (G.phase === 'play') {
+        for (let i = 0; i < SPEED && G.phase === 'play'; i++) tick(DT);
+        if (G.phase === 'play') snapshot();
+      } else if (G.phase === 'end') { G.endT -= DT * SPEED; if (G.endT <= 0) toLobby(); }
+    } catch (e) { console.error('[tick error]', e); }
+  }
 }, 1000 / TICK_HZ);
 
 // ---------- network ----------
 const cleanName = (s) => String(s || '').replace(/[<>&"]/g, '').trim().slice(0, 16) || 'Taucher';
 wss.on('connection', (ws) => {
   const c = { id: nextId++, ws, name: 'Taucher', suit: 'triton', playing: false };
+  c.room = roomFor(leagueOf(upsOf(c.name))); G = c.room;
   clients.set(ws, c);
   send(ws, { t: 'welcome', id: c.id });
   if (G.phase === 'lobby') broadcast(lobbyMsg());
@@ -1592,6 +1616,8 @@ wss.on('connection', (ws) => {
   ws.on('message', (raw) => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object') return;
+    G = c.room;   // ab hier: der Raum dieses Spielers
+    if (m.t === 'set' && m.name !== undefined) { c.name = cleanName(m.name); placeClient(c); G = c.room; }   // anderer Name = evtl. andere Liga
     const p = G.phase === 'play' ? G.players.get(c.id) : null;
     switch (m.t) {
       case 'set':
@@ -1610,7 +1636,7 @@ wss.on('connection', (ws) => {
       case 'start': if (G.phase === 'lobby') { if (G.mode === 'exp') startExp(); else startMatch(); } break;
       case 'buy': if (p && G.mode === 'exp') expBuy(p, m); break;
       // Einkaufen und Ausrüsten: in der Lobby – oder während der Runde, wenn man schon tot ist (oder nur zuschaut)
-      case 'brbuy': if (G.phase === 'lobby' || !p || !p.alive) { brBuy(c, m.k); send(ws, lobbyMsg()); if (G.phase === 'lobby') broadcast(lobbyMsg()); } break;
+      case 'brbuy': if (G.phase === 'lobby' || !p || !p.alive) { brBuy(c, m.k); send(ws, lobbyMsg()); if (G.phase === 'lobby') { broadcast(lobbyMsg()); placeClient(c); G = c.room; } } break;   // neues Upgrade = evtl. neue Liga
       case 'load': if (G.phase === 'lobby' || !p || !p.alive) { setLoadout(c, m); send(ws, lobbyMsg()); if (G.phase === 'lobby') broadcast(lobbyMsg()); } break;
       case 'ult': if (p && p.alive && G.mode !== 'exp') useUlti(p, m); break;
       case 'gad': if (p && p.alive && G.mode !== 'exp') { try { useGadget(p, m); } catch (err) { console.error('[gadget error]', err); } } break;
@@ -1632,6 +1658,7 @@ wss.on('connection', (ws) => {
     }
   });
   ws.on('close', () => {
+    G = c.room;
     clients.delete(ws);
     const p = G.players.get(c.id);
     if (G.phase === 'play' && p && G.mode === 'exp') { storeProgress(p); G.players.delete(c.id); ev('msg', `${p.name} ist aufgetaucht und weg.`); }

@@ -16,14 +16,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 - [ ] **U-Boot zum Begehen:** fertig bis auf Bens Test (sitzen, aufstehen, laufen, Periskop, Details)
 
-## Fairness: Ligen
-
-Gekaufte Upgrades machen **voll stark**. Damit das nicht unfair wird, kommen Spieler nach ihrem
-Upgrade-Level in **Ligen 1 bis 4**: Anfänger spielen gegen Anfänger, Profis gegen Profis.
-- [x] Jedes Level und jede Liga (1–4) wird in der Lobby angezeigt, Bots bekommen die Upgrades der Spieler (schon fertig).
-- [ ] Der Server lässt mehrere Runden gleichzeitig laufen, eine pro Liga (großer Umbau – lohnt sich erst mit vielen Spielern gleichzeitig).
-
-
 ## Später
 
 - 3D-Modelle, Musik
