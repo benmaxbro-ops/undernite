@@ -31,7 +31,7 @@ export const UNDERWATER = {
 export const BOOM_BUS = 0.45;
 //   subHz = wie tief der Tiefbass ist (Hertz, kleiner = tiefer) · punch / punchHz = Knall-Boom in der Mitte (Lautstärke / Tonhöhe)
 // Abgestimmt nach einer echten Glock 17 (gemessen): am lautesten sind Mitten und Knall, dazu etwas mehr Boom als im Original
-export const SHOT = { crack: 3.2, body: 3.6, boom: 1.1, mech: 1.6, duck: 0.6, wumms: 0.6, sub: 0.6, subHz: 78, harm: 1.6, boomLen: 0.45, punch: 4.0, punchHz: 190, loud: 1.4 };
+export const SHOT = { crack: 3.2, body: 3.6, boom: 1.1, mech: 0.6, duck: 0.6, wumms: 0.6, sub: 0.6, subHz: 78, harm: 1.6, boomLen: 0.45, punch: 4.0, punchHz: 190, loud: 1.4 };
 // Holztür-Schlag bei jedem Schuss: vol = Lautstärke bei fremden Schüssen, own = bei eigenen,
 // range = bis so viele Meter weit hört man ihn, pitchSmall / pitchBig = Tonhöhe (kleiner = tiefer),
 // body = zusätzlicher tiefer Bass-Schlag darunter
@@ -73,7 +73,7 @@ export class Sfx {
     const makeup = ctx.createGain(); makeup.gain.value = 2.6;   // wie viel lauter nach dem Kompressor (mehr = lauter, der Begrenzer verhindert Verzerren)
     // weicher Begrenzer ganz am Ende: Spitzen über 1 werden sanft abgerundet statt hart abgehackt (das klang verzerrt und billig)
     const soft = ctx.createWaveShaper(), sc = new Float32Array(2048);
-    for (let i = 0; i < 2048; i++) { const x = (i / 1023.5 - 1) * 2; sc[i] = Math.tanh(x * 1.1) * 0.97; }
+    for (let i = 0; i < 2048; i++) { const x = (i / 1023.5 - 1) * 2; sc[i] = Math.tanh(x * 1.1) * 0.88; }   // 0.88 statt 1: etwas Abstand, weil das Umrechnen (oversample) Spitzen minimal überschwingen lässt
     soft.curve = sc; soft.oversample = '2x';
     const pre = ctx.createGain(); pre.gain.value = 0.5;   // Kurve geht von −2 bis +2
     comp.connect(makeup).connect(pre).connect(soft).connect(ctx.destination);
@@ -97,7 +97,11 @@ export class Sfx {
   // die Aufnahmen laden (bis sie da sind, spielen die gebauten Ersatz-Sounds)
   load() {
     this.bufs = {};
-    for (const f of FILES) fetch(`./sounds/${f}.wav`).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => { this.bufs[f] = buf; }).catch(() => {});
+    this.norm = {};   // Schuss-Aufnahmen auf gleiche Lautstärke bringen (manche Dateien sind leiser gespeichert als andere)
+    for (const f of FILES) fetch(`./sounds/${f}.wav`).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => {
+      // Energie der ersten 0,25 s messen: kurze, knappe Aufnahmen werden so laut gemacht wie die Glock (sonst übertönt der Boom sie)
+      if (f.startsWith('shot_')) { const d = buf.getChannelData(0), n = Math.min(d.length, Math.round(buf.sampleRate * 0.25)); let pk = 0, e = 0; for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i])); for (let i = 0; i < n; i++) e += d[i] * d[i]; this.norm[f] = { pk, rms: Math.sqrt(e / n) }; }
+      this.bufs[f] = buf; }).catch(() => {});
   }
   // Unterwasser-Kette: Bass rauf → Höhen weg → Wabern (Chorus) → Echo
   makeWater() {
@@ -138,7 +142,9 @@ export class Sfx {
     const t = ctx.currentTime + at, src = ctx.createBufferSource(); src.buffer = buf;
     const r = rate * UNDERWATER.pitch * (0.96 + Math.random() * 0.08);   // jedes Mal minimal anders, klingt natürlicher
     src.playbackRate.value = r;
-    const g = ctx.createGain(); g.gain.value = vol;
+    const N = this.norm && this.norm[name], G = this.norm && this.norm.shot_glock;
+    const k = N && G ? Math.min(4, (0.9 / G.pk) * (G.rms / N.rms)) : N ? 0.9 / N.pk : 1;   // gleiche Energie wie die (auf 0,9 gebrachte) Glock
+    const g = ctx.createGain(); g.gain.value = vol * k;
     const into = bus === 'shot' ? this.uwShot : this.uw;
     src.connect(g).connect(drive ? into.shaper : into);
     if (plasma > 0) {
@@ -226,8 +232,9 @@ export class Sfx {
     const env = ctx.createGain(); env.gain.setValueAtTime(0.001, t); env.gain.exponentialRampToValueAtTime(1, t + 0.006); env.gain.exponentialRampToValueAtTime(0.001, t + dur);
     const sh = ctx.createWaveShaper(); sh.curve = this.boomCurve;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = 0.9;   // nur die tiefen Obertöne behalten (sonst schnarrt es)
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = f * 1.7; hp.Q.value = 0.7;   // den Grundton selbst weglassen – nur die Obertöne (sonst wird es zu tief)
     const g = ctx.createGain(); g.gain.value = vol * 1.1;
-    o.connect(env).connect(sh).connect(lp).connect(g).connect(this.boomBus || this.master); o.start(t); o.stop(t + dur + 0.05);
+    o.connect(env).connect(sh).connect(hp).connect(lp).connect(g).connect(this.boomBus || this.master); o.start(t); o.stop(t + dur + 0.05);
   }
   // Schuss wie ein Faustschlag gegen eine Holztür: echter Holzschlag (CC0, siehe QUELLEN.txt), tiefer gestimmt,
   // durch die Unterwasser-Kette mit Echo. Große Waffen: zuschlagende Tür, noch tiefer.
