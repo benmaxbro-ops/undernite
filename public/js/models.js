@@ -317,7 +317,7 @@ const GUNS = [
   /* 0 Bolzenpistole  */ { kind: 'pistol', L: 0.2,  H: 0.034, W: 0.03,  barrel: 0.02, br: 0.009, gills: 3 },
   /* 1 Nadler         */ { kind: 'rifle',  L: 0.28, H: 0.05,  W: 0.04,  barrel: 0.16, br: 0.009, gills: 3, stock: 'short', magK: 1 },
   /* 2 Splitterwerfer */ { kind: 'rifle',  L: 0.34, H: 0.06,  W: 0.05,  barrel: 0.3,  br: 0.02,  gills: 4, stock: 'full', pump: true, magK: 1.2 },
-  /* 3 Harpune        */ { kind: 'rifle',  L: 0.34, H: 0.05,  W: 0.04,  barrel: 0.45, br: 0.012, gills: 4, stock: 'full', scope: true, magK: 0.85 },
+  /* 3 Harpune        */ { kind: 'rifle',  L: 0.34, H: 0.05,  W: 0.04,  barrel: 0.45, br: 0.012, gills: 4, stock: 'full', scope: true, magK: 0.85, spear: true },
   /* 4 Torpedowerfer  */ { kind: 'tube',   L: 0.75, R: 0.075, gills: 5 },
   /* 5 Bordtorpedo    */ { kind: 'tube',   L: 0.75, R: 0.075, gills: 5 },
   /* 6 Plasmalanze    */ { kind: 'rifle',  L: 0.4,  H: 0.065, W: 0.05,  barrel: 0.3,  br: 0.016, gills: 4, stock: 'full', scope: true, magK: 1.15 },
@@ -513,11 +513,13 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   };
   // Griff mit Abzugsbügel und Abzug; top = Unterkante des Gehäuses
   const grip = (top, w, len = 0.1, plate = true) => {
-    side('grip', gripM, [[-0.006, top], [0.034, top], [0.016, top - len], [-0.03, top - len], [-0.026, top - len * 0.25]], w * 0.85);
-    if (plate) box(blue, -0.03, 0.016, top - len - 0.008, top - len, w * 0.9);                              // blaue Bodenplatte
-    for (let i = 1; i < 4; i++) box(dark, -0.026 + i * 0.002, 0.03 - i * 0.004, top - len * (0.2 + i * 0.2), top - len * (0.2 + i * 0.2) + 0.003, w * 0.87);   // Griffrillen
-    side('guard', white, [[0.034, top], [0.1, top], [0.1, top - 0.01], [0.075, top - 0.036], [0.03, top - 0.036]], w * 0.35,
-      [[[0.04, top - 0.006], [0.09, top - 0.006], [0.07, top - 0.028], [0.04, top - 0.028]]]);
+    // Pistolengriff wie bei echten Gewehren: schräg nach hinten geneigt, vorne eine Fingermulde, hinten ein Buckel für die Handfläche
+    const k = len / 0.1;
+    side('grip', gripM, [[-0.016, top], [0.03, top], [0.022, top - 0.018 * k], [0.016, top - 0.034 * k], [0.019, top - 0.046 * k], [0.008, top - 0.08 * k], [0.0, top - 0.097 * k],
+      [-0.026, top - 0.1 * k], [-0.034, top - 0.092 * k], [-0.034, top - 0.06 * k], [-0.028, top - 0.025 * k], [-0.022, top - 0.008 * k]], w * 0.8);
+    if (plate) box(white, -0.03, 0.002, top - 0.103 * k, top - 0.096 * k, w * 0.82);                           // Griffboden
+    side('guard', white, [[0.03, top], [0.098, top], [0.098, top - 0.008], [0.09, top - 0.032], [0.026, top - 0.032]], w * 0.35,
+      [[[0.036, top - 0.005], [0.091, top - 0.005], [0.085, top - 0.026], [0.036, top - 0.026]]]);
     const trig = box(metal, 0.052, 0.058, top - 0.024, top - 0.002, w * 0.2); trig.rotation.x = 0.35;
   };
 
@@ -612,14 +614,21 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     // Handschutz mit Lüftungsschlitzen
     const hg = P.barrel * 0.55;
     side('hand', white, [[front - 0.005, -H * 0.42], [front + hg, -H * 0.32], [front + hg, H * 0.3], [front - 0.005, H * 0.38]], W * 0.85);
-    for (let i = 0; i < 4; i++) { const u = front + hg * (0.15 + i * 0.2); box(dark, u, u + hg * 0.1, -H * 0.15, H * 0.15, W * 0.87); }
+    // M-LOK-Schlitze: zwei Reihen längliche Löcher an den Seiten, unten eine Reihe
+    const nS = Math.max(3, Math.round(hg / 0.03));
+    for (let i = 0; i < nS; i++) { const u = front + hg * (0.08 + i * 0.86 / nS);
+      for (const v of [H * 0.12, -H * 0.16]) box(dark, u, u + hg * 0.5 / nS, v - H * 0.06, v + H * 0.06, W * 0.87);
+      box(dark, u, u + hg * 0.5 / nS, -H * 0.44, -H * 0.36, W * 0.3); }
+    box(metal, front, front + hg - 0.004, H * 0.3, H * 0.3 + 0.006, W * 0.42);                    // Schiene oben auf dem Handschutz
+    for (let u = front + 0.004; u < front + hg - 0.01; u += 0.016) box(metal, u, u + 0.008, H * 0.3 + 0.006, H * 0.3 + 0.01, W * 0.48);
     // Lauf und Mündung
     const bv = H * 0.05, tip = front + P.barrel;
     tube(metal, front + hg - 0.01, tip, bv, P.br);
-    tube(metal, tip, tip + 0.04, bv, P.br * 1.7);                                          // Mündungsaufsatz
-    for (let i = 0; i < 3; i++) box(dark, tip + 0.008 + i * 0.011, tip + 0.013 + i * 0.011, bv + P.br * 1.2, bv + P.br * 1.75, P.br * 1.2);   // Löcher oben
-    ring(tip + 0.04, bv, P.br * 1.75);
-    tube(dark, tip + 0.04, tip + 0.043, bv, P.br * 1.1);
+    box(metal, front + hg + 0.004, front + hg + 0.022, bv - P.br * 1.4, bv + P.br * 1.6, P.br * 2.6);   // Gasblock
+    // Mündungsbremse: Klotz mit seitlichen Öffnungen (dort strömt das Wasser zur Seite aus)
+    box(metal, tip, tip + 0.042, bv - P.br * 1.5, bv + P.br * 1.5, P.br * 3.0);
+    for (let i = 0; i < 3; i++) box(dark, tip + 0.006 + i * 0.012, tip + 0.012 + i * 0.012, bv - P.br * 1.1, bv + P.br * 1.1, P.br * 3.08);
+    tube(dark, tip + 0.0415, tip + 0.0425, bv, P.br * 0.9);
     // Kimme und Korn, mit grünen Leuchtpunkten
     box(dark, -back * 0.5, -back * 0.5 + 0.01, H / 2 + 0.01, H / 2 + 0.022, W * 0.4);
     box(blue, front + hg - 0.012, front + hg - 0.006, H * 0.3, H * 0.3 + 0.03, 0.004);
@@ -629,10 +638,16 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     // Zielfernrohr
     if (P.scope) {
       const sv = H / 2 + 0.03;
-      tube(metal, -back * 0.3, front * 0.6, sv, 0.016);
-      tube(metal, front * 0.6, front * 0.6 + 0.03, sv, 0.021); ring(front * 0.6 + 0.03, sv, 0.019, glass);
-      tube(metal, -back * 0.3 - 0.025, -back * 0.3, sv, 0.019);
-      box(metal, 0, 0.012, H / 2 + 0.006, sv, 0.01); box(metal, front * 0.4, front * 0.4 + 0.012, H / 2 + 0.006, sv, 0.01);
+      // Zielfernrohr wie ein echtes: Mittelrohr, vorne dickes Objektiv (Glas), hinten Okular, oben und rechts Verstelltürme, zwei Ringe
+      const s0 = -back * 0.35, s1 = front * 0.62, sr = 0.013;
+      tube(dark, s0, s1, sv, sr);
+      tube(dark, s1, s1 + 0.018, sv, sr * 1.25); tube(dark, s1 + 0.018, s1 + 0.045, sv, sr * 1.65);   // Übergang + Objektiv
+      tube(glass, s1 + 0.0445, s1 + 0.0455, sv, sr * 1.45);
+      tube(dark, s0 - 0.03, s0, sv, sr * 1.35); tube(glass, s0 - 0.0305, s0 - 0.0295, sv, sr * 1.1);   // Okular
+      const tu = (s0 + s1) / 2;
+      const tt = part(GUN_CYL_Y, metal, 0, sv + sr + 0.006, -tu); tt.scale.set(0.009, 0.014, 0.009);             // Turm oben (Höhe)
+      const tsd = part(GUN_CYL_Y, metal, sr + 0.006, sv, -tu); tsd.scale.set(0.009, 0.014, 0.009); tsd.rotation.z = Math.PI / 2;   // Turm rechts (Seite)
+      for (const u of [s0 + 0.02, s1 - 0.025]) { box(metal, u, u + 0.012, H / 2 + 0.006, sv - sr * 0.4, W * 0.5); const rr = add(g, GEO.torus, metal, 0, sv, -(u + 0.006)); rr.scale.set(sr * 1.15, sr * 1.15, sr * 1.6); }
     }
     // Pump-Griff (Splitterwerfer)
     if (P.pump) {
@@ -646,9 +661,12 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     // Schaft
     if (fp) rear = back;
     else if (P.stock === 'full') {
-      side('stock', white, [[-back, -H / 2], [-back, H * 0.4], [-back - 0.2, H * 0.25], [-back - 0.23, H * 0.25], [-back - 0.23, -H / 2 - 0.06], [-back - 0.19, -H / 2 - 0.06], [-back - 0.06, -H / 2]], W * 0.8,
-        [[[-back - 0.04, -H * 0.2], [-back - 0.17, -H * 0.05], [-back - 0.17, -H / 2 - 0.035], [-back - 0.1, -H / 2 - 0.008]]]);
-      box(metal, -back - 0.24, -back - 0.226, -H / 2 - 0.06, H * 0.25, W * 0.85);         // Schulterstütze
+      // moderner verstellbarer Schaft: Rohr (Puffer) aus dem Gehäuse, darauf der Schaft mit Wangenauflage und Gummi-Schulterpolster
+      tube(metal, -back - 0.13, -back, H * 0.1, H * 0.22);
+      side('stock', white, [[-back - 0.08, -H * 0.2], [-back - 0.08, H * 0.4], [-back - 0.21, H * 0.42], [-back - 0.22, H * 0.3], [-back - 0.22, -H / 2 - 0.05], [-back - 0.19, -H / 2 - 0.05], [-back - 0.1, -H * 0.3]], W * 0.75,
+        [[[-back - 0.12, -H * 0.15], [-back - 0.17, -H * 0.15], [-back - 0.17, -H / 2 - 0.025], [-back - 0.14, -H * 0.35]]]);
+      box(gripM, -back - 0.232, -back - 0.218, -H / 2 - 0.052, H * 0.42, W * 0.82);       // Gummi-Schulterpolster
+      box(white, -back - 0.2, -back - 0.1, H * 0.4, H * 0.5, W * 0.6);                   // Wangenauflage
       rear = back + 0.24;
     } else {
       side('stock', white, [[-back, -H / 2], [-back, H * 0.3], [-back - 0.09, H * 0.2], [-back - 0.1, -H / 2 - 0.02], [-back - 0.04, -H / 2]], W * 0.7);
@@ -778,6 +796,14 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     const cyl = makeCyl(); cyl.position.set(0.02, 0.02, 0); crane.add(cyl);
     const loose = makeCyl(); loose.visible = false; g.add(loose);                              // die Trommel in der Hand beim Nachladen
     g.userData.revolver = { crane, cyl, loose, fill: magFill, seat: new THREE.Vector3(0, RCY, RZ) };
+  }
+  if (P.spear) {   // Harpune wie eine echte Druckluft-Harpune: der Pfeil liegt oben auf dem Lauf, vorne der Mündungskopf mit Wasserlöchern
+    const sv = mzp.y + P.br * 2.6, sEnd = mzp.z - 0.07;
+    const sh = add(g, GUN_CYL, metal, 0, sv, (sEnd - 0.05 + mzp.z + 0.5) / 2); sh.scale.set(0.0035, 0.0035, Math.abs(sEnd - (mzp.z + 0.5)));   // Pfeilschaft
+    const tip = add(g, new THREE.ConeGeometry(1, 1, 3).rotateX(-Math.PI / 2), metal, 0, sv, sEnd - 0.02); tip.scale.set(0.007, 0.007, 0.04);  // dreikantige Spitze
+    for (const sd of [-1, 1]) { const b = add(g, GEO.box, metal, sd * 0.004, sv, sEnd + 0.012); b.scale.set(0.002, 0.004, 0.02); b.rotation.y = sd * 0.5; }   // Widerhaken
+    const head = add(g, GUN_CYL, blue, mzp.x, mzp.y, mzp.z + 0.02); head.scale.set(P.br * 2.4, P.br * 2.4, 0.03);              // Mündungskopf
+    for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + 0.4, hl = add(g, GUN_CYL, dark, mzp.x + Math.cos(a) * P.br * 2.3, mzp.y + Math.sin(a) * P.br * 2.3, mzp.z + 0.02); hl.scale.set(0.003, 0.003, 0.032); }   // Wasserlöcher
   }
   if (P.spikes) {   // Stachel-MG: Kranz aus Stacheln um die Mündung und ein Kühlmantel
     for (let i = 0; i < 6; i++) { const a = i / 6 * TAU, s = add(g, GEO.zcyl, metal, mzp.x + Math.cos(a) * 0.016, mzp.y + Math.sin(a) * 0.016, mzp.z + 0.01); s.scale.set(0.003, 0.003, 0.03); }
