@@ -641,11 +641,18 @@ export class Sfx {
     this.eng.hg.gain.setTargetAtTime(0.1 + L * L * 0.4, t, 0.3);         // bei voller Fahrt zischt es (Kavitation)
   }
   // Sonar: heller, durchdringender Ping, der im Rumpf nachhallt
-  sonar() {
-    this.tone(1480, 1460, 0.9, 0.28, 'sine');
-    this.tone(2960, 2930, 0.4, 0.06, 'sine');
-    for (const [at, v] of [[0.11, 0.12], [0.23, 0.07], [0.37, 0.04]]) this.tone(1480, 1450, 0.6, v, 'sine', at);   // Nachhall im Rumpf
+  // Sonar-Ping: kurzer reiner Ton, dann ein langer, langsam abklingender Nachhall mit einzelnen Echo-Spitzen
+  // (so klingt aktives Sonar: das Echo vom Wasser, Boden und Fischen). vol = Lautstärke, pitch = Tonhöhe (1 = 1480 Hertz)
+  sonar(vol = 1, pitch = 1) {
+    if (vol < 0.005) return;
+    const f = 1480 * pitch;
+    this.tone(f, f * 0.985, 0.9, 0.28 * vol, 'sine');
+    this.tone(f * 2, f * 1.98, 0.4, 0.06 * vol, 'sine');
+    for (const [at, v] of [[0.11, 0.12], [0.23, 0.07], [0.37, 0.04], [0.62, 0.025], [0.95, 0.015]]) this.tone(f, f * 0.98, 0.6, v * vol, 'sine', at);   // Echos
+    this.noise(1.6, f, 18, 0.05 * vol, 'bandpass', f * 0.9, 0.05);   // langer, rauschender Nachhall
   }
+  // kleines "Ding", wenn das Radar einen Gegner erwischt
+  sonarBlip(vol = 1) { if (vol < 0.005) return; this.tone(2350, 2300, 0.18, 0.12 * vol, 'sine'); this.tone(4700, 4650, 0.08, 0.02 * vol, 'sine'); }
   hurt() { this.tone(180, 70, 0.18, 0.45, 'sawtooth'); }
   bite(vol) { this.noise(0.16, 300, 1, 0.8 * vol, 'lowpass', 90); this.tone(240, 60, 0.2, 0.4 * vol, 'square'); }
   pickup() { this.tone(660, 990, 0.09, 0.2, 'triangle'); setTimeout(() => this.tone(990, 1320, 0.1, 0.18, 'triangle'), 70); }

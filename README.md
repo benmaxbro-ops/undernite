@@ -82,7 +82,8 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Perlen-Shop** (Knopf oben rechts in der Lobby): Verbesserungen mit je 3 Stufen – Schnellladen, Rückstoßdämpfer,
   Ruhiges Visier, Profi-Flossen, Turbo-Kompressor, Schnellziehen (Waffe wechseln/rausholen geht schneller), Zäher Anzug (bis +30 % Leben). Gelten nur im Battle Royale.
 - **Sonar-Radar** (oben rechts, nur Battle Royale): du bist in der Mitte, vorne ist oben. Ein grüner Strahl dreht sich alle 3 Sekunden einmal herum;
-  wo er drüberstreicht, leuchten Boden, Riffe und Gegner in der Nähe (bis 45 m) kurz auf. Werte: `SONAR` in `hud.js`.
+  wo er drüberstreicht, leuchten Boden, Riffe und Gegner in der Nähe (bis 45 m) kurz auf – mit leisem Sonar-Ping pro Umdrehung und "Ding" pro Gegner.
+  **Im U-Boot** zeigt das Bord-Sonar alle Gegner bis 90 m durchgehend. Fährt jemand ein U-Boot, hört man dessen Sonar in der Nähe. Werte: `SONAR` und `SONAR_SND` in `hud.js`.
 
 ## Modus: Tiefsee-Expedition (v0.2)
 

@@ -10,6 +10,9 @@ const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStar
 // Sonar-Radar: range = so viele Meter zeigt es bis zum Rand, period = Sekunden für eine Umdrehung des Strahls,
 // fade = so viele Sekunden leuchtet ein Echo nach, hear = so nah müssen Gegner sein, damit das Sonar sie hört
 export const SONAR = { range: 90, period: 3, fade: 2.6, hear: 45 };
+// Sonar-Töne: radar = Ping bei jeder Umdrehung, blip = "Ding" pro erwischtem Gegner, sub = Ping im eigenen U-Boot,
+// near = Ping fremder U-Boote (so laut ganz nah dran), nearRange = bis so viele Meter hört man ihn
+export const SONAR_SND = { radar: 0.22, blip: 0.5, sub: 0.6, near: 0.4, nearRange: 140 };
 
 export class Hud {
   constructor() {
@@ -358,7 +361,9 @@ export class Hud {
   // Sonar-Radar (Battle Royale): du bist in der Mitte, vorne ist oben. Ein grüner Strahl dreht sich;
   // wo er drüberstreicht, leuchten Boden und Gegner kurz auf und verblassen dann wieder.
   // blips = Gegner, die das Sonar hören kann ({ id, x, z }), time = Spielzeit in Sekunden
-  drawSonar(img, zone, me, vehicles, pois, marks, blips, time) {
+  // live = true (im U-Boot): Gegner werden durchgehend angezeigt, nicht nur kurz beim Überstreichen. Gibt zurück, wie viele Gegner neu erwischt wurden.
+  drawSonar(img, zone, me, vehicles, pois, marks, blips, time, live = false) {
+    let newHits = 0;
     this.mini.canvas.classList.add('sonar');
     const c = this.mini, n = 190, h = n / 2, R = SONAR.range, k = (h - 2) / R, cy = Math.cos(me.yaw), sy = Math.sin(me.yaw);
     const scr = (x, z) => { const dx = x - me.x, dz = z - me.z; return [h + (dx * cy - dz * sy) * k, h + (dx * sy + dz * cy) * k]; };
@@ -398,7 +403,8 @@ export class Hud {
     const echo = this.echo ||= new Map(), swept = ((sweep - last) % TAU + TAU) % TAU;
     for (const b of blips) {
       const a = Math.atan2(b.z - me.z, b.x - me.x);
-      if (((sweep - a) % TAU + TAU) % TAU <= swept) echo.set(b.id, { x: b.x, z: b.z, t: time });
+      if (live) { echo.set(b.id, { x: b.x, z: b.z, t: time }); continue; }   // U-Boot: immer sichtbar, an der aktuellen Stelle
+      if (((sweep - a) % TAU + TAU) % TAU <= swept) { if (!echo.has(b.id)) newHits++; echo.set(b.id, { x: b.x, z: b.z, t: time }); }
     }
     for (const [id, e] of echo) {
       const al = 1 - (time - e.t) / SONAR.fade; if (al <= 0) { echo.delete(id); continue; }
@@ -412,6 +418,8 @@ export class Hud {
     c.fillStyle = 'rgba(200,255,215,.9)'; c.font = 'bold 11px Bahnschrift, sans-serif'; c.fillText('N', h + sy * (h - 9), h - cy * (h - 9) + 4);
     c.fillStyle = '#5ef2e0'; c.strokeStyle = '#03222a'; c.lineWidth = 1;
     c.beginPath(); c.moveTo(h, h - 7); c.lineTo(h + 5, h + 6); c.lineTo(h, h + 3); c.lineTo(h - 5, h + 6); c.closePath(); c.fill(); c.stroke();
+    this.sweepWrapped = sweep < last;   // Strahl hat gerade eine ganze Runde gemacht
+    return newHits;
   }
   feed(html, me) {
     const d = document.createElement('div'); d.innerHTML = html; if (me) d.className = 'me';

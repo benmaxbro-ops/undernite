@@ -7,7 +7,7 @@ let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
 import { buildEnvironment } from './world.js';
 import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeJetski, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy, makeGunEnv, makeSwimArms } from './models.js';
-import { Hud, SONAR } from './hud.js';
+import { Hud, SONAR, SONAR_SND } from './hud.js';
 import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
 import { settings, onSettings, openSettings, closeSettings, QUALITY } from './settings.js';
@@ -1122,7 +1122,12 @@ function updateEntities(dt) {
     else { const ox = v.x, oz = v.z, oy = v.y; v.x += (v.tx - v.x) * k; v.y += (v.ty - v.y) * k; v.z += (v.tz - v.z) * k; v.yaw = lerpAngle(v.yaw, v.tyaw, k); v.pitch += (v.tpitch - v.pitch) * k; v.speed += (Math.hypot(v.x - ox, v.y - oy, v.z - oz) / dt - v.speed) * 0.2; }
     v.mesh.position.set(v.x, v.y, v.z); v.driven = !!v.driver;
     v.mesh.userData.update(dt, v);
-    if (v.driver === myId && v.type === 'sub' && alive) { sonarT -= dt; if (sonarT <= 0) { sonarT = 6; sfx.sonar(); } }
+    if (v.driver === myId && v.type === 'sub' && alive) { sonarT -= dt; if (sonarT <= 0) { sonarT = 6; sfx.sonar(SONAR_SND.sub); } }
+    // fremdes U-Boot mit Fahrer: man hört sein Sonar in der Nähe (leiser, je weiter weg)
+    else if (v.driver && v.type === 'sub') {
+      v.sonarT = (v.sonarT ?? Math.random() * 6) - dt;
+      if (v.sonarT <= 0) { v.sonarT = 6; const d = Math.hypot(v.x - camera.position.x, v.y - camera.position.y, v.z - camera.position.z); if (d < SONAR_SND.nearRange) sfx.sonar(SONAR_SND.near * (1 - d / SONAR_SND.nearRange) ** 2, 0.96); }
+    }
     if (v.driver && v.speed > 3 && Math.random() < dt * 25) { const f = dirFrom(v.yaw, v.pitch), o = v.type === 'sub' ? 4.2 : 0.6; env.bubble(v.x - f[0] * o, v.y - f[1] * o, v.z - f[2] * o, 1, 0.8, 1); }
   }
   sfx.engine(engine);
@@ -1502,9 +1507,15 @@ function frame(now) {
     if (mode === 'exp' || !env.sonar) hud.drawMini(env.mini, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), mode === 'exp' ? expPois() : W.pois, marks);
     else {
       // Battle Royale: Sonar-Radar. Gegner hört es bis SONAR.hear Meter, Hammerhai und Sonar-Boje weiter
-      const hear = Math.max(SONAR.hear, sense), blips = [];
-      for (const e of players.values()) if (e.id !== myId && e.mesh.visible && Math.hypot(e.x - fx.x, e.y - fx.y, e.z - fx.z) < hear) blips.push({ id: e.id, x: e.x, z: e.z });
-      hud.drawSonar(env.sonar, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, [], blips, time);
+      // Im U-Boot: das Bord-Sonar zeigt durchgehend ALLE Gegner in Reichweite (auch getarnte und welche in anderen U-Booten)
+      const sv = you && you.alive && you.veh ? vehicles.get(you.veh) : null, mySub = !!(sv && sv.type === 'sub');
+      const hear = mySub ? SONAR.range : Math.max(SONAR.hear, sense), blips = [];
+      for (const e of players.values()) if (e.id !== myId && (mySub || e.mesh.visible) && Math.hypot(e.x - fx.x, e.y - fx.y, e.z - fx.z) < hear) blips.push({ id: e.id, x: e.x, z: e.z });
+      const hits = hud.drawSonar(env.sonar, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, [], blips, time, mySub);
+      if (you && you.alive && !mySub) {   // Taucher: leises Ping bei jeder Umdrehung, "Ding" für jeden erwischten Gegner
+        if (hud.sweepWrapped) sfx.sonar(SONAR_SND.radar, 1.12);
+        if (hits) sfx.sonarBlip(SONAR_SND.blip);
+      }
     }
     if (mode === 'exp' && you && !you.alive && deadInfo) hud.spec(`<b>Ohnmächtig!</b>Erwischt von ${esc(deadInfo.by)}${deadInfo.lost ? ` · ${deadInfo.lost} Fische verloren` : ''} · aufwachen in ${Math.ceil(you.x?.rt || 0)} s`);
     else if (you && !you.alive && deadInfo) { const s = players.get(specId); hud.spec(`<b>Platz ${deadInfo.place}</b>Erwischt von ${esc(deadInfo.by)}${s ? ` · du beobachtest ${esc(s.name)}` : ''}`); }
