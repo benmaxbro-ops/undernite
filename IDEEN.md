@@ -6,6 +6,9 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Als Nächstes (Reihenfolge von Ben)
 
+- [ ] **Ben testet (17.11. abends gebaut):** Schuss-Mechanik der Waffen, neue Haie/Oktopusse/Quallen, große Karte mit neuen Orten,
+  Radar „In der Nähe“, genauer Taucher – und sagt, was noch anders sein soll
+
 
 ## Danach
 
