@@ -97,7 +97,8 @@ export function makePlayerModel(suit, id, name) {
     const amp = 0.12 + Math.min(1, s.speed / 9) * 0.4;
     if (parts.mech) {
       inner.rotation.x = s.pitch * 0.2;
-      for (const a of parts.arms) a.rotation.x = s.pitch;
+      parts.arms[1].rotation.x = s.pitch;   // rechter Arm zielt mit der Waffe
+      parts.arms[0].rotation.x = 0.15;      // linker Arm bleibt locker an der Seite (nur Finisher und Nachladen)
       parts.legs[0].rotation.x = Math.sin(phase * 0.6) * amp; parts.legs[1].rotation.x = -Math.sin(phase * 0.6) * amp;
       if (parts.animate) parts.animate(dt, s.speed || 0, 0.25 + 0.15 * Math.sin(phase * 0.3));   // Propeller drehen, Zangen bewegen sich leicht
       // Goliath-Finisher: nach vorne greifen, hoch über den Kopf heben … und werfen!

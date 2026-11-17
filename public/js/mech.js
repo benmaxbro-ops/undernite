@@ -180,8 +180,8 @@ export function makeMechViewArms(gun) {
   // rechter Arm: Zange am Griff, Unterarm nach hinten unten rechts aus dem Bild
   claw(g, [0, t - 0.035, 0.03], [0, 0.35, -1], r, steel, dark, acc);
   limb(g, [0.01, t - 0.06, 0.08], [0.2, t - 0.36, back], r * 1.25, paint, steel, dark);
-  // linke Zange: bei der Pistole unter dem Griff, bei Gewehren am Vordergriff
-  const sup = gun.kind === 'pistol' ? [-0.02, t - 0.085, 0.0] : gun.support ? [gun.support[0], gun.support[1] - 0.02, gun.support[2]] : null;
+  // Der Mech hält jede Waffe nur mit der RECHTEN Zange. Die linke bleibt auf ihrer Seite (nur für Finisher und Nachladen).
+  const sup = null;
   const left = new THREE.Group(); g.add(left); g.userData.left = sup ? left : null;
   if (sup) {
     claw(left, sup, [0.3, 0.6, -0.7], r * 0.95, steel, dark, acc);
