@@ -778,9 +778,11 @@ export function makeViewArms(suit, gun) {
   const big = suit === 'bulwark' ? 1.3 : suit === 'manta' ? 0.9 : 1;   // Bollwerk hat dicke Panzerarme
   const t = gun.gripTop, w = gun.gripW, back = gun.rear + 0.2, R = w / 2 + 0.009;
   // rechte Hand: Handfläche rechts am Griff, die Finger legen sich vorne herum bis auf die linke Seite
-  const palm = add(g, RBOX_SOFT, glove, R + 0.006, t - 0.047, 0.008); palm.scale.set(0.024, 0.078, 0.06);   // Handfläche rechts am Griff
-  add(g, RBOX_SOFT, glove, R * 0.25, t - 0.03, 0.034).scale.set(w + 0.024, 0.05, 0.032);                   // Handballen hinter dem Griff
-  add(g, RBOX_SOFT, glove, R + 0.012, t - 0.03, -0.004).scale.set(0.012, 0.064, 0.03);                      // Fingerknöchel-Polster
+  // Handfläche aus weichen, ovalen Formen (wie Muskeln unter dem Handschuh) statt aus Klötzen
+  const palm = add(g, KNUCKLE, glove, R + 0.006, t - 0.047, 0.008); palm.scale.set(0.013, 0.04, 0.032);    // Handfläche rechts am Griff
+  add(g, KNUCKLE, glove, R * 0.55, t - 0.05, 0.027).scale.set(0.015, 0.024, 0.017);                        // Daumenballen
+  add(g, KNUCKLE, glove, R * 0.25, t - 0.03, 0.034).scale.set((w + 0.024) / 2, 0.025, 0.017);             // Handballen hinter dem Griff
+  add(g, KNUCKLE, glove, R + 0.012, t - 0.03, -0.004).scale.set(0.007, 0.033, 0.015);                      // Fingerknöchel-Polster
   for (let i = 0; i < 3; i++) {                                                                  // Mittel-, Ring-, kleiner Finger
     const y = t - 0.034 - i * 0.02, f = -(0.028 - i * 0.004), r = 0.0098 - i * 0.0008;
     finger(g, glove, [[R, y, f + 0.026], [R + 0.002, y, f - 0.004], [0, y - 0.002, f - 0.014], [-R, y - 0.002, f - 0.002], [-R - 0.002, y - 0.001, f + 0.016]], r);
@@ -801,7 +803,7 @@ export function makeViewArms(suit, gun) {
     // ihre Finger umfassen vorne die Finger der rechten Hand, der linke Daumen zeigt am Rahmen entlang nach vorne.
     const g = new THREE.Group(); right.add(g); right.userData.left = g;
     const L = -(R + 0.016);
-    const lp = add(g, RBOX_SOFT, glove, L - 0.004, t - 0.05, 0.004); lp.scale.set(0.022, 0.074, 0.062); lp.rotation.y = 0.18;   // Handfläche links am Griff
+    const lp = add(g, KNUCKLE, glove, L - 0.004, t - 0.05, 0.004); lp.scale.set(0.012, 0.038, 0.032); lp.rotation.y = 0.18;   // Handfläche links am Griff
     for (let i = 0; i < 4; i++) {                                                                 // Finger umfassen vorne die rechte Hand
       const y = t - 0.04 - i * 0.017, r = i === 3 ? 0.0082 : 0.0095;
       finger(g, glove, [[L, y, -0.022], [L + 0.008, y - 0.002, -0.048], [-0.004, y - 0.003, -0.056], [R * 0.7, y - 0.002, -0.05], [R + 0.01, y - 0.001, -0.036]], r);
