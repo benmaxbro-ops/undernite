@@ -26,8 +26,9 @@ export const UNDERWATER = {
 //   harm  = Boom mit Obertönen: der tiefe Schlag wird angezerrt, so hört man ihn auch auf Laptop-Lautsprechern (die keine ganz tiefen Töne können)
 //   boomLen = wie lange der Boom nachdröhnt (Sekunden)
 // BOOM_BUS = wie laut der Boom-Weg (am Kompressor vorbei) insgesamt ist
-export const BOOM_BUS = 1.6;
-export const SHOT = { crack: 1.4, body: 3.1, boom: 3.0, mech: 1.6, duck: 0.6, wumms: 1.4, sub: 3.5, harm: 2.2, boomLen: 0.55, loud: 1.4 };
+export const BOOM_BUS = 1.0;
+//   subHz = wie tief der Tiefbass ist (Hertz, kleiner = tiefer) · punch / punchHz = Knall-Boom in der Mitte (Lautstärke / Tonhöhe)
+export const SHOT = { crack: 1.4, body: 3.1, boom: 3.0, mech: 1.6, duck: 0.6, wumms: 1.4, sub: 2.0, subHz: 78, harm: 2.2, boomLen: 0.55, punch: 5.0, punchHz: 190, loud: 1.4 };
 // Holztür-Schlag bei jedem Schuss: vol = Lautstärke bei fremden Schüssen, own = bei eigenen,
 // range = bis so viele Meter weit hört man ihn, pitchSmall / pitchBig = Tonhöhe (kleiner = tiefer),
 // body = zusätzlicher tiefer Bass-Schlag darunter
@@ -177,10 +178,15 @@ export class Sfx {
     this.sample(name, SHOT.body * vol, { plasma: PLASMA.ring, drive: true, bus: own ? 'shot' : '', rate: 1.08 });
     // 3) kurzer, straffer Bass-Schlag (nicht nachklingen lassen, sonst verschmiert es)
     this.cur = this.boomBus;   // Boom-Schichten: am Kompressor vorbei
-    this.tone(62 - big * 16, 32, 0.08 + big * 0.08, (1.2 + big * 0.4) * SHOT.boom * vol, 'sine');     // harter, dumpfer Schlag
+    this.tone(82 - big * 16, 44, 0.08 + big * 0.08, (1.2 + big * 0.4) * SHOT.boom * vol, 'sine');     // harter, dumpfer Schlag
     // Sub-Boom: sehr tiefer Stoß, der kurz nachwirkt (das spürt man mehr, als man es hört)
-    this.tone(58 - big * 10, 34, 0.22 + big * 0.25, SHOT.sub * vol * (own ? 1 : 0.5) * (0.6 + big * 0.5), 'sine');
-    this.boomHarm(55 - big * 12, SHOT.boomLen * (0.7 + big * 0.6), SHOT.harm * vol * (own ? 1 : 0.55) * (0.7 + big * 0.4));
+    this.tone(SHOT.subHz - big * 12, SHOT.subHz * 0.6, 0.22 + big * 0.25, SHOT.sub * vol * (own ? 1 : 0.5) * (0.6 + big * 0.5), 'sine');
+    // Knall-Boom in der Mitte (120–200 Hertz): kurzer, harter Schlag wie eine Bass-Trommel – der "Wumm" in der Brust
+    const PU = SHOT.punch * vol * (own ? 1 : 0.6);
+    this.tone(SHOT.punchHz - big * 40, SHOT.punchHz * 0.45, 0.1 + big * 0.06, PU, 'sine');
+    this.tone((SHOT.punchHz - big * 40) * 2, SHOT.punchHz * 0.9, 0.05, PU * 0.35, 'triangle');   // Oberton, macht ihn knackiger
+    this.noise(0.05 + big * 0.03, 320, 0.9, PU * 0.7, 'bandpass', 130);                          // dumpfer Druck-Knall
+    this.boomHarm(SHOT.subHz * 0.9 - big * 12, SHOT.boomLen * (0.7 + big * 0.6), SHOT.harm * vol * (own ? 1 : 0.55) * (0.7 + big * 0.4));
     this.tone(130 - big * 30, 60, 0.05, 0.7 * SHOT.boom * vol, 'triangle');
     this.noise(0.05 + big * 0.06, 400, 0.8, 0.5 * SHOT.boom * vol, 'lowpass', 90);
     // 3b) Wumms: der hörbare Druck-Schlag. Grundton fällt von ~150 auf ~55 Hertz, dazu die doppelte Frequenz (Oberton),
