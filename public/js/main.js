@@ -16,7 +16,7 @@ import { makeShock, makeBlast, SHOCK } from './shock.js';
 // so weit hinter der Mündung sitzen die Seitenkiemen je Waffe (Meter) – dort kommt beim Hitze-Ablassen der Druck raus
 const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6, 0.16, 0.24, 0.4, 0.32, 0.3, 0.3, 0.3];
 import { makeLensPass } from './lens.js';
-import { makeMechViewArms, makeCockpit } from './mech.js';
+import { makeMechViewArms, makeCockpit, makeMechReloadHand } from './mech.js';
 import { makeSubInterior, SUBROOM } from './subint.js';
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -149,7 +149,9 @@ const SWIM = { minSpeed: 2.5, rate: 0.35, rateSpeed: 0.035, blendIn: 3, blendOut
 // Pistole beidhändig unten in der Mitte, Gewehre etwas rechts, Werfer rechts.
 // inertia = wie stark sie beim Drehen nachschwingt, inertiaMax = höchstens so weit, inertiaBack = wie schnell sie zurückkommt
 // breathe = wie stark sie beim Atmen auf und ab geht, hands = Licht der Helmlampe auf Händen und Waffe (an / aus)
-const VIEW = { mechGun: [0.34, -0.2, -0.05], hip: { pistol: [0.03, -0.112, 0.04], rifle: [0.1, -0.13, 0.02], tube: [0.15, -0.13, 0] },
+// mechGun = wo die Waffe am Goliath hängt (rechts, weit vorne vor der Kuppel), mechReload = beim Nachladen schwenkt sie dorthin (Bildmitte, trotzdem draußen)
+// mechPack = Magazin-Halter links vorne AUSSEN am Mech, mechElbow = dort sitzt das Gelenk der Nachlade-Zange (links außen)
+const VIEW = { mechGun: [0.34, -0.2, -0.3], mechReload: [0.06, -0.14, -0.38], mechPack: [-0.5, -0.32, -1.0], mechElbow: [-0.8, -0.55, -0.75], hip: { pistol: [0.03, -0.112, 0.04], rifle: [0.1, -0.13, 0.02], tube: [0.15, -0.13, 0] },
   inertia: 0.35, inertiaMax: 0.05, inertiaBack: 9, breathe: 0.0025, hands: [0.35, 0.06] };
 view.g.position.set(0.15, -0.13, 0);   // rechts, unten (die Tiefe kommt von der Waffe selbst, siehe updateViewModel)
 mechFrame.add(view.g);   // normal (ohne Freelook) ist mechFrame genau die Kamera
@@ -1298,7 +1300,7 @@ function updateViewModel(dt) {
     view.gun = makeWaterGun(widx, true, w[4]); view.g.add(view.gun);
     // Arm und Hände halten die Waffe – im Mech sind es Roboter-Greifarme
     view.arms = SUITS[mySuit].mech ? makeMechViewArms(view.gun.userData) : makeViewArms(mySuit, view.gun.userData); view.gun.add(view.arms);
-    view.rHand = makeReloadHand(mySuit); view.gun.add(view.rHand);                   // zweite Hand fürs Nachladen
+    view.rHand = SUITS[mySuit].mech ? makeMechReloadHand() : makeReloadHand(mySuit); view.gun.add(view.rHand);                   // zweite Hand fürs Nachladen
   }
   const U = view.gun.userData;
   U.setGills(view.gills);
@@ -1326,7 +1328,11 @@ function updateViewModel(dt) {
   const breathe = Math.sin(time * 1.5) * VIEW.breathe * (1 - ads * 0.7);            // ganz leichtes Atmen
   const hip = VIEW.hip[U.kind] || VIEW.hip.rifle;                                    // wo die Waffe ohne Zielen sitzt
   view.g.position.set(hip[0] * (1 - ads), hip[1] * (1 - ads) - view.swim * 0.4, view.swim * 0.1);   // beim Brustschwimmen nach unten weg
-  if (SUITS[mySuit].mech) view.g.position.set(...VIEW.mechGun);   // Goliath: Waffe hängt rechts außen am Roboter, neben der Kuppel
+  if (SUITS[mySuit].mech) {   // Goliath: Waffe hängt rechts außen am Roboter; beim Nachladen schwenkt der Arm zur Mitte (bleibt vor der Kuppel)
+    view.mrl = (view.mrl || 0) + ((rl ? 1 : 0) - (view.mrl || 0)) * Math.min(1, dt * 6);
+    const a = VIEW.mechGun, b = VIEW.mechReload, k = view.mrl;
+    view.g.position.set(a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k);
+  }
   view.gun.position.set(
     sx - U.sightAt[0] * ads + Math.cos(view.bob) * sway - view.tilt * 0.08 + view.inX * 0.5,
     sy - U.sightAt[1] * ads + Math.abs(Math.sin(view.bob)) * sway + view.tilt * 0.1 + K * 0.012 + rspring.p * 0.35 + view.inY * 0.5 + breathe,   // reißt mit der Kamera hoch
@@ -1338,7 +1344,8 @@ function updateViewModel(dt) {
   if (rl) {
     // Rucksack und Ellbogen von Kamera- in Waffen-Koordinaten umrechnen
     view.gun.updateMatrix(); IM.copy(view.gun.matrix).invert();
-    PL.copy(PACK_CAM).sub(view.g.position).applyMatrix4(IM); EL.copy(ELBOW_CAM).sub(view.g.position).applyMatrix4(IM);
+    const mech = !!SUITS[mySuit].mech;   // Goliath: Magazin-Halter und Zangen-Gelenk sind draußen links vorne, nicht hinter dir
+    PL.set(...(mech ? VIEW.mechPack : PACK_CAM.toArray())).sub(view.g.position).applyMatrix4(IM); EL.set(...(mech ? VIEW.mechElbow : ELBOW_CAM.toArray())).sub(view.g.position).applyMatrix4(IM);
     poseReload(done, U, view.rHand, PL, EL);
   } else {
     view.rHand.visible = false;

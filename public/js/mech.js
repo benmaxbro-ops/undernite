@@ -189,6 +189,30 @@ export function makeMechViewArms(gun) {
   }
   return g;
 }
+// Nachlade-Zange des Mechs (Ego-Sicht): gelber Gelenkarm mit Greifzange – kommt von links außen,
+// nie ins Cockpit. Gleiche Bedienung wie makeReloadHand (models.js): setArm(handPos, elbowPos) in Waffen-Koordinaten.
+export function makeMechReloadHand() {
+  const g = new THREE.Group();
+  const paint = new THREE.MeshStandardMaterial({ color: MECH.paint, roughness: 0.42, metalness: 0.25, bumpMap: polymer(), bumpScale: 0.6 });
+  const steel = new THREE.MeshStandardMaterial({ color: MECH.steel, roughness: 0.3, metalness: 0.85, bumpMap: brushed(), bumpScale: 0.4 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2a3138, roughness: 0.5, metalness: 0.5 });
+  const acc = new THREE.MeshStandardMaterial({ color: 0x5ef2e0, emissive: 0x5ef2e0, emissiveIntensity: 0.35 });
+  const hand = new THREE.Group(); g.add(hand);
+  claw(hand, [0, -0.01, 0.01], [0, 0.9, -0.3], 0.04, steel, dark, acc);   // Zange greift das Magazin von unten
+  const arm = new THREE.Mesh(ZBARREL, paint), r1 = new THREE.Mesh(THIN, steel), r2 = new THREE.Mesh(THIN, steel);
+  const piston = new THREE.Mesh(ZCYL, steel); g.add(arm, r1, r2, piston);
+  const D = new THREE.Vector3(), A = new THREE.Vector3(), Q = new THREE.Quaternion();
+  g.userData.setArm = (handPos, elbowPos) => {
+    hand.position.copy(handPos);
+    A.copy(handPos).add(D.set(0, -0.05, 0.02));   // Handgelenk unter der Zange
+    D.copy(elbowPos).sub(A); const len = D.length() || 0.01; D.normalize(); Q.setFromUnitVectors(Z_AXIS, D);
+    arm.quaternion.copy(Q); arm.position.copy(A).addScaledVector(D, len / 2); arm.scale.set(0.05, 0.05, len);
+    r1.quaternion.copy(Q); r1.position.copy(A).addScaledVector(D, 0.03); r1.scale.setScalar(0.053);
+    r2.quaternion.copy(Q); r2.position.copy(A).addScaledVector(D, len * 0.5); r2.scale.setScalar(0.053);
+    piston.quaternion.copy(Q); piston.position.copy(A).addScaledVector(D, len * 0.5).add(new THREE.Vector3(0, 0.045, 0)); piston.scale.set(0.008, 0.008, len * 0.6);
+  };
+  return g;
+}
 // Cockpit um die Kamera: Kuppelrand (Glas spiegelt am Rand), Metallkragen, Armaturenbrett mit Anzeigen, warmes Licht innen
 export function makeCockpit() {
   const g = new THREE.Group();
