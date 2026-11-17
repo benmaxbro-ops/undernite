@@ -9,7 +9,7 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Danach
 
-- [ ] **Grafik noch realistischer:** bessere Oberflächen, bessere Taucher-Modelle (Bewegungs- und Tiefenunschärfe sind schon drin)
+- [ ] **Grafik noch realistischer:** bessere Oberflächen (Meeresboden, Felsen, Korallen) – Taucher haben schon Handschuh-Finger, halten die Waffe beidhändig, Flossen biegen sich
 - [ ] **Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
 - [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 

@@ -131,20 +131,37 @@ export function buildRealDiver(suit, accent) {
     const el = new THREE.Group(); el.position.z = -0.28; el.rotation.set(...elbowRot); sh.add(el);
     el.add(new THREE.Mesh(limbGeo(0.047, 0.036, 0.25), suitBlack));
     put(el, SPH, suitBlack, 0, 0, 0, 0.05);   // elbow
-    put(el, SPH, rubber, 0, 0, -0.29, 0.045, 0.03, 0.06);   // glove
+    glove(el, side);
     return el;
   };
+  // Handschuh: Handfläche, vier gekrümmte Finger (umgreifen den Griff) und ein Daumen
+  const fingerGeo = new THREE.CapsuleGeometry(0.009, 0.028, 4, 8);
+  const glove = (el, side) => {
+    const h = new THREE.Group(); h.position.set(0, 0, -0.29); el.add(h);
+    put(h, SPH, rubber, 0, 0, 0, 0.034, 0.02, 0.045);                          // Handfläche
+    for (let i = 0; i < 4; i++) {                                                 // Finger, nach unten gekrümmt
+      const fz = -0.03 + i * 0.012 - 0.018, fx = side * (0.01 - i * 0.004);
+      const f1 = put(h, fingerGeo, rubber, fx, -0.018, fz - 0.02); f1.rotation.x = 1.2;
+      const f2 = put(h, fingerGeo, rubber, fx, -0.04, fz - 0.012); f2.rotation.x = 2.3; f2.scale.setScalar(0.85);
+    }
+    const th = put(h, fingerGeo, rubber, -side * 0.028, -0.005, -0.03); th.rotation.set(1.1, 0, -side * 0.6);   // Daumen
+  };
   const rightHand = arm(1, [-0.32, 0.28, 0], [0.18, -0.05, 0]);
-  arm(-1, [0.55, Math.PI + 0.35, 0], [0, 1.6, 0]);
+  arm(-1, [-0.36, -0.32, 0], [0.22, 0.08, 0]);   // linke Hand stützt die Waffe (beidhändig)
   // weapon in the right hand: the white-blue water gun is put in here by makePlayerModel (models.js)
   const gun = new THREE.Group(); gun.position.set(0, 0.05, -0.25); rightHand.add(gun);
 
   // ----- legs with long fins -----
   const finM = mat(0x0f1114, { roughness: 0.55, side: THREE.DoubleSide });
-  const finShape = new THREE.Shape();
-  finShape.moveTo(-0.06, 0); finShape.lineTo(0.06, 0); finShape.lineTo(0.12, 0.45); finShape.quadraticCurveTo(0.13, 0.66, 0.06, 0.68);
-  finShape.lineTo(0, 0.6); finShape.lineTo(-0.06, 0.68); finShape.quadraticCurveTo(-0.13, 0.66, -0.12, 0.45); finShape.closePath();
-  const finGeo = new THREE.ExtrudeGeometry(finShape, { depth: 0.012, bevelEnabled: false }).rotateX(Math.PI / 2);   // blade along +z, flat in xz
+  // Flosse in zwei Teilen: fester Fußteil und biegsames Blatt (FIN_BEND = wie stark sich die Spitze biegt)
+  const FIN_BEND = 0.5;
+  const baseShape = new THREE.Shape();
+  baseShape.moveTo(-0.06, 0); baseShape.lineTo(0.06, 0); baseShape.lineTo(0.107, 0.35); baseShape.lineTo(-0.107, 0.35); baseShape.closePath();
+  const tipShape = new THREE.Shape();
+  tipShape.moveTo(-0.107, 0); tipShape.lineTo(0.107, 0); tipShape.lineTo(0.12, 0.1); tipShape.quadraticCurveTo(0.13, 0.31, 0.06, 0.33);
+  tipShape.lineTo(0, 0.25); tipShape.lineTo(-0.06, 0.33); tipShape.quadraticCurveTo(-0.13, 0.31, -0.12, 0.1); tipShape.closePath();
+  const ext = (sh) => new THREE.ExtrudeGeometry(sh, { depth: 0.012, bevelEnabled: false }).rotateX(Math.PI / 2);   // Blatt entlang +z, flach in xz
+  const finBase = ext(baseShape), finTip = ext(tipShape);
   const legs = [];
   for (const side of [-1, 1]) {
     const hip = new THREE.Group(); hip.position.set(side * 0.09 * wide, -0.02, 0.27); g.add(hip);
@@ -157,9 +174,14 @@ export function buildRealDiver(suit, accent) {
     put(ankle, SPH, rubber, 0, 0, 0, 0.045);
     put(ankle, BOX, rubber, 0, 0, 0.08, 0.075, 0.06, 0.2);                       // foot pocket
     const fin = new THREE.Group(); fin.position.set(0, -0.01, 0.1); ankle.add(fin);
-    fin.add(new THREE.Mesh(finGeo, finM));
-    for (const s of [-1, 1]) { const rail = put(fin, BOX, acc, s * 0.09, 0.008, 0.33, 0.012, 0.02, 0.5); rail.rotation.y = -s * 0.12; }   // coloured rails
-    legs.push({ hip, knee, ankle, fin });
+    fin.add(new THREE.Mesh(finBase, finM));
+    const tip = new THREE.Group(); tip.position.z = 0.35; fin.add(tip);
+    tip.add(new THREE.Mesh(finTip, finM));
+    for (const s of [-1, 1]) {   // farbige Leisten am Rand, auf beiden Teilen
+      const r1 = put(fin, BOX, acc, s * 0.083, 0.008, 0.18, 0.012, 0.02, 0.34); r1.rotation.y = -s * 0.13;
+      const r2 = put(tip, BOX, acc, s * 0.112, 0.008, 0.08, 0.012, 0.02, 0.16); r2.rotation.y = -s * 0.04;
+    }
+    legs.push({ hip, knee, ankle, fin, tip });
   }
   g.scale.setScalar({ manta: 0.92, triton: 1, bulwark: 1.12 }[suit] ?? 1);
 
@@ -173,6 +195,7 @@ export function buildRealDiver(suit, accent) {
         L.knee.rotation.x = -Math.max(0, Math.sin(ph + 0.9)) * 0.55 * amp - 0.08;
         L.ankle.rotation.x = 0.15;
         L.fin.rotation.x = Math.sin(ph - 1.1) * 0.35 * amp;
+        L.tip.rotation.x = Math.sin(ph - 1.7) * FIN_BEND * amp;   // die Spitze biegt sich hinterher (wie echte Flossen)
       }
     },
   };
