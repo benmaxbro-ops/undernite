@@ -9,8 +9,8 @@ export const UNDERWATER = {
   wobble: 0.0018,  // wie stark der Klang "wabert" (Sekunden Verzögerungsschwankung)
   echo: 0.32,      // wie viel Echo zurückkommt (0 = keins)
   echoTime: 0.14,  // Sekunden bis zum Echo
-  shotCutoff: 3000, // Hz: eigene Schüsse etwas heller als der Rest, aber trotzdem dumpf (Wasser schluckt Höhen)
-  metal: 0.5,      // metallischer Nachklang (0 = aus). Unter Wasser klingt Kampflärm blechern …
+  shotCutoff: 6500, // Hz: eigene Schüsse behalten ihren hellen Knall (sonst klingen sie wie ein Spielzeug)
+  metal: 0.25,     // metallischer Nachklang (0 = aus). Unter Wasser klingt Kampflärm blechern … (zu viel klingt nach Blechdose)
   metalTime: 0.0045, // … weil Schall im Wasser viermal so schnell ist und von überall gleichzeitig zu kommen scheint
 };
 // Ein Schuss besteht aus Schichten (wie bei Profi-Spielen):
@@ -20,7 +20,10 @@ export const UNDERWATER = {
 //   mech  = der Verschluss klackt (das Gefühl "ich halte eine Waffe")
 //   duck  = alle anderen Geräusche werden im Moment des Schusses kurz leiser → der Schuss wirkt lauter
 //   wumms = tiefer Druck-Schlag, den man auch auf Laptop-Lautsprechern hört (Punch bei 80–180 Hertz + Obertöne)
-export const SHOT = { crack: 3.0, body: 3.1, boom: 3.0, mech: 4.5, duck: 5.45, wumms: 1.0 };
+//   sub   = ganz tiefer Bass-Stoß (50–60 Hertz), den man im Bauch spürt – das "Boom"
+//   loud  = Gesamtlautstärke aller Schüsse
+// duck geht von 0 (nichts wird leiser) bis 0.9 (alles andere fast stumm)
+export const SHOT = { crack: 1.4, body: 3.1, boom: 2.2, mech: 1.6, duck: 0.6, wumms: 1.0, sub: 2.4, loud: 1.4 };
 // Holztür-Schlag bei jedem Schuss: vol = Lautstärke bei fremden Schüssen, own = bei eigenen,
 // range = bis so viele Meter weit hört man ihn, pitchSmall / pitchBig = Tonhöhe (kleiner = tiefer),
 // body = zusätzlicher tiefer Bass-Schlag darunter
@@ -32,8 +35,8 @@ export const HITS = { crack: 0.5, flesh: 1.6, body: 1.4 };
 export const WHOOSH = { vol: 1.6, pan: 0.6 };
 export const KNOCK = { vol: 1.8, own: 0.5, range: 260, pitchSmall: 0.75, pitchBig: 0.6, body: 1.0 };
 export const PLASMA = {
-  ring: 0.12,      // elektrisches Brummen (Ringmodulation): 0 = aus, 1 = stark (zu viel macht den Schuss dünn)
-  zap: 0.25,       // Lautstärke des "Dzzzt"
+  ring: 0,         // elektrisches Brummen (Ringmodulation): 0 = aus (echte Waffen brummen nicht)
+  zap: 0,          // Lautstärke des "Dzzzt" (0 = aus, klang nach Spielzeug-Laser)
 };
 // ---------- Physik der Gasblase (Rayleigh-Willis-Formel) ----------
 // Bei jedem Schuss und jeder Explosion unter Wasser entsteht eine Gasblase. Sie dehnt sich aus, fällt in sich zusammen
@@ -49,7 +52,7 @@ const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'sli
 export class Sfx {
   constructor() { this.ctx = null; this.depth = 30; this.vol = 0.8; }
   // Lautstärke aus den Einstellungen (0 … 1)
-  setVolume(v) { this.vol = v; if (this.master) this.master.gain.value = 0.78 * v; }
+  setVolume(v) { this.vol = v; if (this.master) this.master.gain.value = 0.9 * v; }
   setDepth(d) { this.depth = d; }   // main.js sagt jedes Bild, wie tief man ist (für die Gasblasen-Physik)
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
@@ -57,9 +60,16 @@ export class Sfx {
     if (!AC) return;
     const ctx = this.ctx = new AC();
     // Kompressor am Ende: macht laute Spitzen gleichmäßiger, so kann alles lauter sein, ohne zu übersteuern
-    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = 0.002; comp.release.value = 0.18;
-    comp.connect(ctx.destination);
-    this.master = ctx.createGain(); this.master.gain.value = 0.78 * this.vol; this.master.connect(comp);
+    // dahinter wird alles wieder lauter gemacht (makeup) – so klingt es kräftig, ohne zu verzerren (wie ein Limiter im Tonstudio)
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.knee.value = 6; comp.ratio.value = 8; comp.attack.value = 0.003; comp.release.value = 0.15;
+    const makeup = ctx.createGain(); makeup.gain.value = 2.6;   // wie viel lauter nach dem Kompressor (mehr = lauter, der Begrenzer verhindert Verzerren)
+    // weicher Begrenzer ganz am Ende: Spitzen über 1 werden sanft abgerundet statt hart abgehackt (das klang verzerrt und billig)
+    const soft = ctx.createWaveShaper(), sc = new Float32Array(2048);
+    for (let i = 0; i < 2048; i++) { const x = (i / 1023.5 - 1) * 2; sc[i] = Math.tanh(x * 1.1) * 0.97; }
+    soft.curve = sc; soft.oversample = '2x';
+    const pre = ctx.createGain(); pre.gain.value = 0.5;   // Kurve geht von −2 bis +2
+    comp.connect(makeup).connect(pre).connect(soft).connect(ctx.destination);
+    this.master = ctx.createGain(); this.master.gain.value = 0.9 * this.vol; this.master.connect(comp);
     this.world = ctx.createGain(); this.world.connect(this.master);   // alles außer den eigenen Schüssen (wird beim Schuss kurz leiser)
     // noise buffer shared by all noise based sounds
     const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
@@ -146,19 +156,23 @@ export class Sfx {
   realShot(w, vol, dist = 0) {
     const name = SHOT_FILES[w] || SHOT_FILES[0], buf = this.bufs && this.bufs[name], ctx = this.ctx;
     if (!buf) return false;
+    vol *= SHOT.loud;
     const big = w === 7 ? 1 : w >= 4 && w <= 5 ? 0.95 : w === 6 ? 0.8 : w === 3 ? 0.85 : w === 2 ? 0.75 : w === 0 ? 0.55 : 0.35;
     const t = ctx.currentTime;
     // 1) metallisches Klicken: unter Wasser gibt es keinen hellen Knall, sondern ein hartes "Klick" (Verschluss + Druckwelle)
     const own = vol > 0.95;   // eigener Schuss: man hört ihn auch über die Knochen, also härter. Fremde Schüsse: dumpfer
     this.cur = this.uwShot;
-    this.tone(2600 - big * 600, 1700 - big * 400, 0.014, SHOT.crack * vol * (own ? 0.55 : 0.25), 'square');
-    this.noise(0.02, 3200, 3, SHOT.crack * vol * (own ? 0.5 : 0.2), 'bandpass');
+    // Knall-Anfang: ein ganz kurzer, heller Rausch-Stoß (wie der Überschallknall einer echten Waffe) – kein Piepton
+    this.noise(0.012, 2500, 0.5, SHOT.crack * vol * (own ? 0.9 : 0.35), 'highpass');
+    this.noise(0.03, 1200, 0.9, SHOT.crack * vol * (own ? 0.6 : 0.25), 'bandpass', 500);
     this.cur = null;
     // 2) Körper: die Aufnahme durch die helle Unterwasser-Kette, leicht übersteuert
     this.sample(name, SHOT.body * vol, { plasma: PLASMA.ring, drive: true, bus: own ? 'shot' : '', rate: 1.08 });
     // 3) kurzer, straffer Bass-Schlag (nicht nachklingen lassen, sonst verschmiert es)
     this.cur = this.master;
     this.tone(62 - big * 16, 32, 0.08 + big * 0.08, (1.2 + big * 0.4) * SHOT.boom * vol, 'sine');     // harter, dumpfer Schlag
+    // Sub-Boom: sehr tiefer Stoß, der kurz nachwirkt (das spürt man mehr, als man es hört)
+    this.tone(58 - big * 10, 34, 0.22 + big * 0.25, SHOT.sub * vol * (own ? 1 : 0.5) * (0.6 + big * 0.5), 'sine');
     this.tone(130 - big * 30, 60, 0.05, 0.7 * SHOT.boom * vol, 'triangle');
     this.noise(0.05 + big * 0.06, 400, 0.8, 0.5 * SHOT.boom * vol, 'lowpass', 90);
     // 3b) Wumms: der hörbare Druck-Schlag. Grundton fällt von ~150 auf ~55 Hertz, dazu die doppelte Frequenz (Oberton),
@@ -179,8 +193,8 @@ export class Sfx {
     if (w === 4 || w === 5) this.launch(vol);
     // 6) Ducking: alles andere kurz leiser, nur bei eigenen Schüssen (vol = 1)
     if (own && SHOT.duck > 0) {
-      const gw = this.world.gain; gw.cancelScheduledValues(t); gw.setValueAtTime(gw.value, t);
-      gw.linearRampToValueAtTime(1 - SHOT.duck, t + 0.008); gw.setTargetAtTime(1, t + 0.06, 0.09);
+      const gw = this.world.gain, dk = Math.min(0.9, SHOT.duck); gw.cancelScheduledValues(t); gw.setValueAtTime(gw.value, t);
+      gw.linearRampToValueAtTime(1 - dk, t + 0.008); gw.setTargetAtTime(1, t + 0.06, 0.09);
     }
     return true;
   }
