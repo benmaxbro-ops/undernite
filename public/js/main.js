@@ -116,13 +116,17 @@ const mechFrame = new THREE.Group(); camera.add(mechFrame);   // Cockpit und Waf
 const COCKPIT_SIZE = 0.5;
 const cockpit = makeCockpit(); cockpit.visible = false; cockpit.scale.setScalar(COCKPIT_SIZE); mechFrame.add(cockpit);
 // ---------- U-Boot von innen (Ego-Sicht mit V): sitzen am Steuerpult, mit B aufstehen und herumlaufen ----------
-const subIn = { stand: false, peri: false, x: SUBROOM.seat[0], z: SUBROOM.seat[1] };   // peri = schaut gerade durchs Periskop
+const subIn = { stand: false, peri: false, gunIn: false, x: SUBROOM.seat[0], z: SUBROOM.seat[1] };   // peri = schaut gerade durchs Periskop
 // Periskop: up = so hoch über dem U-Boot ist die Linse, fov = Zoom (kleiner = näher), reach = so nah muss man dran stehen
 const PERI = { up: 3.2, fov: 28, reach: 0.65, pos: [0, 0.45] };
 const nearPeri = () => subIn.stand && Math.hypot(subIn.x - PERI.pos[0], subIn.z - PERI.pos[1]) < PERI.reach;   // x, z = wo man im U-Boot steht
 let subRoom = null;   // der Innenraum (wird beim ersten Einsteigen gebaut)
 // bist du gerade in der Ego-Sicht in deinem U-Boot? Dann gibt es das U-Boot zurück, sonst null
-function inSubFP() { const v = you && you.alive && you.veh ? vehicles.get(you.veh) : null; return v && v.type === 'sub' && firstPerson ? v : null; }
+// (der Schütze ist auch "drin", wenn er aus der Kugel ins U-Boot geklettert ist: subIn.gunIn)
+function inSubFP() { const v = you && you.alive && you.veh ? vehicles.get(you.veh) : null; if (!v || v.type !== 'sub') return null; return v.gunner === myId ? (subIn.gunIn ? v : null) : firstPerson ? v : null; }
+// 2-Mann-U-Boot: sitze ich als Schütze in der MG-Kugel? Dann gibt es das U-Boot zurück. BALL_DY = so weit unter der U-Boot-Mitte hängt die Kugel
+const BALL_DY = -1.95, SUB_MG_RATE = 11;   // SUB_MG_RATE muss zu SUB_MG.rate in server.js passen
+function myGunSub() { const v = you && you.alive && you.veh ? vehicles.get(you.veh) : null; return v && v.type === 'sub' && v.gunner === myId ? v : null; }
 const nearSeat = () => Math.hypot(subIn.x - SUBROOM.seat[0], subIn.z - SUBROOM.seat[1]) < 0.8;
 function toggleStand() {
   if (!subIn.stand) { subIn.stand = true; subIn.x = SUBROOM.seat[0]; subIn.z = SUBROOM.seat[1] + 0.5; sfx.noise(0.2, 400, 1, 0.3, 'lowpass', 150); return; }
@@ -269,7 +273,7 @@ function onSnap(m) {
     target(e, a, 2); e.state = a[7]; e.hpPct = a[9];
   }
   prune(creatures);
-  for (const a of c.v) { const type = VEHICLE_IDS[a[1]]; const e = sync(vehicles, a[0], () => ({ type, mesh: type === 'sub' ? makeSub() : type === 'jetski' ? makeJetski() : makeScooter() })); target(e, a, 2); e.hp = a[7]; e.driver = a[8]; }
+  for (const a of c.v) { const type = VEHICLE_IDS[a[1]]; const e = sync(vehicles, a[0], () => ({ type, mesh: type === 'sub' ? makeSub() : type === 'jetski' ? makeJetski() : makeScooter() })); target(e, a, 2); e.hp = a[7]; e.driver = a[8]; e.gunner = a[9] || 0; e.gyaw = a[10] || 0; e.gpitch = a[11] || 0; }
   prune(vehicles);
   for (const e of c.e) onEvent(e);
   for (const e of m.ye) onPrivate(e);
@@ -704,6 +708,10 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (phase !== 'play' || !you || !you.alive) return;
   if (e.code === 'KeyV') { firstPerson = !firstPerson; if (!firstPerson) subIn.stand = false; return; }   // Ego-Perspektive an/aus
+  if (e.code === 'KeyB' && myGunSub()) {   // Schütze: aus der Kugel ins U-Boot klettern und zurück
+    subIn.gunIn = !subIn.gunIn; subIn.peri = false; subIn.stand = subIn.gunIn; subIn.x = 0; subIn.z = 0.9;
+    sfx.noise(0.3, 500, 1, 0.3, 'lowpass', 150); return;
+  }
   if (e.code === 'KeyB' && inSubFP()) { if (subIn.peri) subIn.peri = false; else toggleStand(); return; }   // im U-Boot aufstehen / hinsetzen
   if (e.code === 'KeyP' && inSubFP() && (subIn.peri || nearPeri())) { subIn.peri = !subIn.peri; sfx.noise(0.35, 700, 1.2, 0.25, 'bandpass', 300); return; }   // Periskop
   if (e.code === 'KeyC' && canCling()) { toggleCling(); return; }  // Deckung: am Riff festhalten / loslassen
@@ -804,6 +812,12 @@ const FLOW = { input: 8, accel: 4.5, glide: 2.2, roll: 0.045, rollSpeed: 4 };
 const flow = { f: 0, s: 0, u: 0, roll: 0 };
 // ---------- local player ----------
 function controlMe(dt) {
+  const gs = myGunSub();
+  if (gs) {   // Schütze: man hängt in der Kugel unter dem U-Boot, der Fahrer bewegt alles
+    me.x = gs.x; me.y = gs.y + BALL_DY - eyeHeight(mySuit); me.z = gs.z; me.vx = me.vy = me.vz = 0; me.hyaw = me.byaw = camYaw; me.hpitch = me.bpitch = camPitch;
+    gs.gyaw = camYaw; gs.gpitch = camPitch;   // eigene Kugel sofort mitdrehen (nicht erst, wenn der Server antwortet)
+    return;
+  }
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
   if (mySuit === 'goliath' && ultOn()) autoAim(dt);   // Zielcomputer-Ulti
   let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1) * ((mySuit === 'manta' || mySuit === 'hammerhai') && ultOn() ? ULTIS[mySuit].speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
@@ -972,7 +986,7 @@ function updateTorch(dt, depth) {
     if (torch.bat <= 0) { torch.on = false; hud.banner('Lampe leer – oben an der Oberfläche aufladen!', 3); }
   }
   if (!torch.hinted && !torch.on && depth > (exp ? 70 : 30) && torch.bat > 0) { torch.hinted = true; hud.banner('Zu dunkel? Drück L für die Taschenlampe!', 3.5); }
-  const on = torch.on && you.alive, isMech = !!SUITS[mySuit].mech;
+  const on = torch.on && you.alive && !inSubFP(), isMech = !!SUITS[mySuit].mech;   // im U-Boot innen ist Licht – die Lampe würde nur blenden
   // Goliath: zwei Lampen an der Kuppel, die mittlere (Brust-)Lampe bleibt aus
   for (const M of mechLamps) {
     M.l.intensity = on && isMech ? L.power * MECH_LAMPS.power : 0; M.b.visible = M.l.intensity > 0;
@@ -1046,7 +1060,8 @@ function tryFire(now) {
   if (!firing || held >= 0) return;
   const v = you.veh ? vehicles.get(you.veh) : null;
   let rate, w = null;
-  if (v && v.type === 'sub') rate = WEAPONS.subtorp.rate;
+  if (v && v.type === 'sub' && v.gunner === myId) rate = SUB_MG_RATE;   // MG der Kugel
+  else if (v && v.type === 'sub') rate = WEAPONS.subtorp.rate;
   else { w = you.w[you.slot]; if (!w || you.rl > 0 || w[2] <= 0) return; rate = modDef(w[0], w[4]).rate; }
   if (now < nextFire) return;
   const ct = w ? (SHOT_CHARGE[w[0]] || 0) * 1000 : 0;
@@ -1064,7 +1079,7 @@ function shoot(v, w) {
   const d = aimDir().map(x => +x.toFixed(4));
   send(aimAt ? { t: 'f', d, a: aimAt } : { t: 'f', d });
   if (w && WEAPONS[w[0]].melee) { view.kick = 1; view.kickPow = 1; sfx.noise(0.18, 700, 1, 0.35, 'bandpass', 1800); return; }   // Stoß: Waffe fährt nach vorne, Wusch
-  recoil(v ? WEAPONS.subtorp : modDef(w[0], w[4]));
+  recoil(v ? (v.gunner === myId ? WEAPONS.spikemg : WEAPONS.subtorp) : modDef(w[0], w[4]));
 }
 function computePrompt() {
   if (!you || !you.alive) return null;
@@ -1075,6 +1090,8 @@ function computePrompt() {
   if (mode === 'exp' && !hud.shopOpen && !nearBoat() && !nearBase() && otherBaseOwner()) return ['–', `Basis von ${otherBaseOwner()} · nur Luft tanken`];
   if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
   const ft = finTarget(); if (ft) return ['G', `Finisher: ${ft.name}`];
+  if (myGunSub() && !subIn.gunIn) return ['B', 'Aus der Kugel ins U-Boot klettern'];
+  if (myGunSub() && subIn.gunIn && !subIn.peri && !nearPeri()) return ['B', 'Zurück in die MG-Kugel'];
   if (inSubFP()) return subIn.peri ? ['P', 'Periskop einfahren'] : subIn.stand ? (nearPeri() ? ['P', 'Durchs Periskop schauen'] : nearSeat() ? ['B', 'Hinsetzen und steuern'] : null) : ['B', 'Aufstehen und im U-Boot umsehen'];
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
@@ -1082,7 +1099,9 @@ function computePrompt() {
   const d3 = (o) => Math.hypot(o.x - me.x, o.y - me.y, o.z - me.z);
   for (const p of pickups.values()) if (p.k === 'w') { const d = d3(p); if (d < S.r + 3.5 && d < bd) { bd = d; best = ['E', `${WEAPONS[p.wid].name} (${RARITY[p.rar].name}) ${you.w.includes(0) ? 'aufheben' : 'tauschen'}`]; } }
   crates.forEach((c) => { if (!c.userData.isOpen) { const d = d3(c.position); if (d < S.r + 4.5 && d < bd) { bd = d; best = ['E', 'Truhe öffnen']; } } });
-  if (!S.mech) for (const v of vehicles.values()) if (!v.driver) { const d = d3(v) - (v.type === 'sub' ? 2 : 0); if (d < S.r + 4.5 && d < bd) { bd = d; best = ['E', `${VEHICLES[v.type].name} steuern`]; } }
+  if (!S.mech) for (const v of vehicles.values()) { const d = d3(v) - (v.type === 'sub' ? 2 : 0); if (d >= S.r + 4.5 || d >= bd) continue;
+    if (!v.driver) { bd = d; best = ['E', `${VEHICLES[v.type].name} steuern`]; }
+    else if (v.type === 'sub' && !v.gunner && isMate(v.driver)) { bd = d; best = ['E', 'Als Schütze in die MG-Kugel steigen']; } }
   return best;
 }
 
@@ -1406,6 +1425,7 @@ function updateCamera(dt) {
     want = v ? VEHICLES[v.type].cam : SUITS[mySuit].cam;
     if (v && v.type === 'sub') { side = 0; up = 2.2; }
     tx = me.x; ty = me.y + eyeHeight(mySuit); tz = me.z;
+    if (myGunSub()) { want = 0; side = 0; up = 0; fpOn = true; }   // Schütze: Kamera mitten in der Glaskugel
     // swimming at the surface: head out of the water, the camera looks across the sea
     if (SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
     // Ego-Perspektive: Kamera fährt in den Kopf (Abstand 0), nicht zur Seite, nicht nach oben
@@ -1433,6 +1453,7 @@ function updateCamera(dt) {
   if (!sv || !subIn.stand) subIn.peri = false;
   if (subIn.peri) { if (camera.fov !== PERI.fov) { camera.fov = PERI.fov; camera.updateProjectionMatrix(); } hud.scope(true, true); }
   hud.periscope(subIn.peri ? camYaw : null);
+  if (!myGunSub()) subIn.gunIn = false;
   if (!sv) { subIn.stand = false; if (subRoom) { subRoom.visible = false; if (subRoom.parent) subRoom.parent.remove(subRoom); } }
   else {
     const body = sv.mesh.userData.body;

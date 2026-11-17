@@ -256,12 +256,14 @@ function damageVehicle(v, amt, src) {
   v.hp -= amt;
   const d = v.driver && G.players.get(v.driver);
   if (d && !d.bot) d.ye.push(['hurt', Math.round(amt), r2(v.x), r2(v.z), 0]);
+  const gn0 = v.gunner && G.players.get(v.gunner); if (gn0 && !gn0.bot) gn0.ye.push(['hurt', Math.round(amt), r2(v.x), r2(v.z), 0]);
   if (src && src.id && !src.bot && d && src !== d) src.ye.push(['hm', Math.round(amt), 0, +(Math.max(0, v.hp) / VEHICLES[v.type].hp).toFixed(2), 0]);
   if (v.hp <= 0) {
     v.dead = true; G.vehicles.delete(v.id);
     ev('boom', 0, r2(v.x), r2(v.y), r2(v.z), 7);
     ev('vdie', v.id);
     if (d) { d.veh = 0; damage(d, 35, src, 'wreck', v.x, v.z); }
+    const gn = v.gunner && G.players.get(v.gunner); if (gn) { gn.veh = 0; damage(gn, 35, src, 'wreck', v.x, v.z); }
   }
 }
 // Finisher: p erledigt den Gegner mit der id, wenn er nah genug ist und wenig Leben hat (Regeln: FINISHER in shared.js).
@@ -278,7 +280,7 @@ function finisher(p, id) {
 function kill(p, src, how) {
   p.alive = false; p.hp = 0;
   p.place = p.team ? aliveTeams() + ([...G.players.values()].some(q => q.alive && q !== p && q.team === p.team) ? 0 : 1) : aliveCount() + 1; p.deathT = G.time;
-  if (p.veh) { const v = G.vehicles.get(p.veh); if (v) v.driver = 0; p.veh = 0; }
+  if (p.veh) { const v = G.vehicles.get(p.veh); if (v) { if (v.gunner === p.id) v.gunner = 0; else v.driver = 0; } p.veh = 0; }
   if (p.grabbed) { const o = G.creatures.find(c => c.id === p.grabbed); if (o) releaseOcto(o); }
   for (const w of p.weapons) if (w && !(w.id === 'pistol' && w.rar === 0) && w.id !== 'magrifle')   // Magnet-Gewehr fällt nicht als Beute
     addPickup('w', p.x + (rnd() - 0.5) * 2, p.y + rnd(), p.z + (rnd() - 0.5) * 2, w.id, w.rar, w.ammo, w.spare);
@@ -389,6 +391,8 @@ function spawnProj(p, wid, ox, oy, oz, d, mul, vehId, aim, def = WEAPONS[wid]) {
   G.proj.push(pr);
   ev('pj', pr.id, WEAPON_IDS.indexOf(wid), p.id, r2(ox), r2(oy), r2(oz), +dx.toFixed(3), +dy.toFixed(3), +dz.toFixed(3));
 }
+// MG in der Glaskugel unter dem U-Boot: rate = Schuss pro Sekunde, dmg = Schaden, range = Reichweite (m)
+const SUB_MG = { ...WEAPONS.spikemg, dmg: 8, rate: 11, range: 55, spread: 0.018, hitscan: true, beam: 0.05, pellets: 1 };
 function fire(p, d, aim) {
   if (!p.alive || !Array.isArray(d) || d.length !== 3 || d.some(v => typeof v !== 'number' || !isFinite(v))) return;
   if (!Array.isArray(aim) || aim.length !== 2 || !aim.every(Number.isInteger)) aim = null;
@@ -396,6 +400,12 @@ function fire(p, d, aim) {
   if (l < 0.5) return;
   d = [d[0] / l, d[1] / l, d[2] / l];
   const v = p.veh && G.vehicles.get(p.veh);
+  if (v && v.type === 'sub' && v.gunner === p.id) {   // Schütze in der MG-Kugel unter dem U-Boot
+    if (G.time < (v.gunNext || 0) - 0.02) return;
+    v.gunNext = G.time + 1 / SUB_MG.rate;
+    spawnProj(p, 'spikemg', p.x + d[0] * 0.8, p.y + eyeHeight(p.suit) + d[1] * 0.8, p.z + d[2] * 0.8, d, 1, v.id, aim, SUB_MG);
+    return;
+  }
   if (v && v.type === 'sub') {
     if (G.time < v.nextFire - 0.06) return;
     v.nextFire = G.time + 1 / WEAPONS.subtorp.rate;
@@ -724,15 +734,21 @@ function autoCollect(p) {
 }
 function interact(p) {
   if (!p.alive) return;
-  if (p.veh) { const v = G.vehicles.get(p.veh); if (v) v.driver = 0; p.veh = 0; return; }
+  if (p.veh) { const v = G.vehicles.get(p.veh); if (v) { if (v.gunner === p.id) v.gunner = 0; else v.driver = 0; } p.veh = 0; return; }
   const S = SUITS[p.suit];
   let best = null, bd = 1e9;
   for (const pk of G.pickups.values()) if (pk.k === 'w') { const d = dist(p, pk); if (d < S.r + 3.5 && d < bd) { bd = d; best = { k: 'pk', pk }; } }
   G.crates.forEach((c, i) => { if (!c.open) { const d = dist(p, c); if (d < S.r + 4.5 && d < bd) { bd = d; best = { k: 'crate', i }; } } });
-  if (!S.mech && !p.grabbed) for (const v of G.vehicles.values()) if (!v.driver) { const d = dist(p, v) - (v.type === 'sub' ? 2 : 0); if (d < S.r + 4.5 && d < bd) { bd = d; best = { k: 'veh', v }; } }
+  if (!S.mech && !p.grabbed) for (const v of G.vehicles.values()) {
+    const d = dist(p, v) - (v.type === 'sub' ? 2 : 0); if (d >= S.r + 4.5 || d >= bd) continue;
+    if (!v.driver) { bd = d; best = { k: 'veh', v }; }
+    // 2-Mann-U-Boot: fährt dein Teamkamerad, kannst du unten in die MG-Kugel steigen
+    else if (v.type === 'sub' && !v.gunner && p.team && (G.players.get(v.driver) || {}).team === p.team) { bd = d; best = { k: 'gun', v }; }
+  }
   if (!best) return;
   if (best.k === 'pk') takeWeapon(p, best.pk, p.slot);
   else if (best.k === 'crate') openCrate(best.i);
+  else if (best.k === 'gun') { best.v.gunner = p.id; p.veh = best.v.id; }
   else { best.v.driver = p.id; p.veh = best.v.id; }
 }
 function releaseOcto(o) {
@@ -1440,7 +1456,7 @@ function snapshot() {
     c: G.creatures.map(c => [c.id, CREATURE_IDS.indexOf(c.type), r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.pitch),
       ['hunt', 'lunge', 'chase', 'swing', 'attack', 'flee'].includes(c.state) ? 1 : c.state === 'hold' ? 2 : 0,
       c.sub || 0, c.maxhp ? Math.max(0, Math.ceil(c.hp / c.maxhp * 100)) : 100, c.gold ? 1 : 0]),
-    v: [...G.vehicles.values()].map(v => [v.id, VEHICLE_IDS.indexOf(v.type), r2(v.x), r2(v.y), r2(v.z), r2(v.yaw), r2(v.pitch), Math.ceil(v.hp), v.driver]),
+    v: [...G.vehicles.values()].map(v => { const gn = v.gunner && G.players.get(v.gunner); return [v.id, VEHICLE_IDS.indexOf(v.type), r2(v.x), r2(v.y), r2(v.z), r2(v.yaw), r2(v.pitch), Math.ceil(v.hp), v.driver, v.gunner || 0, gn ? r2(gn.yaw) : 0, gn ? r2(gn.pitch) : 0]; }),   // 9-11: Schütze, seine Blickrichtung
     e: G.events,
     // expedition: who owns which base + their aquarium (so everybody sees the fish in the other bases)
     b: G.mode === 'exp' ? [...G.players.values()].filter(p => p.baseIdx != null).map(p => [p.baseIdx, p.id, p.name, p.aq.map(catchToNet)]) : undefined,

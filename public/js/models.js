@@ -175,8 +175,19 @@ export function makeSub() {
   const ring = add(g, GEO.torus, dark, 0, 0, 3.95); ring.scale.setScalar(1.0);
   const beam = add(g, new THREE.ConeGeometry(3, 22, 16, 1, true).rotateX(Math.PI / 2).translate(0, 0, -14),
     new THREE.MeshBasicMaterial({ color: 0xcff6ff, transparent: true, opacity: 0.04, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  // MG-Kugel unten: Halterung, Glaskugel und zwei Läufe, die sich zum Blick des Schützen drehen (2-Mann-U-Boot)
+  add(g, GEO.cyl, dark, 0, -1.45, 0).scale.set(0.45, 0.2, 0.45);
+  const tur = new THREE.Group(); tur.position.set(0, -1.95, 0); g.add(tur);
+  add(tur, GEO.sph, new THREE.MeshStandardMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.3, depthWrite: false }), 0, 0, 0).scale.setScalar(0.55);
+  add(tur, GEO.torus, dark, 0, 0, 0).scale.setScalar(0.56);
+  const guns = new THREE.Group(); tur.add(guns);
+  for (const sx of [-1, 1]) { add(guns, GEO.zcyl, dark, sx * 0.16, -0.05, -0.55).scale.set(0.045, 0.045, 0.6); add(guns, GEO.zcyl, std(0x3a4046, { metalness: 0.8, roughness: 0.4 }), sx * 0.16, -0.05, -0.9).scale.set(0.06, 0.06, 0.12); }
   root.userData.body = g;   // hier hängt der Innenraum dran (Ego-Sicht im U-Boot)
-  root.userData.update = (dt, s) => { g.rotation.y = s.yaw; g.rotation.x = s.pitch; prop.rotation.z += dt * (2 + s.speed * 1.5); beam.visible = !!s.driven; };
+  root.userData.update = (dt, s) => {
+    g.rotation.y = s.yaw; g.rotation.x = s.pitch; prop.rotation.z += dt * (2 + s.speed * 1.5); beam.visible = !!s.driven;
+    tur.rotation.y = s.gunner ? (s.gyaw || 0) - s.yaw : 0;   // Kugel dreht sich zum Blick des Schützen
+    guns.rotation.x = s.gunner ? Math.max(-1.2, Math.min(0.4, (s.gpitch || 0) - s.pitch)) : 0;
+  };
   return root;
 }
 // Jetski-Scooter: schlanker roter Rumpf mit weißem Streifen, Lenker, Sitz, zwei Kufen und einer leuchtenden Düse hinten
