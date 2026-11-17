@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME, ULTI, ULTIS,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME, ULTI, ULTIS, eyeHeight,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -398,8 +398,8 @@ function fire(p, d, aim) {
   p.invisT = 0;   // wer schießt, ist nicht mehr getarnt (Sepia-Ulti)
   const def = wdef(w), S = SUITS[p.suit];
   w.ammo--; p.nextFire = G.time + 1 / def.rate;
-  const o = S.r + 0.5;
-  for (let i = 0; i < def.pellets; i++) spawnProj(p, w.id, p.x + d[0] * o, p.y + d[1] * o, p.z + d[2] * o, d, RARITY[w.rar].mul * S.dmg, 0, aim, def);
+  const o = S.r + 0.5, eye = eyeHeight(p.suit);   // Schuss startet auf Augenhöhe (genau hinter dem Fadenkreuz)
+  for (let i = 0; i < def.pellets; i++) spawnProj(p, w.id, p.x + d[0] * o, p.y + eye + d[1] * o, p.z + d[2] * o, d, RARITY[w.rar].mul * S.dmg, 0, aim, def);
   if (G.mode !== 'exp') heatUp(p, w, def);
   if (w.ammo === 0) startReload(p);
 }
@@ -957,7 +957,7 @@ function botStep(b, dt) {
       // bots only half-predict where you are going, so moving targets are harder for them to hit.
       // Hitscan trifft sofort: dann zielen Bots dorthin, wo du gerade eben warst (Reaktionszeit), sonst wären sie zu gut.
       const lead = def.hitscan ? -(0.08 + rnd() * 0.15) : tt * (0.3 + rnd() * 0.4);
-      const px = tgt.x + (tgt.vx || 0) * lead - b.x, py = tgt.y + (tgt.vy || 0) * lead - b.y, pz = tgt.z + (tgt.vz || 0) * lead - b.z;
+      const px = tgt.x + (tgt.vx || 0) * lead - b.x, py = tgt.y + (tgt.vy || 0) * lead - (b.y + eyeHeight(b.suit)), pz = tgt.z + (tgt.vz || 0) * lead - b.z;   // von Augenhöhe aus zielen (da startet der Schuss)
       const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
       fire(b, [px / pl + (rnd() + rnd() - 1) * e, py / pl + (rnd() + rnd() - 1) * e, pz / pl + (rnd() + rnd() - 1) * e]);
       b.burst++;

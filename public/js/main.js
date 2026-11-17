@@ -1,7 +1,7 @@
 // Undernite - browser client: networking, input, camera, entity sync, effects.
 import * as THREE from 'three';
 import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREATURES, CREATURE_IDS, SURFACE, dirFrom, segSphere, FINISHER, DEEP,
-  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf, modDef, DRAW_TIME, ULTIS, SUIT_ORDER } from './shared.js';
+  creatureR, FISH, BOSSES, EXP_BOAT, LAMPS, catchFromNet, catchName, catchRate, deepGlow, SHOT_CHARGE, upMul, REEF_HITBOX, HEAT, GADGETS, gadgetOf, modDef, DRAW_TIME, ULTIS, SUIT_ORDER, eyeHeight } from './shared.js';
 // gekaufte Verbesserungen aus dem Perlen-Shop (kommen mit der Lobby-Nachricht). Wirken nur im Battle Royale.
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
@@ -1007,7 +1007,8 @@ function aimDir() {
   for (const e of players.values()) if (e.id !== myId) test(e.x, e.y, e.z, SUITS[e.suit].r, [1, e.id]);
   for (const [id, c] of creatures) test(c.x, c.y, c.z, c.r, [3, id]);
   D = Math.max(D, camDist + 5);
-  const ax = cp.x + cd[0] * D - me.x, ay = cp.y + cd[1] * D - me.y, az = cp.z + cd[2] * D - me.z, l = Math.hypot(ax, ay, az) || 1;
+  // Richtung vom Schuss-Start (Augenhöhe, wie im Server) zum Punkt unter dem Fadenkreuz
+  const ax = cp.x + cd[0] * D - me.x, ay = cp.y + cd[1] * D - (me.y + eyeHeight(mySuit)), az = cp.z + cd[2] * D - me.z, l = Math.hypot(ax, ay, az) || 1;
   return [ax / l, ay / l, az / l];
 }
 let aimAt = null;
@@ -1391,7 +1392,7 @@ function updateCamera(dt) {
     const v = you.veh ? vehicles.get(you.veh) : null;
     want = v ? VEHICLES[v.type].cam : SUITS[mySuit].cam;
     if (v && v.type === 'sub') { side = 0; up = 2.2; }
-    tx = me.x; ty = me.y + (SUITS[mySuit].mech ? 1.4 : 0.5); tz = me.z;
+    tx = me.x; ty = me.y + eyeHeight(mySuit); tz = me.z;
     // swimming at the surface: head out of the water, the camera looks across the sea
     if (SURFACE - me.y < 3.2) { headUp += (1 - headUp) * Math.min(1, dt * 3); } else headUp += (0 - headUp) * Math.min(1, dt * 4);
     // Ego-Perspektive: Kamera fährt in den Kopf (Abstand 0), nicht zur Seite, nicht nach oben

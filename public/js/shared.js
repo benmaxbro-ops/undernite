@@ -135,6 +135,9 @@ export const GADGETS = [
   { k: 'zap',    suit: 'hammerhai', name: 'Elektroschocker',  price: 400, cool: 22, range: 8, dmg: 10, time: 1.8,
     desc: 'Ein Stromstoß: Gegner bis 8 m sind 1,8 Sekunden gelähmt (langsam, können nicht schießen) und bekommen 10 Schaden.' },
 ];
+// Augenhöhe über der Körpermitte: hier sitzt die Kamera in der Ego-Sicht – und hier starten auch die Schüsse,
+// damit sie genau durchs Fadenkreuz fliegen (der Goliath sitzt hoch oben in der Kuppel)
+export const eyeHeight = (suit) => SUITS[suit] && SUITS[suit].mech ? 1.4 : 0.5;
 export const gadgetOf = (suit) => GADGETS.findIndex(g => g.suit === suit);   // Nummer des Gadgets dieses Tauchers (-1 = keins)
 
 // ---------- Ultis (Battle Royale, Taste 4) ----------
