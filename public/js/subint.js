@@ -11,6 +11,7 @@ export const SUBROOM = {
   eyeStand: 0.5,             // Augenhöhe im Stehen
   walk: { x: 0.85, z0: -1.7, z1: 2.0 },   // so weit kann man laufen (links/rechts, vorne/hinten)
   walkSpeed: 1.6,            // Meter pro Sekunde beim Laufen im U-Boot
+  hatch: [0, 1.25],          // x, z der Bodenluke zur MG-Kugel
 };
 
 const R = 1.44, FLOOR = -0.95;
@@ -60,6 +61,10 @@ export function makeSubInterior() {
   for (let x = -0.9; x <= 0.9; x += 0.15) add(g, BOX, steel, x, FLOOR, 0.05).scale.set(0.02, 0.03, 4.3);
   for (let z = -2.1; z <= 2.2; z += 0.3) add(g, BOX, steel, 0, FLOOR + 0.005, z).scale.set(1.9, 0.02, 0.02);
 
+  // Bodenluke zur MG-Kugel (Ring mit Handrad im Boden)
+  add(g, new THREE.TorusGeometry(0.3, 0.04, 8, 28), steel, SUBROOM.hatch[0], FLOOR + 0.02, SUBROOM.hatch[1]).rotation.x = Math.PI / 2;
+  add(g, new THREE.CircleGeometry(0.28, 24), dark, SUBROOM.hatch[0], FLOOR + 0.015, SUBROOM.hatch[1]).rotation.x = -Math.PI / 2;
+  valve(g, red, SUBROOM.hatch[0], FLOOR + 0.05, SUBROOM.hatch[1], 0, 0.1).rotation.x = -Math.PI / 2;
   // Pilotensitz
   const [sx, sz] = SUBROOM.seat;
   add(g, CYL, steel, sx, FLOOR + 0.2, sz).scale.set(0.05, 0.4, 0.05);

@@ -89,7 +89,8 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Duo-Modus** (Häkchen "Duo" in der Lobby): alle spielen in Zweier-Teams, auch die Bots. Teamkameraden starten nebeneinander,
   können sich nicht verletzen, haben ein grünes Namensschild und sind auf dem Sonar ein grüner Punkt. Das letzte Team gewinnt.
   **2-Mann-U-Boot:** Fährt dein Teamkamerad ein U-Boot, steigst du mit **E** unten in die Glaskugel mit zwei MGs und schießt, während er fährt.
-  Mit **B** kletterst du aus der Kugel ins U-Boot (herumlaufen, Periskop) und mit **B** wieder zurück.
+  Mit **B** kletterst du aus der Kugel ins U-Boot (herumlaufen, Periskop) und mit **B** wieder zurück – oder am Sitz mit **B** ans Steuer.
+  **Auch allein:** Als Fahrer stehst du auf (B) und kletterst an der Bodenluke mit **K** in die Kugel. Von unten (unter dem U-Boot) steigst du mit **E** direkt in die Kugel.
 - **Perlen 🦪:** Am Rundenende gibt es 50 pro Kill, 10 pro überlebter Minute und 300 / 150 / 75 für Platz 1–3.
   Sie werden unter deinem Namen gespeichert (`saves/battleroyale.json`), getrennt vom Expeditions-Geld.
 - **Perlen-Shop** (Knopf oben rechts in der Lobby): Verbesserungen mit je 3 Stufen – Schnellladen, Rückstoßdämpfer,

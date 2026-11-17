@@ -123,6 +123,15 @@ const cockpit = makeCockpit(); cockpit.visible = false; cockpit.scale.setScalar(
 const subIn = { stand: false, peri: false, gunIn: false, x: SUBROOM.seat[0], z: SUBROOM.seat[1] };   // peri = schaut gerade durchs Periskop
 // Periskop: up = so hoch über dem U-Boot ist die Linse, fov = Zoom (kleiner = näher), reach = so nah muss man dran stehen
 const PERI = { up: 3.2, fov: 28, reach: 0.65, pos: [0, 0.45] };
+const nearHatch = () => subIn.stand && Math.hypot(subIn.x - SUBROOM.hatch[0], subIn.z - SUBROOM.hatch[1]) < 0.6;
+// Platz im U-Boot wechseln (gleich hier im Browser umstellen, damit nichts ruckelt; der Server bestätigt es)
+function switchSeat(to) {
+  const v = you && you.veh ? vehicles.get(you.veh) : null; if (!v) return;
+  send({ t: 'seat', s: to });
+  if (to === 'gun') { v.driver = 0; v.gunner = myId; subIn.stand = false; subIn.gunIn = false; subIn.peri = false; }
+  else { v.gunner = 0; v.driver = myId; me.x = v.x; me.y = v.y; me.z = v.z; me.hyaw = v.yaw; subIn.gunIn = false; subIn.stand = false; firstPerson = true; }   // im Cockpit bleiben
+  sfx.noise(0.35, 500, 1, 0.3, 'lowpass', 150);
+}
 const nearPeri = () => subIn.stand && Math.hypot(subIn.x - PERI.pos[0], subIn.z - PERI.pos[1]) < PERI.reach;   // x, z = wo man im U-Boot steht
 let subRoom = null;   // der Innenraum (wird beim ersten Einsteigen gebaut)
 // bist du gerade in der Ego-Sicht in deinem U-Boot? Dann gibt es das U-Boot zurück, sonst null
@@ -716,6 +725,8 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (phase !== 'play' || !you || !you.alive) return;
   if (e.code === 'KeyV') { firstPerson = !firstPerson; if (!firstPerson) subIn.stand = false; return; }   // Ego-Perspektive an/aus
+  if (e.code === 'KeyK' && inSubFP() && nearHatch() && !myGunSub()) { const v = inSubFP(); if (!v.gunner) { switchSeat('gun'); return; } }   // Fahrer: durch die Bodenluke in die Kugel
+  if (e.code === 'KeyB' && myGunSub() && subIn.gunIn && nearSeat()) { const v = myGunSub(); if (!v.driver) { switchSeat('drive'); return; } }   // Schütze im U-Boot: am Sitz ans Steuer
   if (e.code === 'KeyB' && myGunSub()) {   // Schütze: aus der Kugel ins U-Boot klettern und zurück
     subIn.gunIn = !subIn.gunIn; subIn.peri = false; subIn.stand = subIn.gunIn; subIn.x = 0; subIn.z = 0.9;
     sfx.noise(0.3, 500, 1, 0.3, 'lowpass', 150); return;
@@ -1111,7 +1122,9 @@ function computePrompt() {
   if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
   const ft = finTarget(); if (ft) return ['G', `Finisher: ${ft.name}`];
   if (myGunSub() && !subIn.gunIn) return ['B', 'Aus der Kugel ins U-Boot klettern'];
+  if (myGunSub() && subIn.gunIn && nearSeat() && !myGunSub().driver) return ['B', 'Ans Steuer setzen'];
   if (myGunSub() && subIn.gunIn && !subIn.peri && !nearPeri()) return ['B', 'Zurück in die MG-Kugel'];
+  if (inSubFP() && !myGunSub() && nearHatch() && !inSubFP().gunner) return ['K', 'Durch die Luke in die MG-Kugel'];
   if (inSubFP()) return subIn.peri ? ['P', 'Periskop einfahren'] : subIn.stand ? (nearPeri() ? ['P', 'Durchs Periskop schauen'] : nearSeat() ? ['B', 'Hinsetzen und steuern'] : null) : ['B', 'Aufstehen und im U-Boot umsehen'];
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
@@ -1120,7 +1133,8 @@ function computePrompt() {
   for (const p of pickups.values()) if (p.k === 'w') { const d = d3(p); if (d < S.r + 3.5 && d < bd) { bd = d; best = ['E', `${WEAPONS[p.wid].name} (${RARITY[p.rar].name}) ${you.w.includes(0) ? 'aufheben' : 'tauschen'}`]; } }
   crates.forEach((c) => { if (!c.userData.isOpen) { const d = d3(c.position); if (d < S.r + 4.5 && d < bd) { bd = d; best = ['E', 'Truhe öffnen']; } } });
   if (!S.mech) for (const v of vehicles.values()) { const d = d3(v) - (v.type === 'sub' ? 2 : 0); if (d >= S.r + 4.5 || d >= bd) continue;
-    if (!v.driver) { bd = d; best = ['E', `${VEHICLES[v.type].name} steuern`]; }
+    if (!v.driver && !v.gunner) { bd = d; best = v.type === 'sub' && me.y < v.y - 1.2 ? ['E', 'Unten in die MG-Kugel steigen'] : ['E', `${VEHICLES[v.type].name} steuern`]; }
+    else if (!v.driver && v.type === 'sub') { bd = d; best = ['E', 'Mini-U-Boot steuern']; }
     else if (v.type === 'sub' && !v.gunner && isMate(v.driver)) { bd = d; best = ['E', 'Als Schütze in die MG-Kugel steigen']; } }
   return best;
 }

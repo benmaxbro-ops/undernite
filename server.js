@@ -786,7 +786,8 @@ function interact(p) {
   G.crates.forEach((c, i) => { if (!c.open) { const d = dist(p, c); if (d < S.r + 4.5 && d < bd) { bd = d; best = { k: 'crate', i }; } } });
   if (!S.mech && !p.grabbed) for (const v of G.vehicles.values()) {
     const d = dist(p, v) - (v.type === 'sub' ? 2 : 0); if (d >= S.r + 4.5 || d >= bd) continue;
-    if (!v.driver) { bd = d; best = { k: 'veh', v }; }
+    if (!v.driver && !v.gunner) { bd = d; best = { k: v.type === 'sub' && p.y < v.y - 1.2 ? 'gun' : 'veh', v }; }   // unter dem U-Boot: gleich in die MG-Kugel
+    else if (!v.driver && v.type === 'sub' && v.gunner && p.y >= v.y - 1.2) { bd = d; best = { k: 'veh', v }; }   // jemand sitzt schon in der Kugel: ans Steuer
     // 2-Mann-U-Boot: fährt dein Teamkamerad, kannst du unten in die MG-Kugel steigen
     else if (v.type === 'sub' && !v.gunner && p.team && (G.players.get(v.driver) || {}).team === p.team) { bd = d; best = { k: 'gun', v }; }
   }
@@ -1665,6 +1666,12 @@ wss.on('connection', (ws) => {
       case 'fin': if (p && p.alive) finisher(p, m.id); break;
       case 'slot': if (p && p.alive && [0, 1, 2].includes(m.i) && p.weapons[m.i] && m.i !== p.slot) { p.slot = m.i; p.reload = 0; p.nextFire = Math.max(p.nextFire, G.time + DRAW_TIME * upMul(p.up, 'draw') - 0.1); } break;   // Waffe ziehen braucht kurz Zeit
       case 'e': if (p) interact(p); break;
+      // im U-Boot den Platz wechseln: s = 'gun' (vom Steuer in die Kugel) oder 'drive' (aus der Kugel ans Steuer)
+      case 'seat': if (p && p.alive && p.veh) { const v = G.vehicles.get(p.veh);
+        if (v && v.type === 'sub') {
+          if (m.s === 'gun' && v.driver === p.id && !v.gunner) { v.driver = 0; v.gunner = p.id; }
+          else if (m.s === 'drive' && v.gunner === p.id && !v.driver) { v.gunner = 0; v.driver = p.id; p.x = v.x; p.y = v.y; p.z = v.z; }
+        } } break;
       case 'x': if (p && p.alive) struggle(p); break;
     }
   });
