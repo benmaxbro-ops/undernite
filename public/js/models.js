@@ -334,7 +334,9 @@ const GUN_WHITE = 0xf2f7fa, GUN_BLUE = 0x2fa8ff;
 const SIGHT_GLOW = 0x6dff8a;   // Farbe der Leuchtpunkte auf Kimme und Korn (grün wie echte Leuchtvisiere)
 // Aussehen der Waffen: body = Gehäuse (Kunststoff), metal = Stahlteile, grip = Gummigriff, bodyGlow = wie stark das Gehäuse
 // von selbst leuchtet (damit man es im Dunkeln noch erahnt). Die alten weißen Waffen: body 0xf2f7fa, bodyGlow 0.45
-export const GUN_LOOK = { body: 0x353c42, metal: 0x5d676f, grip: 0x1d2226, bodyGlow: 0.12 };
+// Echte Waffen-Optik: Rahmen aus mattem schwarz-grauem Polymer, Stahlteile in Gunmetal-Grau (brüniert), Griff mit Noppen-Gummi.
+// Nur die Kiemen sind weiß-blau (gills / gillEdge). brass = Messing der Bolzen im Magazin.
+export const GUN_LOOK = { body: 0x34383c, metal: 0x4c5359, grip: 0x1b1f22, bodyGlow: 0.06, gills: 0xf2f7fa, gillEdge: 0x2fa8ff, brass: 0xb8914a };
 // Spiegel-Umgebung für Metall (wird in main.js einmal erzeugt): oben helles Wasser, unten dunkel,
 // dazu zwei weiche helle Flecken (wie Lampen), damit Kanten und Rundungen Glanzlichter bekommen
 export const GUN_ENV = { tex: null };
@@ -427,10 +429,17 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   const metal = new THREE.MeshStandardMaterial({ color: L.metal, emissive: 0x0c1014, emissiveIntensity: 0.4, roughness: 0.28, metalness: 0.9, bumpMap: brushed(), bumpScale: 0.5, envMap: env, envMapIntensity: 1.1 });
   const gripM = new THREE.MeshStandardMaterial({ color: L.grip, emissive: 0x0a0d10, emissiveIntensity: 0.4, roughness: 0.85, metalness: 0.05, bumpMap: stipple(), bumpScale: 1.8, envMap: env, envMapIntensity: 0.15 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x15191d, emissive: 0x06090c, emissiveIntensity: 0.4, roughness: 0.6, metalness: 0.4, envMap: env, envMapIntensity: 0.4 });
-  const blue = new THREE.MeshStandardMaterial({ color: GUN_BLUE, emissive: GUN_BLUE, emissiveIntensity: 1.3, roughness: 0.3 });
+  // Früher leuchtend blaue Zierteile (Ringe, Bodenplatten, Knöpfe): jetzt dunkler, brünierter Stahl wie bei echten Waffen
+  const blue = new THREE.MeshStandardMaterial({ color: 0x2c3136, roughness: 0.38, metalness: 0.85, bumpMap: brushed(), bumpScale: 0.4, envMap: env, envMapIntensity: 0.9 });
+  // Kiemen: das Einzige in Weiß-Blau
+  const gillWhite = new THREE.MeshStandardMaterial({ color: L.gills, emissive: L.gills, emissiveIntensity: 0.25, roughness: 0.4 });
+  const gillEdge = new THREE.MeshStandardMaterial({ color: L.gillEdge, emissive: L.gillEdge, emissiveIntensity: 1.3, roughness: 0.3 });
+  const brassM = new THREE.MeshStandardMaterial({ color: L.brass, roughness: 0.3, metalness: 0.9, envMap: env, envMapIntensity: 1.0 });
+  const magBody = new THREE.MeshStandardMaterial({ color: 0x23272b, roughness: 0.7, metalness: 0.15, bumpMap: polymer(), bumpScale: 0.6, envMap: env, envMapIntensity: 0.3 });
   const gillIn = new THREE.MeshStandardMaterial({ color: 0x08233d, emissive: GUN_BLUE, emissiveIntensity: 0.15, roughness: 0.5 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x9fe4ff, emissive: GUN_BLUE, emissiveIntensity: 0.25, transparent: true, opacity: 0.55, roughness: 0.05 });
-  const fill = new THREE.MeshStandardMaterial({ color: 0x7fdcff, emissive: GUN_BLUE, emissiveIntensity: 1.6 });
+  // Linsen (Zielfernrohr, Visier): leicht getöntes Glas, spiegelt – leuchtet nicht
+  const glass = new THREE.MeshStandardMaterial({ color: 0x3a5560, transparent: true, opacity: 0.75, roughness: 0.05, metalness: 0.6, envMap: env, envMapIntensity: 1.4 });
+  const fill = new THREE.MeshStandardMaterial({ color: 0x2a2f34, roughness: 0.5, metalness: 0.6 });   // (früher leuchtende Druckanzeige)
   let tgt = g;   // wohin neue Teile kommen (normalerweise die Waffe selbst, beim Schlitten in dessen Gruppe)
   const part = (geo, mat, x = 0, y = 0, z = 0) => add(tgt, geo, mat, x, y, z);
   // Box von u0 bis u1 (vorne), v0 bis v1 (oben), Breite w, seitlich verschoben um x
@@ -442,27 +451,28 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   const flaps = [];   // Kiemen-Lamellen
   // Magazin: eine Gruppe, deren Ursprung das obere Ende ist (das Ende, das in der Waffe steckt); es zeigt nach unten (−y).
   // magFill leuchtet je nachdem, wie voll das Magazin ist.
-  const magFill = new THREE.MeshStandardMaterial({ color: 0x7fdcff, emissive: GUN_BLUE, emissiveIntensity: 1.6 });
+  const magFill = brassM;   // oben im Magazin schauen die Messing-Bolzen raus
   let mag = null;
   const makeMag = (kind, k = 1) => {
     const m = new THREE.Group(), at = (geo, mat, y, sx, sy, sz) => { const o = new THREE.Mesh(geo, mat); o.position.y = y; o.scale.set(sx, sy, sz); m.add(o); return o; };
     let len;
     if (kind === 'pistol') {          // flaches Magazin, steckt fast ganz im Griff, unten die blaue Bodenplatte
       len = 0.104;
-      at(RBOX, glass, -0.05, P.W * 0.55, 0.1, 0.03); at(RBOX, magFill, -0.05, P.W * 0.35, 0.09, 0.018);
+      at(RBOX, magBody, -0.05, P.W * 0.62, 0.1, 0.03); at(RBOX, magFill, -0.004, P.W * 0.4, 0.008, 0.02);   // Magazin aus Polymer, oben der erste Bolzen
       at(RBOX, blue, -0.101, P.W * 0.9, 0.009, 0.046);
     } else if (kind === 'rifle') {    // durchsichtige Druckpatrone mit Metallkappe
       len = 0.1 * k;
-      at(GUN_CYL_Y, glass, -0.045 * k, 0.018 * k, 0.09 * k, 0.018 * k); at(GUN_CYL_Y, magFill, -0.045 * k, 0.012 * k, 0.08 * k, 0.012 * k);
-      at(GUN_CYL_Y, metal, -0.095 * k, 0.02 * k, 0.012, 0.02 * k); at(GUN_CYL_Y, blue, -0.088 * k, 0.0205 * k, 0.004, 0.0205 * k);
+      at(RBOX, magBody, -0.045 * k, 0.026 * k, 0.09 * k, 0.04 * k).rotation.x = 0.12;   // Kastenmagazin (leicht gebogen)
+      at(RBOX, magBody, -0.095 * k, 0.03 * k, 0.012, 0.046 * k); at(RBOX, magFill, -0.003, 0.012 * k, 0.006, 0.03 * k);
+
     } else if (kind === 'magnet') { // Magnet-Gewehr: Hufeisen-Magnet, der vorne auf den Lauf gesetzt wird (er zeigt nach −y = nach vorne)
       len = 0.07;
       const arc = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.008, 10, 20, Math.PI), magFill); arc.position.y = -0.045; arc.rotation.z = Math.PI; m.add(arc);
       at(RBOX, metal, -0.022, 0.016, 0.03, 0.016); arc.position.x = 0;
-      for (const sx of [-1, 1]) { at(RBOX, glass, -0.02, 0.012, 0.03, 0.012).position.x = sx * 0.022; at(RBOX, blue, -0.006, 0.013, 0.006, 0.013).position.x = sx * 0.022; }
+      for (const sx of [-1, 1]) { at(RBOX, magBody, -0.02, 0.012, 0.03, 0.012).position.x = sx * 0.022; at(RBOX, blue, -0.006, 0.013, 0.006, 0.013).position.x = sx * 0.022; }
     } else {                          // dicke Patrone für die Werfer
       len = 0.15;
-      at(GUN_CYL_Y, glass, -0.065, P.R * 0.62, 0.13, P.R * 0.62); at(GUN_CYL_Y, magFill, -0.065, P.R * 0.45, 0.12, P.R * 0.45);
+      at(GUN_CYL_Y, metal, -0.065, P.R * 0.62, 0.13, P.R * 0.62); at(GUN_CYL_Y, magBody, -0.03, P.R * 0.64, 0.02, P.R * 0.64);   // Stahl-Patrone mit Gummiring
       at(GUN_CYL_Y, metal, -0.14, P.R * 0.68, 0.02, P.R * 0.68); at(GUN_CYL_Y, blue, -0.128, P.R * 0.69, 0.006, P.R * 0.69);
     }
     return { m, len };
@@ -486,14 +496,15 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       for (let k = 0; k < 3; k++) {                                                          // 3 Lamellen, die sich auffächern
         const hinge = new THREE.Group(); hinge.position.set(s * (sx + 0.002 + k * 0.0015), v, -(u + du * 0.3)); tgt.add(hinge);
         const len = du * (0.95 - k * 0.2), hh = h * (1 - k * 0.12);
-        const lam = add(hinge, GEO.box, white, 0, 0, len / 2); lam.scale.set(0.0025, hh, len);
-        const edge = add(hinge, GEO.box, blue, s * 0.0014, 0, len - 0.002); edge.scale.set(0.001, hh, 0.003);   // blaue Kante
+        const lam = add(hinge, GEO.box, gillWhite, 0, 0, len / 2); lam.scale.set(0.0025, hh, len);
+        const edge = add(hinge, GEO.box, gillEdge, s * 0.0014, 0, len - 0.002); edge.scale.set(0.001, hh, 0.003);   // blaue Kante
         flaps.push({ hinge, s, k });
       }
     }
   };
   // Druckanzeige: dunkles Fenster mit blauem Balken, der beim Komprimieren voll wird
   const chargeBar = (u0, u1, v, h, sx) => {
+    return;   // echte Waffen haben keine leuchtende Druckanzeige
     for (const s of [-1, 1]) {
       box(dark, u0, u1, v - h / 2, v + h / 2, 0.003, s * sx);
       const bar = box(fill, u0 + 0.003, u1 - 0.003, v - h * 0.3, v + h * 0.3, 0.003, s * (sx + 0.001));
@@ -629,7 +640,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       }
       muzzleAt = [0, 0, -(front + 0.42)];
     } else if (P.head === 'spear') {   // Elektro-Speer: Spulen, dann eine flache Klinge mit leuchtender Kante
-      const coilM = new THREE.MeshStandardMaterial({ color: 0x5ef2e0, emissive: 0x5ef2e0, emissiveIntensity: 1.8 });
+      const coilM = new THREE.MeshStandardMaterial({ color: 0xb87333, roughness: 0.35, metalness: 0.9 });   // Kupferspulen
       for (let i = 0; i < 5; i++) { const c = add(g, GEO.torus, coilM, 0, 0, -(front - 0.12 + i * 0.022)); c.scale.setScalar(R * 1.6); }
       const blade = part(KNUCKLE, metal, 0, 0, -(front + 0.17)); blade.scale.set(0.055, 0.011, 0.21);
       const edge = part(KNUCKLE, coilM, 0, 0, -(front + 0.17)); edge.scale.set(0.058, 0.004, 0.214);
@@ -662,7 +673,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     }
     // Drucktanks an der Seite (leuchten beim Komprimieren)
     for (const s of [-1, 1]) {
-      const t1 = part(GEO.zcyl, glass, s * R * 0.95, -R * 0.45, -L * 0.25); t1.scale.set(0.022, 0.022, L * 0.45);
+      const t1 = part(GEO.zcyl, metal, s * R * 0.95, -R * 0.45, -L * 0.25); t1.scale.set(0.022, 0.022, L * 0.45);   // Druckluftflasche aus Stahl
       const t2 = part(GEO.zcyl, fill, s * R * 0.95, -R * 0.45, -L * 0.25); t2.scale.set(0.014, 0.014, L * 0.42);
       chargeBars.push({ tank: t2 });
     }
@@ -727,7 +738,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     const n = add(g, new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xd8ffe0, wireframe: true }), 0, 0, mzp.z + 0.05); n.scale.setScalar(P.R * 0.6);
   }
   if (P.coil) {   // Magnet-Gewehr: violett leuchtende Spulen um den Lauf, vorne sitzt der Magnet (= das Magazin)
-    const coilM = new THREE.MeshStandardMaterial({ color: 0xb46bff, emissive: 0xb46bff, emissiveIntensity: 1.6 });
+    const coilM = new THREE.MeshStandardMaterial({ color: 0xb87333, roughness: 0.35, metalness: 0.9 });   // Kupferspulen
     for (let i = 0; i < 6; i++) add(g, GEO.torus, coilM, mzp.x, mzp.y, mzp.z + 0.06 + i * 0.03).scale.setScalar(0.02);
     seatMag('magnet', 1, mzp.x, mzp.y, mzp.z + 0.005, Math.PI / 2);   // zeigt nach vorne
     g.userData.mag = mag; g.userData.freshOnly = true;   // Nachladen: es gibt kein altes Magazin, nur einen neuen Magneten vom Rücken
