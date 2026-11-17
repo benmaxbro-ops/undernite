@@ -20,4 +20,3 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 - 3D-Modelle, Musik
 - Im Internet spielen
-- Einführung für neue Spieler

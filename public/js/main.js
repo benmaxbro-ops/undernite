@@ -19,6 +19,8 @@ import { makeLensPass } from './lens.js';
 import { makeMechViewArms, makeCockpit, makeMechReloadHand } from './mech.js';
 import { makeSubInterior, SUBROOM } from './subint.js';
 import { initTouch, isTouch } from './touch.js';
+import { makeTutorial } from './tutorial.js';
+const tut = makeTutorial(); let tutShots = 0;   // Einführung für neue Spieler (tutorial.js)
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -779,6 +781,7 @@ document.getElementById('pause').addEventListener('click', lock);
 hud.initBrShop((k) => send({ t: 'brbuy', k }));   // Perlen-Shop in der Lobby
 hud.initLoadout((m) => send({ t: 'load', ...m }));   // Ausrüstungs-Fenster pro Taucher
 for (const id of ['setBtnLobby', 'setBtnPause']) document.getElementById(id).addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
+document.getElementById('tutBtn').addEventListener('click', (e) => { e.stopPropagation(); tut.restart(); hud.banner('Die Einführung startet in der nächsten Runde', 2); });
 addEventListener('keydown', (e) => { if (e.code === 'Escape') closeSettings(); });
 
 addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) scoping = false; });
@@ -1090,6 +1093,7 @@ function tryFire(now) {
   shoot(v, w);
 }
 function shoot(v, w) {
+  tutShots++;
   view.lastShotT = performance.now();   // nach einem Schuss nicht gleich wieder Brustschwimmen
   const d = aimDir().map(x => +x.toFixed(4));
   send(aimAt ? { t: 'f', d, a: aimAt } : { t: 'f', d });
@@ -1526,6 +1530,7 @@ function frame(now) {
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
     promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }
     if (mode === 'exp' && you && you.x) { if (held >= you.x.bagL.length || !you.alive) held = -1; updateTorch(dt, SURFACE - fx.y); updateAquarium(dt); }
+    tut.update(mode !== 'exp' && !!(you && you.alive) && !myFin, { x: me.x, z: me.z, yaw: camYaw, shots: tutShots, dt });
     hud.update({ you, zone, wave: waveInfo, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y + depthOffset(), suit: mySuit, outside, time, dt,
       lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null, held });
     let marks = [];

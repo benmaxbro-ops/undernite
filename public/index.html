@@ -67,6 +67,14 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #touch .tbtns b{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 20px var(--display);color:#fff;background:rgba(4,22,34,.55);border:2px solid rgba(255,255,255,.3);user-select:none;-webkit-user-select:none}
 #touch .tbtns b.big{grid-column:span 2;width:120px;border-radius:30px;background:rgba(255,90,74,.45)}
 #touch .tbtns b.on,#touch .tbtns b.lock{background:rgba(94,242,224,.5)}
+/* Einführung (tutorial.js) unten in der Mitte, Tasten-Übersicht (F1) */
+#tut{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);z-index:15;max-width:640px;padding:12px 18px;border-radius:12px;background:rgba(4,22,34,.82);border:1px solid var(--glow);color:var(--ink);font:500 17px var(--display);text-align:center;box-shadow:0 0 18px rgba(94,242,224,.25)}
+#tut.hidden{display:none} #tut small{display:block;color:var(--glow);font-size:12px;letter-spacing:.12em;margin-bottom:4px}
+#tut button{margin-top:8px;padding:4px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:#9fc;font:600 12px var(--display);cursor:pointer}
+#tut.pop{animation:tutPop .35s ease-out} @keyframes tutPop{from{transform:translateX(-50%) scale(.9);opacity:.3}}
+#tut kbd,#keyhelp kbd{display:inline-block;padding:1px 7px;border-radius:5px;background:#e8fbff;color:#03222a;font:700 13px var(--display)}
+#keyhelp{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;padding:16px 22px;border-radius:14px;background:rgba(3,16,26,.94);border:1px solid var(--line);color:var(--ink);font:500 14px var(--display)}
+#keyhelp.hidden{display:none} #keyhelp h3{margin:0 0 8px;color:var(--glow)} #keyhelp td{padding:3px 10px}
 #peri{position:absolute;left:50%;top:9%;transform:translateX(-50%);font:600 15px var(--display);letter-spacing:.2em;color:#cfe;text-shadow:0 0 6px #000;z-index:6}
 #peri.hidden{display:none}
 #scope{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .12s;
@@ -279,6 +287,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
       <label class="rng" id="botsRow">Bots <input type="range" id="bots" min="0" max="23" value="11"><b class="num" id="botsN">11</b></label>
       <button class="go" id="go">ABTAUCHEN</button>
       <button class="setBtn" id="setBtnLobby">⚙ Einstellungen</button>
+      <button class="setBtn" id="tutBtn">🎓 Einführung nochmal</button>
       <div class="hint" id="lan"></div>
     </div>
   </div>
