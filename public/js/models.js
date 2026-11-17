@@ -6,7 +6,7 @@ import { makeRealFish, makeRealShark, makeRealOcto, makeRealBoss } from './creat
 import { makeShip } from './ship.js';
 import { buildRealDiver } from './diver.js';
 import { buildMech } from './mech.js';
-import { polymer, brushed, stipple, neoprene } from './textures.js';
+import { polymer, brushed, stipple, neoprene, steelWear, steelRough, polyWear, engraving } from './textures.js';
 
 const TAU = Math.PI * 2;
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1, ...o });
@@ -412,7 +412,7 @@ function profileGeo(key, pts, depth, holes = []) {
   const sh = new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v)));
   for (const h of holes) sh.holes.push(new THREE.Path(h.map(([u, v]) => new THREE.Vector2(u, v))));
   const bev = Math.min(0.005, depth * 0.22), d = Math.max(0.002, depth - bev * 2);
-  const geo = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: true, bevelThickness: bev, bevelSize: bev * 0.7, bevelSegments: 2, curveSegments: 8 });
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: true, bevelThickness: bev, bevelSize: bev * 0.7, bevelSegments: 4, curveSegments: 10 });   // mehr Rundungsstufen = sauberere Glanzkanten
   geo.translate(0, 0, -d / 2);
   geo.rotateY(Math.PI / 2);            // Umriss-u zeigt jetzt nach vorne (-z), die Dicke liegt quer (x)
   GUN_GEO.set(key, geo);
@@ -425,12 +425,20 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   // Materialien (jede Waffe eigene, weil Kiemen und Druckanzeige leuchten). Farben: GUN_LOOK oben.
   // Gehäuse: matter Kunststoff mit feiner Körnung · Metall: gebürsteter Stahl, spiegelt die Umgebung · Griff: Gummi mit Noppen
   const L = GUN_LOOK, env = GUN_ENV.tex;
-  const white = new THREE.MeshStandardMaterial({ color: L.body, emissive: L.body, emissiveIntensity: L.bodyGlow, roughness: 0.6, metalness: 0.2, bumpMap: polymer(), bumpScale: 0.5, roughnessMap: polymer(), envMap: env, envMapIntensity: 0.35 });
-  const metal = new THREE.MeshStandardMaterial({ color: L.metal, emissive: 0x0c1014, emissiveIntensity: 0.4, roughness: 0.28, metalness: 0.9, bumpMap: brushed(), bumpScale: 0.5, envMap: env, envMapIntensity: 1.1 });
+  // Polymer mit Schrammen (polyWear) · Stahl mit Kratzern und blank gescheuerten Stellen (steelWear / steelRough)
+  const white = new THREE.MeshStandardMaterial({ color: L.body, emissive: L.body, emissiveIntensity: L.bodyGlow, map: polyWear(), roughness: 0.62, metalness: 0.2, bumpMap: polymer(), bumpScale: 0.5, roughnessMap: polymer(), envMap: env, envMapIntensity: 0.35 });
+  const metal = new THREE.MeshStandardMaterial({ color: L.metal, emissive: 0x0c1014, emissiveIntensity: 0.4, map: steelWear(), roughness: 0.42, roughnessMap: steelRough(), metalness: 0.9, bumpMap: brushed(), bumpScale: 0.5, envMap: env, envMapIntensity: 1.1 });
   const gripM = new THREE.MeshStandardMaterial({ color: L.grip, emissive: 0x0a0d10, emissiveIntensity: 0.4, roughness: 0.85, metalness: 0.05, bumpMap: stipple(), bumpScale: 1.8, envMap: env, envMapIntensity: 0.15 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x15191d, emissive: 0x06090c, emissiveIntensity: 0.4, roughness: 0.6, metalness: 0.4, envMap: env, envMapIntensity: 0.4 });
   // Früher leuchtend blaue Zierteile (Ringe, Bodenplatten, Knöpfe): jetzt dunkler, brünierter Stahl wie bei echten Waffen
-  const blue = new THREE.MeshStandardMaterial({ color: 0x2c3136, roughness: 0.38, metalness: 0.85, bumpMap: brushed(), bumpScale: 0.4, envMap: env, envMapIntensity: 0.9 });
+  const blue = new THREE.MeshStandardMaterial({ color: 0x2c3136, map: steelWear(), roughness: 0.45, roughnessMap: steelRough(), metalness: 0.85, bumpMap: brushed(), bumpScale: 0.4, envMap: env, envMapIntensity: 0.9 });
+  // Gravur-Schild: Schrift, die in die Seite der Waffe geprägt ist. u0..u1 = von hinten nach vorne, v = Höhe, h = Schrifthöhe, x = Seite (+ rechts, − links)
+  const engrave = (text, u0, u1, v, h, x) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(u1 - u0, h), new THREE.MeshStandardMaterial({ map: engraving(text), transparent: true, depthWrite: false, roughness: 0.5, metalness: 0.4, polygonOffset: true, polygonOffsetFactor: -2 }));
+    m.position.set(x, v, -(u0 + u1) / 2); m.rotation.y = x > 0 ? Math.PI / 2 : -Math.PI / 2; tgt.add(m); return m;
+  };
+  // Stift / Schraube quer durch die Waffe (sieht man auf beiden Seiten)
+  const pin = (u, v, w, r = 0.0022) => { const p = part(GUN_CYL, metal, 0, v, -u); p.scale.set(r, r, w + 0.002); p.rotation.y = Math.PI / 2; return p; };
   // Kiemen: das Einzige in Weiß-Blau
   const gillWhite = new THREE.MeshStandardMaterial({ color: L.gills, emissive: L.gills, emissiveIntensity: 0.25, roughness: 0.4 });
   const gillEdge = new THREE.MeshStandardMaterial({ color: L.gillEdge, emissive: L.gillEdge, emissiveIntensity: 1.3, roughness: 0.3 });
@@ -549,6 +557,8 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     const tr = box(metal, 0.034, 0.04, t - 0.024, t - 0.002, W * 0.22); tr.rotation.x = 0.35;
     box(dark, -0.006, 0.004, 0.002, 0.012, 0.004, -W * 0.5);                                    // Trommel-Entriegelung links
     gills(3, 0.095, 0.022, cy + 0.0, 0.016, W * 0.3);                                           // Kiemen seitlich am Unterlauf
+    engrave('.44 HYDRO MAGNUM', 0.16, L - 0.02, cy + 0.017, 0.007, -P.br * 1.5 - 0.001);    // Gravur am Lauf links
+    pin(-0.02, cy + 0.02, W); pin(0.075, t + 0.01, W);
     sightAt = [0, top + 0.006]; rear = 0.05;
     muzzleAt = [0, cy + 0.012, -(L + 0.005)]; gripTop = t; gripW = W;
   } else if (P.kind === 'pistol') {
@@ -576,6 +586,8 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     // Auswurffenster rechts oben: dunkle Öffnung, darin sieht man das Laufende (Stahl)
     box(dark, 0.03, 0.075, H * 0.5, H + 0.001, W * 0.45, W * 0.3);
     box(metal, 0.035, 0.072, H * 0.62, H * 0.92, W * 0.35, W * 0.22);
+    engrave('UNDERNITE  P9-H', 0.005, 0.07, H * 0.3, 0.0075, -W / 2 - 0.0012);   // Gravur links auf dem Schlitten
+    engrave('9 mm HYDRO', 0.0, 0.03, H * 0.3, 0.0065, W / 2 + 0.0012);         // Gravur rechts
     for (let i = 0; i < 4; i++) box(dark, L - 0.075 + i * 0.006, L - 0.072 + i * 0.006, H * 0.2, H * 0.85, W + 0.002);   // vordere Griffrillen
     // Leuchtvisier wie bei echten Pistolen (Tritium): zwei grüne Punkte hinten auf der Kimme, einer vorne auf dem Korn
     const dotM = new THREE.MeshStandardMaterial({ color: SIGHT_GLOW, emissive: SIGHT_GLOW, emissiveIntensity: 2.2 });
@@ -600,6 +612,8 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       box(dark, 0.022, 0.03, t - 0.012, t - 0.002, 0.004, -W * 0.47);
       box(metal, -0.005, 0.03, -0.006, -0.002, 0.004, -W * 0.48);
       box(metal, 0.04, 0.05, -0.008, -0.003, 0.004, -W * 0.46);
+      pin(0.012, t - 0.004, W * 0.92); pin(0.062, t + 0.008, W * 0.9); pin(-0.018, t - 0.012, W * 0.92);   // Stifte im Rahmen
+      engrave('Nr. 04172', 0.075, 0.11, -0.019, 0.005, W * 0.37);   // Seriennummer vorne am Rahmen
     }
     if (!P.drum) seatMag('pistol', 1, 0, -0.016, -0.014, -0.207);   // schräg wie der Griff (der Revolver hat stattdessen eine Trommel)
     rear = 0.035;
@@ -686,6 +700,8 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     cock = { g: chG, at: new THREE.Vector3(-W / 2 - 0.03, H * 0.28, -front * 0.5), travel: front * 0.4 };
     sightAt = [0, P.scope ? H / 2 + 0.03 : H / 2 + 0.016];
     chargeBar(-back * 0.85, -back * 0.15, H * 0.15, 0.012, W / 2 + 0.002);
+    engrave('UN-17  KAL. WASSER  Nr. 0' + (311 + widx * 47), -back * 0.85, -back * 0.05, H * 0.12, 0.009, -W / 2 - 0.0012);   // Gravur links am Gehäuse
+    for (const [u, v] of [[-back * 0.5, -H * 0.38], [front * 0.25, -H * 0.38], [front * 0.6, H * 0.05]]) pin(u, v, W);
     gills(P.gills, front * 0.15, 0.03, H * 0.05, H * 0.75, W / 2 + 0.002);
     grip(-H / 2, W);
     muzzleAt = [0, bv, -(tip + 0.045)]; gripTop = -H / 2; gripW = W; support = [0, -H * 0.42, -(front + hg * 0.5)];
@@ -759,6 +775,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       side('fgrip', gripM, [[fu - 0.022, ft], [fu + 0.022, ft], [fu + 0.018, ft - 0.09], [fu + 0.012, ft - 0.1], [fu - 0.016, ft - 0.1], [fu - 0.02, ft - 0.09]], 0.034);
       box(metal, fu - 0.026, fu + 0.026, ft - 0.004, ft + 0.006, 0.04); }
     gills(P.gills, -L * 0.15, 0.03, R * 0.1, R * 0.9, R * 0.98);
+    engrave('ACHTUNG  DRUCK  —  WERFER M3', L * 0.22, L * 0.6, R * 0.5, 0.016, -R - 0.002);
     const chG = new THREE.Group(); g.add(chG); tgt = chG;
     box(metal, L * 0.0, L * 0.06, R * 0.1, R * 0.45, 0.02, -R - 0.004);
     const knob = part(GUN_CYL, blue, -R - 0.025, R * 0.3, -L * 0.03); knob.scale.set(0.011, 0.011, 0.03); knob.rotation.y = Math.PI / 2;

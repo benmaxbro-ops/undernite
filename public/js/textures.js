@@ -109,3 +109,42 @@ export const fanLattice = () => tex('fan', 256, (c, n) => {
   c.lineWidth = 1.2; c.globalAlpha = 0.8;
   for (let i = 0; i < 160; i++) { const x = R() * n, y = R() * n * 0.9; c.beginPath(); c.moveTo(x, y); c.lineTo(x + (R() - 0.5) * 22, y + (R() - 0.5) * 22); c.stroke(); }   // Quer-Verbindungen
 }, { cached: false });
+
+// ---------- Gebrauchsspuren für Waffen ----------
+// Stahl-Abnutzung (Farbe): brüniertes Gunmetal mit feinen, blank gescheuerten Kratzern und hellen Kanten-Flecken
+export const steelWear = () => tex('steelWear', 512, (c, n) => {
+  const R = seeded(61); c.fillStyle = '#c4c8cc'; c.fillRect(0, 0, n, n);
+  for (let i = 0; i < 1400; i++) { const v = 170 + R() * 60; c.fillStyle = `rgba(${v},${v + 2},${v + 4},0.25)`; c.fillRect(R() * n, R() * n, 1 + R() * 3, 1 + R() * 3); }   // feine Flecken
+  c.lineCap = 'round';
+  for (let i = 0; i < 260; i++) {   // Kratzer: kurze, leicht gebogene helle Linien
+    const x = R() * n, y = R() * n, a = R() * 6.28, l = 4 + R() * 30, w = 0.4 + R() * 0.8;
+    c.strokeStyle = `rgba(245,247,250,${0.25 + R() * 0.45})`; c.lineWidth = w;
+    c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + (R() - 0.5) * 4, y + Math.sin(a) * l * 0.5 + (R() - 0.5) * 4, x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke();
+  }
+  for (let i = 0; i < 30; i++) { const g = c.createRadialGradient(0, 0, 0, 0, 0, 1); const x = R() * n, y = R() * n, r = 6 + R() * 18;   // blank gescheuerte Stellen
+    c.save(); c.translate(x, y); c.scale(r, r * (0.3 + R() * 0.5)); g.addColorStop(0, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.beginPath(); c.arc(0, 0, 1, 0, 7); c.fill(); c.restore(); }
+}, { color: true, repeat: 2 });
+// Stahl-Rauheit: wo Kratzer sind, glänzt es mehr (dunkler = glatter)
+export const steelRough = () => tex('steelRough', 512, (c, n) => {
+  const R = seeded(61); c.fillStyle = '#7a7a7a'; c.fillRect(0, 0, n, n);
+  speckle(c, n, R, 50, 122);
+  c.lineCap = 'round';
+  for (let i = 0; i < 260; i++) { const x = R() * n, y = R() * n, a = R() * 6.28, l = 4 + R() * 30; c.strokeStyle = `rgba(30,30,30,0.6)`; c.lineWidth = 0.6 + R() * 0.8; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+}, { repeat: 2 });
+// Polymer: matt mit hellen Schrammen und abgegriffenen, glatteren Stellen
+export const polyWear = () => tex('polyWear', 512, (c, n) => {
+  const R = seeded(71); c.fillStyle = '#b9bcbf'; c.fillRect(0, 0, n, n);
+  for (let i = 0; i < 3000; i++) { const v = 160 + R() * 70; c.fillStyle = `rgba(${v},${v},${v},0.3)`; c.fillRect(R() * n, R() * n, 1, 1); }
+  for (let i = 0; i < 90; i++) { const x = R() * n, y = R() * n, a = R() * 6.28, l = 3 + R() * 14; c.strokeStyle = `rgba(235,235,235,${0.2 + R() * 0.3})`; c.lineWidth = 0.5 + R(); c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+}, { color: true, repeat: 2 });
+// Gravur: Schrift in den Stahl/Kunststoff geprägt (hell = Buchstaben). Wird als kleines Schild auf die Waffe gesetzt.
+const gravCache = new Map();
+export function engraving(text, w = 512, h = 64) {
+  const k = text + w; if (gravCache.has(k)) return gravCache.get(k);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d');
+  c.clearRect(0, 0, w, h); c.font = `600 ${Math.round(h * 0.62)}px "Bahnschrift", "Arial Narrow", sans-serif`; c.textBaseline = 'middle';
+  c.fillStyle = 'rgba(0,0,0,0.85)'; c.fillText(text, 6, h / 2 + 1.5);          // Schatten der Vertiefung
+  c.fillStyle = 'rgba(205,210,214,0.9)'; c.fillText(text, 5, h / 2);           // helle Kante
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  gravCache.set(k, t); return t;
+}
