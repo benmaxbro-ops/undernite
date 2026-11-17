@@ -12,8 +12,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 - [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 
-- [ ] **Mech noch viel detaillierter** (außen und innen)
-- [ ] **Mech-Cockpit:** Steuerhebel und Zeiger sind drin – noch mehr Bildschirme und Knöpfe möglich
 
 ## Neue Modi (Ideen von Ben, 17.11.)
 

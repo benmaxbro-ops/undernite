@@ -1323,7 +1323,8 @@ function updateViewModel(dt) {
   cockpit.visible = fpOn && !!(you && you.alive) && !!SUITS[mySuit].mech;
   const near = cockpit.visible ? 0.06 : 0.25;   // im kleinen Cockpit ist alles sehr nah an den Augen
   if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
-  if (cockpit.visible) cockpit.userData.update(dt, flow.f, flow.s, blurCam.x * 30, time);   // Steuerhebel kippen mit, Zeiger zittern
+  if (cockpit.visible) { cockpit.userData.update(dt, flow.f, flow.s, blurCam.x * 30, time);   // Steuerhebel kippen mit, Zeiger zittern
+    const cw = you.w[you.slot]; cockpit.userData.screen({ hp: you.hp, mhp: you.mhp, ammo: cw ? cw[2] : 0, mag: cw ? WEAPONS[cw[0]].mag : 0, ult: you.ul ? you.ul[0] : 0 }); }
   // Mech-Geräusche: Motor und Propeller je nach Tempo, Hydraulik bei jedem Schritt, Servos beim schnellen Drehen
   const inMech = phase === 'play' && !!(you && you.alive) && !!SUITS[mySuit].mech && mode !== 'exp';
   const mspd = Math.hypot(me.vx, me.vy, me.vz);

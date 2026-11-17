@@ -4,7 +4,9 @@
 //   · Scheinwerfer und Kamera an den Schultern.
 // Alles ist in "Mech-Einheiten" gebaut und am Ende verkleinert (MECH.scale).
 import * as THREE from 'three';
-import { brushed, polymer, neoprene } from './textures.js';
+import { brushed, polymer, neoprene, engraving } from './textures.js';
+// gelb-schwarze Warnstreifen (für Kanten und Gefahrenstellen am Mech)
+const STRIPES = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 32; const x = c.getContext('2d'); x.fillStyle = '#e3a51b'; x.fillRect(0, 0, 128, 32); x.fillStyle = '#15181b'; for (let i = -2; i < 10; i++) { x.beginPath(); x.moveTo(i * 16, 32); x.lineTo(i * 16 + 8, 32); x.lineTo(i * 16 + 24, 0); x.lineTo(i * 16 + 16, 0); x.closePath(); x.fill(); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
 
 // paint = Lackfarbe, foam = Auftriebsblock, glass = Kuppel (opacity = wie durchsichtig), cabin = Licht innen in der Kuppel
 // dome = Größe der Glaskuppel (nur der Kopf des Piloten schaut raus – kleiner = schwerer zu treffen)
@@ -65,6 +67,19 @@ export function buildMech(accent) {
   at(body, SPH, cabin, 0, dy, -0.15, D * 0.85);                                               // Licht innen
   at(body, SPH, glass, 0, dy, -0.15, D);                                                      // die Kuppel selbst
   at(body, SPH, rimMat(0xd8f2ff), 0, dy, -0.15, D + 0.005);                                   // Glanz am Rand der Kuppel
+  // ----- mehr Details: Warnstreifen, Nummer, Lüftungsgitter, Hydraulik-Schläuche, Antenne -----
+  const stripeM = new THREE.MeshStandardMaterial({ map: STRIPES, roughness: 0.5, metalness: 0.2 });
+  at(body, BOX, stripeM, 0, 0.5, -0.86, 0.8, 0.08, 0.02);                                       // Warnstreifen oben an der Brustplatte
+  for (const sx of [-1, 1]) at(body, BOX, stripeM, sx * 0.5, -0.62, -0.42, 0.35, 0.06, 0.02);  // Warnstreifen an den Hüften
+  const num = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.14), new THREE.MeshStandardMaterial({ map: engraving('G-07', 256, 64), transparent: true, depthWrite: false, roughness: 0.5 }));
+  num.position.set(0.18, 0.22, -0.885); num.rotation.y = Math.PI; num.rotation.x = 0.12; body.add(num);   // Nummer auf der Brust
+  for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) at(body, BOX, dark, sx * 0.98, 0.05 + i * 0.07, 0.15, 0.03, 0.025, 0.36);   // Lüftungsgitter an den Seiten
+  const hoseM = new THREE.MeshStandardMaterial({ color: 0x15181b, roughness: 0.7 });
+  for (const sx of [-1, 1]) {   // Hydraulik-Schläuche vom Rucksack zur Schulter
+    const c = new THREE.CatmullRomCurve3([new THREE.Vector3(sx * 0.7, 0.75, 0.5), new THREE.Vector3(sx * 1.05, 0.95, 0.3), new THREE.Vector3(sx * 1.2, 0.75, 0.05)]);
+    body.add(new THREE.Mesh(new THREE.TubeGeometry(c, 16, 0.045, 8), hoseM));
+  }
+  at(body, CYL, steel, 0.6, 1.55, 1.0, 0.015, 0.7, 0.015); at(body, SPH, new THREE.MeshStandardMaterial({ color: 0xff3a2a, emissive: 0xff3a2a, emissiveIntensity: 2 }), 0.6, 1.92, 1.0, 0.035);   // Antenne mit rotem Licht
   // ----- Rücken: Auftriebsblock, Propeller, Kamera -----
   const pack = new THREE.Group(); pack.position.set(0, 0.55, 0.95); body.add(pack);
   at(pack, RBOX, foam, 0, 0, 0, 1.8, 1.15, 0.9);
@@ -288,6 +303,21 @@ export function makeCockpit() {
     const nm = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0xd0302a })); nm.position.y = 0.018; nm.scale.set(0.004, 0.036, 0.002); needle.add(nm);
     needles.push(needle);
   }
+  // Bildschirm unten in der Mitte: Rumpf-Leben, Munition, Ulti (wird jedes Bild neu gemalt)
+  const scrC = document.createElement('canvas'); scrC.width = 256; scrC.height = 128; const scrX = scrC.getContext('2d'), scrT = new THREE.CanvasTexture(scrC);
+  const infoScr = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.11), new THREE.MeshBasicMaterial({ map: scrT, color: 0x5a5a5a }));   // color = Helligkeit (dunkler = weniger Blenden) infoScr.position.set(0, -0.24, -0.58); infoScr.rotation.x = -0.35; g.add(infoScr);
+  const scrFrame = new THREE.Mesh(RBOX, dark); scrFrame.position.set(0, -0.243, -0.586); scrFrame.rotation.x = -0.35; scrFrame.scale.set(0.245, 0.135, 0.01); g.add(scrFrame);
+  let scrKey = '';
+  g.userData.screen = (info) => {   // info = { hp, mhp, ammo, mag, ult }
+    const k = info ? [info.hp, info.ammo, info.ult].join('|') : ''; if (k === scrKey) return; scrKey = k;
+    const x = scrX; x.fillStyle = '#04140f'; x.fillRect(0, 0, 256, 128); if (!info) { scrT.needsUpdate = true; return; }
+    x.font = 'bold 20px monospace'; x.fillStyle = '#7dff9a';
+    x.fillText('RUMPF', 12, 30); x.fillText('MUN', 12, 70); x.fillText('ULTI', 12, 108);
+    const bar = (y, f, col) => { x.strokeStyle = '#2f6b4a'; x.strokeRect(80, y - 16, 160, 18); x.fillStyle = col; x.fillRect(82, y - 14, 156 * Math.max(0, Math.min(1, f)), 14); };
+    bar(30, info.hp / info.mhp, info.hp / info.mhp < 0.3 ? '#ff5a4a' : '#7dff9a'); bar(108, info.ult / 100, info.ult >= 100 ? '#ffc94d' : '#5ef2e0');
+    x.fillStyle = '#ffd36b'; x.fillText(info.ammo + ' / ' + info.mag, 90, 70);
+    scrT.needsUpdate = true;
+  };
   // warmes Licht innen (beleuchtet Kragen, Arme und Waffe)
   const light = new THREE.PointLight(MECH.cockpitLight, 0.7, 2.4, 2); light.position.set(0, 0.3, 0.15); g.add(light);   // leicht rote Beleuchtung innen
   g.userData.light = light;
