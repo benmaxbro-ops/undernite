@@ -521,7 +521,35 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     const trig = box(metal, 0.052, 0.058, top - 0.024, top - 0.002, w * 0.2); trig.rotation.x = 0.35;
   };
 
-  if (P.kind === 'pistol') {
+  if (P.kind === 'pistol' && P.drum) {
+    // ----- Revolver: Rahmen mit Fenster für die Trommel, schwerer Lauf mit Unterlauf, Hahn, runder Griff -----
+    const { L, W } = P, cy = 0.018, top = 0.056, t = -0.014;   // cy = Höhe der Trommelmitte
+    side('rframe', white, [[-0.034, t], [0.085, t], [0.085, top], [-0.016, top], [-0.03, top - 0.012], [-0.036, 0.02]], W,
+      [[[0.006, -0.008], [0.066, -0.008], [0.066, top - 0.01], [0.006, top - 0.01]]]);          // Fenster für die Trommel
+    tube(metal, 0.085, L, cy + 0.012, P.br * 1.5);                                              // Lauf
+    box(metal, 0.085, L - 0.004, cy - 0.012, cy + 0.01, W * 0.58);                              // Unterlauf (unter dem Lauf, ganz durch)
+    box(dark, 0.088, L - 0.006, cy + 0.024, cy + 0.03, W * 0.32);                               // Laufschiene oben
+    tube(dark, L - 0.0005, L + 0.0005, cy + 0.012, P.br * 0.8);                                 // Laufbohrung
+    box(metal, L - 0.02, L - 0.012, cy + 0.028, cy + 0.04, 0.004);                              // Korn
+    box(dark, -0.02, -0.012, top, top + 0.006, 0.006, -0.005); box(dark, -0.02, -0.012, top, top + 0.006, 0.006, 0.005);   // Kimme
+    const dotV = new THREE.MeshStandardMaterial({ color: SIGHT_GLOW, emissive: SIGHT_GLOW, emissiveIntensity: 2.2 });
+    add(g, KNUCKLE, dotV, 0, cy + 0.037, -(L - 0.016) - 0.004).scale.setScalar(0.0021);
+    // Hahn hinten oben (fährt beim Schuss kurz zurück)
+    const hamG = new THREE.Group(); g.add(hamG); tgt = hamG;
+    const ham = box(metal, -0.04, -0.028, top - 0.016, top + 0.004, 0.008); ham.rotation.x = -0.35;
+    box(dark, -0.048, -0.036, top - 0.002, top + 0.008, 0.01);                                  // geriffelter Hahnsporn
+    tgt = g;
+    cock = { g: hamG, at: new THREE.Vector3(0, top + 0.01, 0.045), travel: 0.008 };
+    // runder Griff und runder Abzugsbügel
+    side('rgrip', gripM, [[-0.036, t + 0.004], [0.012, t], [0.016, t - 0.03], [0.009, t - 0.07], [0.004, t - 0.094], [-0.018, t - 0.1], [-0.04, t - 0.09], [-0.049, t - 0.06], [-0.045, t - 0.03], [-0.04, t - 0.008]], W * 0.95);
+    side('rguard', white, [[0.012, t], [0.07, t], [0.064, t - 0.022], [0.048, t - 0.034], [0.026, t - 0.032], [0.012, t - 0.02]], W * 0.38,
+      [[[0.02, t - 0.004], [0.062, t - 0.004], [0.052, t - 0.024], [0.03, t - 0.026], [0.02, t - 0.018]]]);
+    const tr = box(metal, 0.034, 0.04, t - 0.024, t - 0.002, W * 0.22); tr.rotation.x = 0.35;
+    box(dark, -0.006, 0.004, 0.002, 0.012, 0.004, -W * 0.5);                                    // Trommel-Entriegelung links
+    gills(3, 0.095, 0.022, cy + 0.0, 0.016, W * 0.3);                                           // Kiemen seitlich am Unterlauf
+    sightAt = [0, top + 0.006]; rear = 0.05;
+    muzzleAt = [0, cy + 0.012, -(L + 0.005)]; gripTop = t; gripW = W;
+  } else if (P.kind === 'pistol') {
     const { L, H, W } = P;
     // Schlitten (oben, weiß): eine eigene Gruppe, damit er beim Schuss und beim Durchladen nach hinten fahren kann
     const slideG = new THREE.Group(); g.add(slideG); tgt = slideG;
@@ -739,15 +767,17 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   // Besonderheiten der neuen Waffen
   const mzp = g.userData.muzzle.position;
   if (P.drum) {   // Revolver: Trommel mit 6 Kammern auf einem Schwenkarm (crane), der zum Nachladen nach links ausklappt
-    const crane = new THREE.Group(); crane.position.set(-0.02, P.H * 0.45 - 0.02, -0.06); g.add(crane);
+    const RCY = 0.018, RZ = -0.036;   // Trommelmitte (Höhe und wie weit vorne) – passt ins Fenster des Rahmens
+    const crane = new THREE.Group(); crane.position.set(-0.02, RCY - 0.02, RZ); g.add(crane);
     add(crane, GEO.box, metal, 0.008, 0.008, 0).scale.set(0.006, 0.02, 0.05);                 // Schwenkarm
     const makeCyl = () => { const c = new THREE.Group();
       add(c, GUN_CYL, metal, 0, 0, 0).scale.set(0.024, 0.024, 0.05);
+      for (let i = 0; i < 6; i++) { const a = (i + 0.5) / 6 * TAU, fl = add(c, GEO.box, dark, Math.cos(a) * 0.0235, Math.sin(a) * 0.0235, -0.004); fl.scale.set(0.006, 0.006, 0.032); fl.rotation.z = a; }   // eingefräste Rillen
       for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; add(c, GUN_CYL, magFill, Math.cos(a) * 0.014, Math.sin(a) * 0.014, 0.026).scale.set(0.005, 0.005, 0.003); }   // leuchtende Kammern (voll)
       return c; };
     const cyl = makeCyl(); cyl.position.set(0.02, 0.02, 0); crane.add(cyl);
     const loose = makeCyl(); loose.visible = false; g.add(loose);                              // die Trommel in der Hand beim Nachladen
-    g.userData.revolver = { crane, cyl, loose, fill: magFill, seat: new THREE.Vector3(0, P.H * 0.45, -0.06) };
+    g.userData.revolver = { crane, cyl, loose, fill: magFill, seat: new THREE.Vector3(0, RCY, RZ) };
   }
   if (P.spikes) {   // Stachel-MG: Kranz aus Stacheln um die Mündung und ein Kühlmantel
     for (let i = 0; i < 6; i++) { const a = i / 6 * TAU, s = add(g, GEO.zcyl, metal, mzp.x + Math.cos(a) * 0.016, mzp.y + Math.sin(a) * 0.016, mzp.z + 0.01); s.scale.set(0.003, 0.003, 0.03); }
