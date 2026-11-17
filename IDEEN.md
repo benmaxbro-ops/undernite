@@ -18,5 +18,5 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Später
 
-- 3D-Modelle, Musik
+- 3D-Modelle (Musik ist fertig)
 - Im Internet spielen

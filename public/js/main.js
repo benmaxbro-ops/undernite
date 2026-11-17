@@ -20,6 +20,7 @@ import { makeMechViewArms, makeCockpit, makeMechReloadHand } from './mech.js';
 import { makeSubInterior, SUBROOM } from './subint.js';
 import { initTouch, isTouch } from './touch.js';
 import { makeTutorial } from './tutorial.js';
+import { Music } from './music.js';
 const tut = makeTutorial(); let tutShots = 0;   // Einführung für neue Spieler (tutorial.js)
 import './water.js';   // Wasser schluckt Farben (Rot zuerst) – muss geladen sein, bevor etwas gezeichnet wird
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -93,6 +94,7 @@ function setupPost(Q) {
 addEventListener('resize', resize); resize();
 
 const hud = new Hud(), sfx = new Sfx();
+const music = new Music(sfx); let lastShotT = -99, hurtT = 0;   // Musik (music.js); lastShotT = wann zuletzt geschossen wurde (für die Spannung)
 const dyn = new THREE.Group(); scene.add(dyn);
 let W = null, env = null;
 let waveInfo = null;   // Wellen-Modus: [Nummer, Pause-Sekunden oder −Haie übrig]
@@ -673,7 +675,7 @@ function onPrivate(e) {
       sfx.stow(); hud.banner(`Zu heiß! Waffe weggesteckt – ${e[1]} Sekunden warten …`, e[1]);
       break;
     }
-    case 'hurt': {
+    case 'hurt': { hurtT = time + 4;   // Musik wird für 4 Sekunden spannend
       if (e[4]) { hud.hurt(null); break; }
       const rel = Math.atan2(e[2] - me.x, -(e[3] - me.z)) + camYaw;
       hud.hurt(rel); sfx.hurt(); sfx.hitMe(e[1]); shake = Math.max(shake, 0.35);   // die Kugel geht durch dich durch
@@ -1105,7 +1107,7 @@ function tryFire(now) {
   shoot(v, w);
 }
 function shoot(v, w) {
-  tutShots++;
+  tutShots++; lastShotT = time;
   view.lastShotT = performance.now();   // nach einem Schuss nicht gleich wieder Brustschwimmen
   const d = aimDir().map(x => +x.toFixed(4));
   send(aimAt ? { t: 'f', d, a: aimAt } : { t: 'f', d });
@@ -1228,7 +1230,7 @@ let scoping = false, aim = 0, scoped = 0, swayT = 0, swayX = 0, swayY = 0;
 // Einstellungen anwenden (hier, weil FOV erst ab dieser Stelle existiert)
 onSettings((s) => {
   const Q = QUALITY[s.quality] || QUALITY.high;
-  sfx.setVolume(s.volume);
+  sfx.setVolume(s.volume); music.setVolume(s.music);
   renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); resize();
   setupPost(Q);                 // Leuchten und weiche Schatten
   setReefQuality(Q.reef);       // gilt ab der nächsten Welt (nächste Runde)
@@ -1529,6 +1531,11 @@ function lobbyCamera() {
 const blurCam = { x: 0, y: 0 };   // Bewegungsunschärfe (lens.js)
 let last = performance.now();
 function frame(now) {
+  // Musik: Spannung aus eigenen Schüssen, Treffern in der Nähe, wenig Leben, Schwarzwasser rückt vor, Wellen-Kampf
+  if (sfx.ctx) {
+    const fight = time - lastShotT < 5 ? 0.8 : 0, low = you && you.alive && you.hp < you.mhp * 0.35 ? 0.6 : 0, zoneMove = zone && zone[8] ? 0.5 : 0, wv = waveInfo && waveInfo[1] < 0 ? 0.7 : 0;
+    music.update(phase === 'play' ? 'play' : 'lobby', Math.min(1, Math.max(fight, low, zoneMove, wv, hurtT > time ? 0.8 : 0)));
+  }
   if (touch) { const on = phase === 'play'; if (touch.on !== on) { touch.on = on; touch.show(on); } }   // Handy-Knöpfe nur während einer Runde
   const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
   let outside = false;

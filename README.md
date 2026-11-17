@@ -31,6 +31,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | E am Rochen | **Torpedo-Rochen** (3 Stück neben Scootern): gleitet mit schlagenden Flügeln, nur vorwärts, **Linksklick = Torpedo** (40 Schaden, Explosion). Werte: `ray` in `VEHICLES` (shared.js) |
 | (Handy) | Auf Geräten mit Touchscreen erscheint eine **Handy-Steuerung**: links Joystick (schwimmen), rechts wischen (umschauen), Knöpfe für Feuer, Zielen, Hoch/Runter, R, E, Q, 4, Waffe wechseln, Ego-Sicht, Sprint. Werte: `TOUCH` in `touch.js` |
 | F1 | **Tasten-Übersicht** mit allen Tasten. Beim ersten Battle Royale führt eine **Einführung** Schritt für Schritt durch die Steuerung (jeder Schritt wartet, bis du es gemacht hast). In der Lobby: „Einführung nochmal“. Schritte: `TUT_STEPS` in `tutorial.js` |
+| (Musik) | Musik wird im Code erzeugt: in der Lobby ruhige Akkorde, im Spiel ein dunkler Tiefsee-Klang mit fernen Walrufen. Wird geschossen, getroffen oder rückt das Schwarzwasser vor, kommen Bass und Trommeln dazu. Lautstärke: Regler „Musik“ in den Einstellungen, Werte: `MUSIC` in `music.js` |
 | Leertaste / C | aufwärts / abwärts – ganz oben schaut dein Kopf aus dem Wasser (X geht auch abwärts) |
 | H | Waffe wegstecken / rausholen (weggesteckt: Hände frei, 8 % schneller) |
 | (Schwimmen) | Bewegungen laufen weich an, beim Loslassen gleitest du aus, beim Seitwärtsschwimmen neigt sich die Kamera leicht (Werte: `FLOW` in `main.js`) |
