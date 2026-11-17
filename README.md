@@ -105,7 +105,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
   **Im U-Boot** zeigt das Bord-Sonar alle Gegner bis 90 m durchgehend. Fährt jemand ein U-Boot, hört man dessen Sonar in der Nähe. Werte: `SONAR` und `SONAR_SND` in `hud.js`.
   Auf dem Radar siehst du auch, **was in der Nähe ist** (bis 90 m): gelbe Symbole für freie Fahrzeuge (Ellipse = U-Boot, Dreieck = Jetski,
   Raute = Rochen, Kreis = Scooter), orange Kästchen = Truhen, Punkte in Seltenheitsfarbe = Waffen, grünes/blaues Kreuz = Medikit/Schild.
-  Darunter steht die Liste „In der Nähe: …“. Ist nichts in Reichweite, zeigt ein Pfeil am Rand zum nächsten Fahrzeug und zur nächsten Truhe (mit Entfernung,  in ).
+  Darunter steht die Liste „In der Nähe: …“. Ist nichts in Reichweite, zeigt ein Pfeil am Rand zum nächsten Fahrzeug und zur nächsten Truhe (mit Entfernung, `NEAR` in `hud.js`).
 
 ## Modus: Tiefsee-Expedition (v0.2)
 
