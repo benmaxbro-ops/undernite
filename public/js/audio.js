@@ -25,6 +25,8 @@ export const UNDERWATER = {
 // duck geht von 0 (nichts wird leiser) bis 0.9 (alles andere fast stumm)
 //   harm  = Boom mit Obertönen: der tiefe Schlag wird angezerrt, so hört man ihn auch auf Laptop-Lautsprechern (die keine ganz tiefen Töne können)
 //   boomLen = wie lange der Boom nachdröhnt (Sekunden)
+// BOOM_BUS = wie laut der Boom-Weg (am Kompressor vorbei) insgesamt ist
+export const BOOM_BUS = 1.6;
 export const SHOT = { crack: 1.4, body: 3.1, boom: 3.0, mech: 1.6, duck: 0.6, wumms: 1.4, sub: 3.5, harm: 2.2, boomLen: 0.55, loud: 1.4 };
 // Holztür-Schlag bei jedem Schuss: vol = Lautstärke bei fremden Schüssen, own = bei eigenen,
 // range = bis so viele Meter weit hört man ihn, pitchSmall / pitchBig = Tonhöhe (kleiner = tiefer),
@@ -54,7 +56,7 @@ const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'sli
 export class Sfx {
   constructor() { this.ctx = null; this.depth = 30; this.vol = 0.8; }
   // Lautstärke aus den Einstellungen (0 … 1)
-  setVolume(v) { this.vol = v; if (this.master) this.master.gain.value = 0.9 * v; }
+  setVolume(v) { this.vol = v; if (this.master) this.master.gain.value = 0.9 * v; if (this.boomBus) this.boomBus.gain.value = BOOM_BUS * v; }
   setDepth(d) { this.depth = d; }   // main.js sagt jedes Bild, wie tief man ist (für die Gasblasen-Physik)
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
@@ -72,6 +74,9 @@ export class Sfx {
     const pre = ctx.createGain(); pre.gain.value = 0.5;   // Kurve geht von −2 bis +2
     comp.connect(makeup).connect(pre).connect(soft).connect(ctx.destination);
     this.master = ctx.createGain(); this.master.gain.value = 0.9 * this.vol; this.master.connect(comp);
+    // Boom-Weg am Kompressor vorbei: sonst drückt der helle Knall den Boom im selben Moment leiser (er wird "erdrückt").
+    // Er geht nur durch den weichen Begrenzer, damit nichts verzerrt. BOOM_BUS = Lautstärke dieses Wegs
+    this.boomBus = ctx.createGain(); this.boomBus.gain.value = BOOM_BUS * this.vol; this.boomBus.connect(pre);
     this.world = ctx.createGain(); this.world.connect(this.master);   // alles außer den eigenen Schüssen (wird beim Schuss kurz leiser)
     // noise buffer shared by all noise based sounds
     const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
@@ -171,7 +176,7 @@ export class Sfx {
     // 2) Körper: die Aufnahme durch die helle Unterwasser-Kette, leicht übersteuert
     this.sample(name, SHOT.body * vol, { plasma: PLASMA.ring, drive: true, bus: own ? 'shot' : '', rate: 1.08 });
     // 3) kurzer, straffer Bass-Schlag (nicht nachklingen lassen, sonst verschmiert es)
-    this.cur = this.master;
+    this.cur = this.boomBus;   // Boom-Schichten: am Kompressor vorbei
     this.tone(62 - big * 16, 32, 0.08 + big * 0.08, (1.2 + big * 0.4) * SHOT.boom * vol, 'sine');     // harter, dumpfer Schlag
     // Sub-Boom: sehr tiefer Stoß, der kurz nachwirkt (das spürt man mehr, als man es hört)
     this.tone(58 - big * 10, 34, 0.22 + big * 0.25, SHOT.sub * vol * (own ? 1 : 0.5) * (0.6 + big * 0.5), 'sine');
@@ -212,7 +217,7 @@ export class Sfx {
     const sh = ctx.createWaveShaper(); sh.curve = this.boomCurve;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = 0.9;   // nur die tiefen Obertöne behalten (sonst schnarrt es)
     const g = ctx.createGain(); g.gain.value = vol * 1.1;
-    o.connect(env).connect(sh).connect(lp).connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+    o.connect(env).connect(sh).connect(lp).connect(g).connect(this.boomBus || this.master); o.start(t); o.stop(t + dur + 0.05);
   }
   // Schuss wie ein Faustschlag gegen eine Holztür: echter Holzschlag (CC0, siehe QUELLEN.txt), tiefer gestimmt,
   // durch die Unterwasser-Kette mit Echo. Große Waffen: zuschlagende Tür, noch tiefer.
