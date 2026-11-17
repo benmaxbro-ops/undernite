@@ -26,6 +26,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | (Grafik) | Bodycam-Linse (ab Qualität „Niedrig“): schnelles Drehen verwischt das Bild, beim Zielen wird der Rand unscharf (`motion` und `focus` in `lens.js`) |
 | Maus im Goliath (Ego-Sicht) | **Freelook:** Die Maus dreht nur deinen Kopf im Cockpit – nach oben durch die Kuppel, zur Seite, nach unten. Mit **rechter Maustaste** dreht sich der ganze Mech zum Blick (ohne Zoom, ohne Kimme und Korn). Die Waffe hängt rechts außen am Roboter (`mechGun`), innen leuchtet es leicht rot, die Lampe (L) sind zwei Scheinwerfer links und rechts an der Kuppel (`MECH_LAMPS`). Werte: `FREELOOK` in `main.js` |
 | V im U-Boot | Ego-Sicht **im** U-Boot: du sitzt am Steuerpult (Sonar-Bildschirm, Steuerhorn, Gashebel) und schaust durch die Glaskuppel. **B** = aufstehen: dann bleibt das U-Boot stehen, du läufst mit W/A/S/D herum (Periskop, Leiter, Rohre, Ventile, Koje) und schaust dich um. Vorne am Sitz wieder **B** = hinsetzen. Werte: `SUBROOM` in `subint.js` |
+| E am Jetski | **Jetski-Scooter** (rot, 4 Stück neben den Scootern): viel schneller als der Scooter, aber nur vorwärts und mit weiten Kurven. Werte: `jetski` in `VEHICLES` (shared.js) |
 | Leertaste / C | aufwärts / abwärts – ganz oben schaut dein Kopf aus dem Wasser (X geht auch abwärts) |
 | H | Waffe wegstecken / rausholen (weggesteckt: Hände frei, 8 % schneller) |
 | (Schwimmen) | Bewegungen laufen weich an, beim Loslassen gleitest du aus, beim Seitwärtsschwimmen neigt sich die Kamera leicht (Werte: `FLOW` in `main.js`) |

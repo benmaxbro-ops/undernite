@@ -6,7 +6,7 @@ import { World, SUITS, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS, CREAT
 let myUp = {};
 const UP = (k) => mode === 'exp' ? 1 : upMul(myUp, k);
 import { buildEnvironment } from './world.js';
-import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy, makeGunEnv, makeSwimArms } from './models.js';
+import { makePlayerModel, makeShark, makeOcto, makeJelly, makeSub, makeScooter, makeJetski, makeCrate, makePickup, makeProjectile, makeBeam, makeWaterGun, makeViewArms, makeReloadHand, poseReload, reloadRoll, RELOAD_STEPS, makeFish, makeBoss, makeTrophy, makeGunEnv, makeSwimArms } from './models.js';
 import { Hud, SONAR } from './hud.js';
 import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
@@ -260,7 +260,7 @@ function onSnap(m) {
     target(e, a, 2); e.state = a[7]; e.hpPct = a[9];
   }
   prune(creatures);
-  for (const a of c.v) { const type = VEHICLE_IDS[a[1]]; const e = sync(vehicles, a[0], () => ({ type, mesh: type === 'sub' ? makeSub() : makeScooter() })); target(e, a, 2); e.hp = a[7]; e.driver = a[8]; }
+  for (const a of c.v) { const type = VEHICLE_IDS[a[1]]; const e = sync(vehicles, a[0], () => ({ type, mesh: type === 'sub' ? makeSub() : type === 'jetski' ? makeJetski() : makeScooter() })); target(e, a, 2); e.hp = a[7]; e.driver = a[8]; }
   prune(vehicles);
   for (const e of c.e) onEvent(e);
   for (const e of m.ye) onPrivate(e);
@@ -797,9 +797,11 @@ function controlMe(dt) {
   const S = SUITS[mySuit], v = you.veh ? vehicles.get(you.veh) : null, vt = v ? v.type : null;
   if (mySuit === 'goliath' && ultOn()) autoAim(dt);   // Zielcomputer-Ulti
   let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1) * ((mySuit === 'manta' || mySuit === 'hammerhai') && ultOn() ? ULTIS[mySuit].speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
+  if (vt === 'jetski') { const J = VEHICLES.jetski; speed = J.speed; accel = J.accel; strafe = J.strafe; r = J.r; canBoost = false; }
   if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
   if (vt === 'sub' && subIn.stand) { /* im U-Boot herumlaufen: das U-Boot behält seine Richtung */ }
+  else if (vt === 'jetski') { const J = VEHICLES.jetski; me.hyaw = approachAngle(me.hyaw, camYaw, J.turn * dt); me.hpitch += Math.max(-J.turn * dt, Math.min(J.turn * dt, camPitch - me.hpitch)); }   // Jetski: weite Kurven
   else if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
   else { me.hyaw = camYaw; me.hpitch = camPitch; }
   const shop = hud.shopOpen || (vt === 'sub' && subIn.stand);   // im Shop nicht schwimmen; wer im U-Boot steht, steuert nicht (es bremst ab)

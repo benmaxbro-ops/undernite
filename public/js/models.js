@@ -178,6 +178,26 @@ export function makeSub() {
   root.userData.update = (dt, s) => { g.rotation.y = s.yaw; g.rotation.x = s.pitch; prop.rotation.z += dt * (2 + s.speed * 1.5); beam.visible = !!s.driven; };
   return root;
 }
+// Jetski-Scooter: schlanker roter Rumpf mit weißem Streifen, Lenker, Sitz, zwei Kufen und einer leuchtenden Düse hinten
+export function makeJetski() {
+  const root = new THREE.Group(), g = new THREE.Group(); g.rotation.order = 'YXZ'; root.add(g);
+  const b = new THREE.Group(); b.position.set(0, -0.55, -0.4); g.add(b);
+  const red = std(0xd8262c, { roughness: 0.3, metalness: 0.2 }), white = std(0xf2f4f6, { roughness: 0.35 }), dark = std(0x1d2329, { roughness: 0.5 });
+  add(b, zCapsule(0.32, 1.5, 14), red).scale.set(1.15, 0.7, 1);                        // Rumpf
+  add(b, zCyl(0.3, 0.02, 0.6, 14), white, 0, 0, -1.3).scale.set(1.1, 0.7, 1);          // Nase (spitz nach vorne)
+  add(b, GEO.box, white, 0, 0.2, -0.2).scale.set(0.5, 0.05, 1.3);                      // weißer Streifen oben
+  add(b, GEO.box, dark, 0, 0.27, 0.35).scale.set(0.36, 0.1, 0.75);                     // Sitz
+  add(b, GEO.cyl, dark, 0, 0.42, -0.45).scale.set(0.03, 0.4, 0.03);                    // Lenksäule
+  add(b, GEO.box, dark, 0, 0.6, -0.45).scale.set(0.7, 0.04, 0.05);                     // Lenker
+  for (const s of [-1, 1]) {
+    add(b, zCapsule(0.08, 1.2, 8), white, s * 0.42, -0.18, 0.05);                       // Kufen
+    add(b, GEO.box, red, s * 0.25, -0.1, 0.05).scale.set(0.2, 0.04, 0.9);
+  }
+  add(b, GEO.torus, dark, 0, -0.02, 1.15).scale.setScalar(0.18);                       // Düse
+  const jet = add(b, GEO.sph, glow(0x4de8ff, 2.2), 0, -0.02, 1.2); jet.scale.set(0.13, 0.13, 0.05);
+  root.userData.update = (dt, s) => { g.rotation.y = s.yaw; g.rotation.x = s.pitch; g.rotation.z = (s.roll || 0); jet.scale.z = 0.05 + Math.min(1, (s.speed || 0) / 30) * 0.25; };
+  return root;
+}
 export function makeScooter() {
   const root = new THREE.Group(), g = new THREE.Group(); g.rotation.order = 'YXZ'; root.add(g);
   const b = new THREE.Group(); b.position.set(0, -0.5, -1.25); g.add(b);

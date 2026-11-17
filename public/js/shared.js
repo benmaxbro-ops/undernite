@@ -253,9 +253,11 @@ export const RARITY = [
   { name: 'Legendär',   color: '#ffb52e', mul: 1.45 },
 ];
 
-export const VEHICLE_IDS = ['scooter', 'sub'];
+export const VEHICLE_IDS = ['scooter', 'sub', 'jetski'];   // neue Fahrzeuge immer HINTEN anhängen
 export const VEHICLES = {
   scooter: { name: 'U-Scooter',   hp: 0,   speed: 24, accel: 3.0, r: 1.1, cam: 6.5 },
+  // Jetski-Scooter: viel schneller, aber man kann nicht seitwärts fahren (strafe 0) und er dreht weit
+  jetski:  { name: 'Jetski',      hp: 0,   speed: 38, accel: 2.2, r: 1.2, cam: 7.5, strafe: 0, turn: 2.4 },
   sub:     { name: 'Mini-U-Boot', hp: 450, speed: 17, accel: 1.6, r: 3.0, cam: 16 },
 };
 
@@ -611,6 +613,10 @@ export class World {
     this.vehSpawns.push({ type: 'sub', ...spot(rs.x, rs.z, 28, 3.5, 4) });
     for (let i = 0; i < 2; i++) this.vehSpawns.push({ type: 'sub', ...spot(0, 0, 240, 3.5, 4) });
     for (let i = 0; i < 9; i++) this.vehSpawns.push({ type: 'scooter', ...spot(0, 0, 250, 1.4, 2) });
+    // Jetskis: neben den ersten 4 Scootern (ohne neue Zufallszahlen, damit der Rest der Karte gleich bleibt)
+    for (const sc of this.vehSpawns.filter(v => v.type === 'scooter').slice(0, 4)) {
+      const x = sc.x + 5, z = sc.z + 3; this.vehSpawns.push({ type: 'jetski', x, y: this.heightAt(x, z) + 1.8, z, yaw: sc.yaw });
+    }
 
     // creature sites
     this.lairs.push(spot(ws.x, ws.z, 14, 1.3, 1.5), spot(rs.x, rs.z, 10, 1.3, 1.5));

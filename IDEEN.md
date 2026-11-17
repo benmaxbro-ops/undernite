@@ -9,8 +9,7 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Danach
 
-- [ ] **Grafik noch realistischer:** Korallen-Oberflächen (Sand, Felsen und Taucher sind schon überarbeitet)
-- [ ] **Neue Fahrzeuge:** schneller Jetski-Scooter, Kampf-Mech, Torpedo-Rochen
+- [ ] **Neue Fahrzeuge:** Torpedo-Rochen (Jetski ist fertig; Kampf-Mech gibt es schon als Goliath – mit Ben klären, ob ein Fahrzeug-Mech gewünscht ist)
 - [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 
 - [ ] **Mech noch viel detaillierter** (außen und innen)
