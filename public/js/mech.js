@@ -7,7 +7,8 @@ import * as THREE from 'three';
 import { brushed, polymer, neoprene } from './textures.js';
 
 // paint = Lackfarbe, foam = Auftriebsblock, glass = Kuppel (opacity = wie durchsichtig), cabin = Licht innen in der Kuppel
-export const MECH = { scale: 0.75, paint: 0xe3a51b, foam: 0xf0c02a, steel: 0x9aa5ae, rubber: 0x17191c, cabin: 0xffd49a, cockpitLight: 0xff3a2a, glassOpacity: 0.22 };
+// dome = Größe der Glaskuppel (nur der Kopf des Piloten schaut raus – kleiner = schwerer zu treffen)
+export const MECH = { dome: 0.48, scale: 0.75, paint: 0xe3a51b, foam: 0xf0c02a, steel: 0x9aa5ae, rubber: 0x17191c, cabin: 0xffd49a, cockpitLight: 0xff3a2a, glassOpacity: 0.22 };
 
 const SPH = new THREE.SphereGeometry(1, 40, 28), CYL = new THREE.CylinderGeometry(1, 1, 1, 32), ZCYL = new THREE.CylinderGeometry(1, 1, 1, 32).rotateX(Math.PI / 2);
 const RING = new THREE.TorusGeometry(1, 0.16, 14, 40), THIN = new THREE.TorusGeometry(1, 0.06, 10, 40), BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -45,7 +46,7 @@ export function buildMech(accent) {
   const acc = new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 0.9, roughness: 0.4 });
   const lens = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf4f8ff, emissiveIntensity: 2.6, roughness: 0.1 });
   const glass = new THREE.MeshStandardMaterial({ color: 0xbfe6ff, roughness: 0.04, metalness: 0.1, transparent: true, opacity: MECH.glassOpacity, depthWrite: false, side: THREE.DoubleSide });
-  const cabin = new THREE.MeshBasicMaterial({ color: MECH.cabin, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false });
+  const cabin = new THREE.MeshBasicMaterial({ color: MECH.cockpitLight, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false });
 
   // ----- Druckkörper mit Bauchring und Brustplatte -----
   at(body, HULL, paint, 0, 0.2, 0, 1.05, 1.0, 0.92);
@@ -54,17 +55,16 @@ export function buildMech(accent) {
   for (const sx of [-1, 1]) at(body, SPH, steel, sx * 0.3, 0.32, -0.9, 0.05);                  // Schrauben an der Brustplatte
   at(body, BOX, acc, 0, -0.08, -0.86, 0.6, 0.05, 0.02);                                       // Farbstreifen (Spielerfarbe)
   // ----- Glaskuppel mit Pilot und Licht innen -----
-  at(body, RING, steel, 0, 0.9, -0.15, 0.8, 0.8, 0.8).rotation.x = Math.PI / 2;               // Metallkragen
-  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; at(body, SPH, steel, Math.cos(a) * 0.8, 0.98, -0.15 + Math.sin(a) * 0.8, 0.04); }   // Schrauben am Kragen
-  const pilot = new THREE.Group(); pilot.position.set(0, 1.18, -0.15); body.add(pilot);
+  const D = MECH.dome, dy = 0.95 + D * 0.55;   // Kuppel sitzt oben auf dem Rumpf, nur so groß wie der Kopf
+  at(body, RING, steel, 0, 0.9, -0.15, D + 0.06, D + 0.06, 0.8).rotation.x = Math.PI / 2;     // Metallkragen
+  for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; at(body, SPH, steel, Math.cos(a) * (D + 0.06), 0.98, -0.15 + Math.sin(a) * (D + 0.06), 0.035); }   // Schrauben am Kragen
+  const pilot = new THREE.Group(); pilot.position.set(0, dy - 0.04, -0.15); body.add(pilot);   // nur Kopf und Hals schauen in die Kuppel
   at(pilot, SPH, rubber, 0, 0.05, 0.05, 0.2, 0.23, 0.21);                                     // Kopf mit Haube
   at(pilot, SPH, new THREE.MeshStandardMaterial({ color: 0x1c2228, roughness: 0.2, metalness: 0.6 }), 0, 0.04, -0.13, 0.12, 0.07, 0.04);   // Headset
-  at(pilot, SPH, rubber, 0, -0.3, 0.1, 0.4, 0.22, 0.3);                                       // Schultern
-  at(pilot, BOX, dark, 0, -0.18, -0.38, 0.5, 0.14, 0.12).rotation.x = -0.5;                   // Armaturenbrett
-  for (let i = 0; i < 5; i++) at(pilot, BOX, new THREE.MeshBasicMaterial({ color: [0x5ef2e0, 0xffd36b, 0x7dff9a, 0xff6b5e, 0x5ef2e0][i] }), -0.16 + i * 0.08, -0.12, -0.42, 0.04, 0.025, 0.01);   // Lämpchen
-  at(body, SPH, cabin, 0, 1.22, -0.15, 0.66);                                                 // warmes Licht innen
-  at(body, SPH, glass, 0, 1.22, -0.15, 0.78);                                                 // die Kuppel selbst
-  at(body, SPH, rimMat(0xd8f2ff), 0, 1.22, -0.15, 0.785);                                     // Glanz am Rand der Kuppel
+  at(pilot, CYL, rubber, 0, -0.2, 0.05, 0.11, 0.25, 0.11);                                    // Hals (Schultern stecken im Rumpf)
+  at(body, SPH, cabin, 0, dy, -0.15, D * 0.85);                                               // Licht innen
+  at(body, SPH, glass, 0, dy, -0.15, D);                                                      // die Kuppel selbst
+  at(body, SPH, rimMat(0xd8f2ff), 0, dy, -0.15, D + 0.005);                                   // Glanz am Rand der Kuppel
   // ----- Rücken: Auftriebsblock, Propeller, Kamera -----
   const pack = new THREE.Group(); pack.position.set(0, 0.55, 0.95); body.add(pack);
   at(pack, RBOX, foam, 0, 0, 0, 1.8, 1.15, 0.9);
@@ -83,7 +83,7 @@ export function buildMech(accent) {
   thruster(-0.62, 1.22, 0.95, Math.PI / 2, 0); thruster(0.62, 1.22, 0.95, Math.PI / 2, 0);
   // ----- Schulter-Scheinwerfer und Kamera -----
   for (const sx of [-1, 1]) {
-    const L = new THREE.Group(); L.position.set(sx * 0.92, 0.9, -0.42); body.add(L);
+    const L = new THREE.Group(); L.position.set(sx * (MECH.dome + 0.2), 0.95 + MECH.dome * 0.55, -0.3); L.rotation.y = -sx * 0.12; body.add(L);   // Scheinwerfer links/rechts an der Kuppel, leicht zur Mitte gedreht
     at(L, ZCYL, dark, 0, 0, 0, 0.13, 0.13, 0.26); at(L, ZCYL, lens, 0, 0, -0.135, 0.105, 0.105, 0.01);
     at(L, THIN, steel, 0, 0, -0.13, 0.13);
   }

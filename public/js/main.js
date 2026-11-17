@@ -52,7 +52,7 @@ const torchBeam = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).trans
 torchBeam.rotation.order = 'YXZ'; torchBeam.visible = false; scene.add(torchBeam);
 // Goliath: zwei Scheinwerfer links und rechts an der Kuppel, die schräg zur Mitte leuchten (statt einer Lampe aus der Brust).
 // side = so weit links/rechts, up = Höhe, fwd = nach vorne, focus = in so vielen Metern treffen sich die Lichtkegel, power = Helligkeit je Lampe (× normale Lampe)
-const MECH_LAMPS = { side: 1.05, up: 1.45, fwd: 0.6, focus: 16, power: 0.6, haze: 0.018 };   // haze = wie sichtbar der Lichtkegel im Wasser ist
+const MECH_LAMPS = { side: 0.52, up: 1.46, fwd: 0.25, focus: 16, power: 0.6, haze: 0.018 };   // haze = wie sichtbar der Lichtkegel im Wasser ist
 const mechLamps = [-1, 1].map(s => {
   const l = new THREE.SpotLight(LAMP_COLOR, 0, 90, 0.3, 0.4, 1.6); scene.add(l); scene.add(l.target);
   const b = torchBeam.clone(); b.material = torchBeam.material.clone(); b.material.uniforms.o.value = MECH_LAMPS.haze; b.visible = false; scene.add(b);
@@ -112,7 +112,9 @@ const handLight = new THREE.PointLight(0xe8f0ff, 0, 1.4, 2); handLight.position.
 const FREELOOK = { yaw: 1.9, pitchUp: 1.3, pitchDown: 0.7, turn: 7 };
 const head = { yaw: 0, pitch: 0 };   // so weit ist der Kopf gerade gegenüber dem Mech gedreht
 const mechFrame = new THREE.Group(); camera.add(mechFrame);   // Cockpit und Waffe hängen hier dran und drehen gegen den Kopf
-const cockpit = makeCockpit(); cockpit.visible = false; mechFrame.add(cockpit);
+// COCKPIT_SIZE = wie groß das Cockpit um deinen Kopf ist (kleiner = Arme und Waffe sind draußen vor der Scheibe)
+const COCKPIT_SIZE = 0.5;
+const cockpit = makeCockpit(); cockpit.visible = false; cockpit.scale.setScalar(COCKPIT_SIZE); mechFrame.add(cockpit);
 // ---------- U-Boot von innen (Ego-Sicht mit V): sitzen am Steuerpult, mit B aufstehen und herumlaufen ----------
 const subIn = { stand: false, x: SUBROOM.seat[0], z: SUBROOM.seat[1] };   // x, z = wo man im U-Boot steht
 let subRoom = null;   // der Innenraum (wird beim ersten Einsteigen gebaut)
@@ -1272,6 +1274,8 @@ function updateViewModel(dt) {
   handLight.intensity = view.swimArms.visible ? (lamp.intensity > 0 ? VIEW.hands[0] : VIEW.hands[1]) : 0;   // Helmlampe beleuchtet die Arme
   // im Mech sitzt man in der Ego-Perspektive hinter der Glaskuppel
   cockpit.visible = fpOn && !!(you && you.alive) && !!SUITS[mySuit].mech;
+  const near = cockpit.visible ? 0.06 : 0.25;   // im kleinen Cockpit ist alles sehr nah an den Augen
+  if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
   if (cockpit.visible) cockpit.userData.update(dt, flow.f, flow.s, blurCam.x * 30, time);   // Steuerhebel kippen mit, Zeiger zittern
   // Mech-Geräusche: Motor und Propeller je nach Tempo, Hydraulik bei jedem Schritt, Servos beim schnellen Drehen
   const inMech = phase === 'play' && !!(you && you.alive) && !!SUITS[mySuit].mech && mode !== 'exp';
