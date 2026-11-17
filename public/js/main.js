@@ -116,7 +116,10 @@ const mechFrame = new THREE.Group(); camera.add(mechFrame);   // Cockpit und Waf
 const COCKPIT_SIZE = 0.5;
 const cockpit = makeCockpit(); cockpit.visible = false; cockpit.scale.setScalar(COCKPIT_SIZE); mechFrame.add(cockpit);
 // ---------- U-Boot von innen (Ego-Sicht mit V): sitzen am Steuerpult, mit B aufstehen und herumlaufen ----------
-const subIn = { stand: false, x: SUBROOM.seat[0], z: SUBROOM.seat[1] };   // x, z = wo man im U-Boot steht
+const subIn = { stand: false, peri: false, x: SUBROOM.seat[0], z: SUBROOM.seat[1] };   // peri = schaut gerade durchs Periskop
+// Periskop: up = so hoch über dem U-Boot ist die Linse, fov = Zoom (kleiner = näher), reach = so nah muss man dran stehen
+const PERI = { up: 3.2, fov: 28, reach: 0.65, pos: [0, 0.45] };
+const nearPeri = () => subIn.stand && Math.hypot(subIn.x - PERI.pos[0], subIn.z - PERI.pos[1]) < PERI.reach;   // x, z = wo man im U-Boot steht
 let subRoom = null;   // der Innenraum (wird beim ersten Einsteigen gebaut)
 // bist du gerade in der Ego-Sicht in deinem U-Boot? Dann gibt es das U-Boot zurück, sonst null
 function inSubFP() { const v = you && you.alive && you.veh ? vehicles.get(you.veh) : null; return v && v.type === 'sub' && firstPerson ? v : null; }
@@ -697,7 +700,8 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (phase !== 'play' || !you || !you.alive) return;
   if (e.code === 'KeyV') { firstPerson = !firstPerson; if (!firstPerson) subIn.stand = false; return; }   // Ego-Perspektive an/aus
-  if (e.code === 'KeyB' && inSubFP()) { toggleStand(); return; }   // im U-Boot aufstehen / hinsetzen
+  if (e.code === 'KeyB' && inSubFP()) { if (subIn.peri) subIn.peri = false; else toggleStand(); return; }   // im U-Boot aufstehen / hinsetzen
+  if (e.code === 'KeyP' && inSubFP() && (subIn.peri || nearPeri())) { subIn.peri = !subIn.peri; sfx.noise(0.35, 700, 1.2, 0.25, 'bandpass', 300); return; }   // Periskop
   if (e.code === 'KeyC' && canCling()) { toggleCling(); return; }  // Deckung: am Riff festhalten / loslassen
   if (e.code === 'KeyQ' && mode !== 'exp') { useGadget(); return; } // Gadget
   if (e.code === 'Digit4' && mode !== 'exp') { useUlti(); return; } // Ulti
@@ -1067,7 +1071,7 @@ function computePrompt() {
   if (mode === 'exp' && !hud.shopOpen && !nearBoat() && !nearBase() && otherBaseOwner()) return ['–', `Basis von ${otherBaseOwner()} · nur Luft tanken`];
   if (mode === 'exp') return hud.shopOpen ? null : nearBoat() ? ['E', 'Händler-Boot: Fische verkaufen & Ausrüstung'] : nearBase() ? ['E', 'Unterwasser-Basis: Aquarium'] : null;
   const ft = finTarget(); if (ft) return ['G', `Finisher: ${ft.name}`];
-  if (inSubFP()) return subIn.stand ? (nearSeat() ? ['B', 'Hinsetzen und steuern'] : null) : ['B', 'Aufstehen und im U-Boot umsehen'];
+  if (inSubFP()) return subIn.peri ? ['P', 'Periskop einfahren'] : subIn.stand ? (nearPeri() ? ['P', 'Durchs Periskop schauen'] : nearSeat() ? ['B', 'Hinsetzen und steuern'] : null) : ['B', 'Aufstehen und im U-Boot umsehen'];
   if (you.veh) { if (!vehSince) vehSince = time; return time - vehSince < 4 ? ['E', 'Aussteigen'] : null; }
   vehSince = 0;
   const S = SUITS[mySuit]; let best = null, bd = 1e9;
@@ -1422,15 +1426,20 @@ function updateCamera(dt) {
   // von innen: alle Außenteile (Glaskugel, Scheinwerferkegel, Leuchtstreifen …) ausblenden, sonst blendet es weiß
   const showHull = (body, on) => { for (const c of body.children) if (c !== subRoom) c.visible = on; };
   if (subRoom && subRoom.parent && (!sv || subRoom.parent !== sv.mesh.userData.body)) showHull(subRoom.parent, true);
+  if (!sv || !subIn.stand) subIn.peri = false;
+  if (subIn.peri) { if (camera.fov !== PERI.fov) { camera.fov = PERI.fov; camera.updateProjectionMatrix(); } hud.scope(true, true); }
+  hud.periscope(subIn.peri ? camYaw : null);
   if (!sv) { subIn.stand = false; if (subRoom) { subRoom.visible = false; if (subRoom.parent) subRoom.parent.remove(subRoom); } }
   else {
     const body = sv.mesh.userData.body;
     if (!subRoom) subRoom = makeSubInterior();
     if (subRoom.parent !== body) body.add(subRoom);
     subRoom.visible = true; showHull(body, false);
-    if (subIn.stand) updateSubWalk(dt, sv);
+    if (subIn.stand && !subIn.peri) updateSubWalk(dt, sv);
     sv.mesh.updateMatrixWorld(true);
-    V.set(subIn.x, subIn.stand ? SUBROOM.eyeStand + Math.sin(time * 1.3) * 0.01 : SUBROOM.eyeSit, subIn.z); body.localToWorld(V);
+    if (subIn.peri) V.set(PERI.pos[0], PERI.up, PERI.pos[1] - 0.7);   // Periskop: die Linse sitzt oben über dem Turm
+    else V.set(subIn.x, subIn.stand ? SUBROOM.eyeStand + Math.sin(time * 1.3) * 0.01 : SUBROOM.eyeSit, subIn.z);
+    body.localToWorld(V);
     px = V.x; py = V.y; pz = V.z;
     subRoom.userData.update(dt, subIn.stand ? 0 : flow.f || ((keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0)), (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), time, sv.speed || 0);
   }
@@ -1536,5 +1545,5 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // small hook for automated smoke tests
-window.__un = { get state() { return { phase, myId, you, aliveN, me, aimLock, camYaw, camPitch, mySuit, players: players.size, creatures: creatures.size, pickups: pickups.size, projs: projs.size }; },
+window.__un = { get state() { return { phase, myId, you, aliveN, me, aimLock, camYaw, camPitch, mySuit, subIn, players: players.size, creatures: creatures.size, pickups: pickups.size, projs: projs.size }; },
   look(y, p) { camYaw = y; camPitch = p; }, key(c, d) { keys[c] = d; }, fire(b) { firing = b; }, send, tp(x, y, z) { me.x = x; me.y = y; me.z = z; }, world: () => W, ents: () => ({ players, creatures, vehicles, crates, pickups }) };

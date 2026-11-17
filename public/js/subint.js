@@ -110,6 +110,26 @@ export function makeSubInterior() {
   add(g, BOX, std(0x445056), 0.85, -0.3, 1.7).scale.set(0.45, 1.2, 0.7);
   for (let i = 0; i < 3; i++) add(g, BOX, dark, 0.62, 0.1 - i * 0.35, 1.7).scale.set(0.01, 0.02, 0.3);   // Spind-Griffe
 
+  // Feuerlöscher an der linken Wand (rot, mit Halterung und Schlauch)
+  add(g, CYL, red, -1.18, -0.55, 0.15).scale.set(0.07, 0.42, 0.07);
+  add(g, CYL, dark, -1.18, -0.3, 0.15).scale.set(0.03, 0.08, 0.03);
+  add(g, BOX, steel, -1.22, -0.5, 0.15).scale.set(0.02, 0.06, 0.16);
+  // Kartentisch rechts hinter dem Sitz: Tisch mit leuchtender Seekarte
+  const chartTex = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 96; const x = c.getContext('2d');
+    x.fillStyle = '#0d2a33'; x.fillRect(0, 0, 128, 96); x.strokeStyle = 'rgba(120,220,200,.45)';
+    for (let i = 0; i < 9; i++) { x.beginPath(); for (let k = 0; k <= 128; k += 8) x.lineTo(k, 12 + i * 10 + Math.sin(k * 0.08 + i) * 4); x.stroke(); }   // Tiefenlinien
+    x.strokeStyle = '#ffd36b'; x.lineWidth = 2; x.beginPath(); x.moveTo(20, 80); x.lineTo(60, 50); x.lineTo(100, 30); x.stroke();   // Kurs
+    x.fillStyle = '#ff6b5e'; x.beginPath(); x.arc(100, 30, 4, 0, 7); x.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  add(g, BOX, dark, 0.85, -0.5, -0.55).scale.set(0.5, 0.06, 0.45);
+  const chart = add(g, new THREE.PlaneGeometry(0.44, 0.36), new THREE.MeshBasicMaterial({ map: chartTex }), 0.85, -0.465, -0.55); chart.rotation.x = -Math.PI / 2;
+  add(g, CYL, steel, 0.85, -0.73, -0.55).scale.set(0.03, 0.4, 0.03);
+  // Kabelbündel an der Decke (schwarz, in Haltern)
+  for (const x of [-0.15, -0.08, 0.08]) add(g, zCyl, std(0x15181b, { roughness: 0.8 }), x, 1.37, 0.05).scale.set(0.015, 0.015, 4.3);
+  for (let z = -1.6; z <= 2.0; z += 0.6) add(g, BOX, steel, 0, 1.33, z).scale.set(0.4, 0.015, 0.03);
+  // Lautsprecher der Bordsprechanlage und ein gelbes Notfall-Schild
+  add(g, CYL, dark, 0.95, 0.85, -1.2).scale.set(0.08, 0.05, 0.08);
+  const sign = add(g, new THREE.PlaneGeometry(0.22, 0.1), new THREE.MeshBasicMaterial({ color: 0xffc94d }), -1.24, 0.75, -1.3); sign.rotation.y = Math.PI / 2;
   // Lampen in Schutzkörben und warmes Licht
   for (const z of [-1.0, 0.6, 1.8]) {
     add(g, SPH, glow(0xffe2b0), 0, 1.3, z).scale.set(0.08, 0.05, 0.08);

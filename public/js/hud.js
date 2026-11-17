@@ -433,6 +433,14 @@ export class Hud {
   // Rückstoß im Fernrohr: das schwarze Fernrohr-Bild springt kurz nach unten und wird größer (das Auge stößt fast ans Okular)
   scopeKick(k) { const v = Math.round(k * 100) / 100; if (this.sk === v) return; this.sk = v; $('scope').style.transform = v ? `translateY(${v * 4}vh) scale(${1 + v * 0.08})` : ''; }
   // on = durchs Zielfernrohr, ads = über Kimme und Korn zielen: dann verschwindet das normale Fadenkreuz
+  // Periskop-Anzeige: Gradzahl der Blickrichtung oben (null = aus)
+  periscope(yaw) {
+    const el = $('peri'); if (!el) return;
+    if (yaw == null) { if (this.periOn) { el.classList.add('hidden'); this.periOn = false; } return; }
+    const deg = Math.round(((-yaw * 180 / Math.PI) % 360 + 360) % 360);
+    if (!this.periOn) { el.classList.remove('hidden'); this.periOn = true; }
+    if (this.periDeg !== deg) { this.periDeg = deg; el.textContent = `PERISKOP · ${String(deg).padStart(3, '0')}°`; }
+  }
   scope(on, ads = on) { const k = on + '|' + ads; if (this.scopeKey === k) return; this.scopeKey = k; $('scope').classList.toggle('on', on); $('cross').style.display = on || ads ? 'none' : ''; }
   hitmark(dmg, kill, left) {
     const h = $('hitm'); h.classList.remove('on'); h.classList.toggle('kill', !!kill); void h.offsetWidth; h.classList.add('on');

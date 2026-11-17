@@ -59,6 +59,8 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #banner.on{opacity:1}
 #prompt{position:absolute;top:60%;left:50%;transform:translateX(-50%);padding:8px 16px;font-size:16px} #prompt kbd{display:inline-block;background:var(--glow);color:#03222a;border-radius:5px;padding:1px 8px;font-weight:700;margin-right:8px;font-family:var(--display)}
 /* Zielfernrohr: schwarzer Rand, rundes Sichtfeld mit leichtem Blaustich, Fadenkreuz und Entfernungsstriche */
+#peri{position:absolute;left:50%;top:9%;transform:translateX(-50%);font:600 15px var(--display);letter-spacing:.2em;color:#cfe;text-shadow:0 0 6px #000;z-index:6}
+#peri.hidden{display:none}
 #scope{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .12s;
   background:radial-gradient(circle at 50% 50%,rgba(40,140,200,.06) 0,rgba(40,140,200,.06) 34vmin,rgba(0,0,0,.85) 34.6vmin,#000 36vmin)}
 #scope.on{opacity:1}
@@ -216,6 +218,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
     <canvas id="mini" width="190" height="190"></canvas>
     <div id="counts"><div class="panel"><span id="cntA">Überlebende</span><b class="num" id="alive">0</b></div><div class="panel"><span id="cntK">Kills</span><b class="num" id="kills">0</b></div></div>
   </div>
+  <div id="peri" class="hidden"></div>
   <div id="scope"><i class="h"></i><i class="v"></i><i class="m m1"></i><i class="m m2"></i><i class="m m3"></i></div>
   <div id="cross"></div><div id="hitm"></div><div id="dmgNum" class="num"></div>
   <div id="prompt" class="panel hidden"></div>
