@@ -742,11 +742,22 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       const t2 = part(GEO.zcyl, fill, s * R * 0.95, -R * 0.45, -L * 0.25); t2.scale.set(0.014, 0.014, L * 0.42);
       chargeBars.push({ tank: t2 });
     }
-    // Visier oben links
-    box(metal, L * 0.05, L * 0.2, R, R + 0.03, 0.03, -R * 0.4);
-    ring(L * 0.2, R + 0.015, 0.013, glass).position.x = -R * 0.4;
-    // Vordergriff
-    const fg = part(GEO.cyl, metal, 0, -R - 0.05, -L * 0.4); fg.scale.set(0.016, 0.1, 0.016);
+    // Zielvisier oben links: Gehäuse auf einer Halterung, vorne und hinten Glas
+    box(metal, L * 0.06, L * 0.12, R * 0.85, R + 0.012, 0.012, -R * 0.45);                       // Halterung
+    box(dark, L * 0.03, L * 0.2, R + 0.01, R + 0.042, 0.032, -R * 0.45);                         // Gehäuse
+    for (const u of [L * 0.03 - 0.001, L * 0.2 + 0.001]) { const ln = box(glass, u, u + 0.002, R + 0.016, R + 0.036, 0.024, -R * 0.45); }
+    // Tragegriff oben (Bogen) und Gummi-Stoßschutz vorne und hinten
+    const ch = add(g, new THREE.TorusGeometry(1, 0.12, 8, 20, Math.PI), metal, 0, R, -L * 0.32); ch.scale.set(0.06, 0.05, 0.06); ch.rotation.y = Math.PI / 2;
+    pipe(gripM, u1 - 0.035, u1 + 0.005, R * 1.1);
+    pipe(gripM, u0 + 0.02, u0 + 0.055, R * 1.1);
+    // hinten ein ausgestellter Trichter (Düse), wie bei echten rückstoßfreien Werfern
+    const bell = part(new THREE.CylinderGeometry(R * 1.0, R * 1.35, 0.06, 32, 1, true).rotateX(-Math.PI / 2), metal, 0, 0, -(u0 - 0.06)); bell.material = metal.clone(); bell.material.side = THREE.DoubleSide;
+    // Schulterstütze unter dem Rohr
+    box(gripM, -L * 0.05, L * 0.12, -R - 0.03, -R + 0.005, 0.05);
+    // Vordergriff: richtiger senkrechter Griff mit Noppen
+    { const fu = L * 0.4, ft = -R * 0.95;
+      side('fgrip', gripM, [[fu - 0.022, ft], [fu + 0.022, ft], [fu + 0.018, ft - 0.09], [fu + 0.012, ft - 0.1], [fu - 0.016, ft - 0.1], [fu - 0.02, ft - 0.09]], 0.034);
+      box(metal, fu - 0.026, fu + 0.026, ft - 0.004, ft + 0.006, 0.04); }
     gills(P.gills, -L * 0.15, 0.03, R * 0.1, R * 0.9, R * 0.98);
     const chG = new THREE.Group(); g.add(chG); tgt = chG;
     box(metal, L * 0.0, L * 0.06, R * 0.1, R * 0.45, 0.02, -R - 0.004);
