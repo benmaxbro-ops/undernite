@@ -38,3 +38,8 @@ https://opengameart.org/content/impact
 https://opengameart.org/content/37-hitspunches
   hit_flesh.wav   (qubodupImpactMeat02.flac)  nasser Einschlag
   hit_body.wav    (hit21.mp3.flac)            dumpfer Körper-Schlag
+
+Glock 17 (Pistole und Revolver) – "9mm Glock 17" von JKirsch, Lizenz: Creative Commons Attribution 3.0 (CC BY 3.0)
+https://soundbible.com/1382-9mm-Glock-17.html
+  shot_glock.wav   (in Mono umgewandelt und normalisiert)
+  Hinweis: CC BY heißt, der Name des Aufnehmers (JKirsch) muss genannt werden – das steht hier und in der README.

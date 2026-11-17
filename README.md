@@ -136,3 +136,9 @@ public/js/audio.js   synthetische Sounds (WebAudio)
 Balance-Werte (Leben, Tempo, Waffen, Zonenphasen) stehen oben in `shared.js` bzw. `server.js` (`PHASES`).
 `node test-sim.mjs` spielt bei laufendem Server eine Runde als Testclient durch
 (`UN_SPEED=25` am Server = Zeitraffer).
+
+## Sounds und Danke
+
+Die Schuss- und Nachlade-Sounds sind echte Aufnahmen (Liste mit Herkunft: `public/sounds/QUELLEN.txt`).
+Fast alle sind CC0 (frei ohne Namensnennung). Die Glock-17-Aufnahme für Pistole und Revolver stammt von **JKirsch**
+([SoundBible](https://soundbible.com/1382-9mm-Glock-17.html), Lizenz CC BY 3.0 – deshalb steht der Name hier).

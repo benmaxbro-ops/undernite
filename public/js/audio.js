@@ -9,7 +9,9 @@ export const UNDERWATER = {
   wobble: 0.0018,  // wie stark der Klang "wabert" (Sekunden Verzögerungsschwankung)
   echo: 0.32,      // wie viel Echo zurückkommt (0 = keins)
   echoTime: 0.14,  // Sekunden bis zum Echo
-  shotCutoff: 6500, // Hz: eigene Schüsse behalten ihren hellen Knall (sonst klingen sie wie ein Spielzeug)
+  shotBass: 1,     // dB: Bass-Anhebung für eigene Schüsse (klein, sonst überdeckt der Bass den Knall – echte Waffen sind vor allem Mitten und Knall)
+  shotCutoff: 11000, // Hz: eigene Schüsse behalten ihren hellen Knall (sonst klingen sie wie ein Spielzeug)
+  presence: 8,     // dB: Anhebung bei 2500 Hertz für eigene Schüsse – der Knall kommt "nach vorne" (wie im Tonstudio)
   metal: 0.25,     // metallischer Nachklang (0 = aus). Unter Wasser klingt Kampflärm blechern … (zu viel klingt nach Blechdose)
   metalTime: 0.0045, // … weil Schall im Wasser viermal so schnell ist und von überall gleichzeitig zu kommen scheint
 };
@@ -26,9 +28,10 @@ export const UNDERWATER = {
 //   harm  = Boom mit Obertönen: der tiefe Schlag wird angezerrt, so hört man ihn auch auf Laptop-Lautsprechern (die keine ganz tiefen Töne können)
 //   boomLen = wie lange der Boom nachdröhnt (Sekunden)
 // BOOM_BUS = wie laut der Boom-Weg (am Kompressor vorbei) insgesamt ist
-export const BOOM_BUS = 1.0;
+export const BOOM_BUS = 0.45;
 //   subHz = wie tief der Tiefbass ist (Hertz, kleiner = tiefer) · punch / punchHz = Knall-Boom in der Mitte (Lautstärke / Tonhöhe)
-export const SHOT = { crack: 1.4, body: 3.1, boom: 3.0, mech: 1.6, duck: 0.6, wumms: 1.4, sub: 2.0, subHz: 78, harm: 2.2, boomLen: 0.55, punch: 5.0, punchHz: 190, loud: 1.4 };
+// Abgestimmt nach einer echten Glock 17 (gemessen): am lautesten sind Mitten und Knall, dazu etwas mehr Boom als im Original
+export const SHOT = { crack: 3.2, body: 3.6, boom: 1.1, mech: 1.6, duck: 0.6, wumms: 0.6, sub: 0.6, subHz: 78, harm: 1.6, boomLen: 0.45, punch: 4.0, punchHz: 190, loud: 1.4 };
 // Holztür-Schlag bei jedem Schuss: vol = Lautstärke bei fremden Schüssen, own = bei eigenen,
 // range = bis so viele Meter weit hört man ihn, pitchSmall / pitchBig = Tonhöhe (kleiner = tiefer),
 // body = zusätzlicher tiefer Bass-Schlag darunter
@@ -52,7 +55,7 @@ export const bubblePeriod = (W, depth) => 2.11 * Math.cbrt(W) / Math.pow(Math.ma
 // Ladung (kg) je Waffe – nur für den Klang (Reihenfolge wie WEAPON_IDS)
 const CHARGE = [0.004, 0.003, 0.008, 0.01, 0.03, 0.03, 0.006, 0.015, 0.009, 0.002, 0.012, 0.012, 0.004, 0.004, 0.004];
 // Schuss-Aufnahme je Waffe (Reihenfolge wie WEAPON_IDS)
-const SHOT_FILES = ['shot_pistol', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic', 'shot_harpoon', 'shot_needler', 'shot_torpedo', 'shot_plasma', 'shot_pistol', 'shot_pistol', 'shot_pistol'];
+const SHOT_FILES = ['shot_glock', 'shot_needler', 'shot_scatter', 'shot_harpoon', 'shot_torpedo', 'shot_torpedo', 'shot_plasma', 'shot_sonic', 'shot_glock', 'shot_needler', 'shot_torpedo', 'shot_plasma', 'shot_pistol', 'shot_pistol', 'shot_pistol'];   // Pistole + Revolver: echte Glock 17
 const FILES = [...new Set(SHOT_FILES), 'mag_out', 'mag_in', 'mag_in_rifle', 'slide_back', 'slide_fwd', 'knock_small', 'knock_big', 'burn_ah1', 'burn_ah2', 'hit_flesh', 'hit_body'];
 export class Sfx {
   constructor() { this.ctx = null; this.depth = 30; this.vol = 0.8; }
@@ -99,14 +102,15 @@ export class Sfx {
   // Unterwasser-Kette: Bass rauf → Höhen weg → Wabern (Chorus) → Echo
   makeWater() {
     this.uw = this.chain(UNDERWATER.cutoff, this.world);          // dumpf: Nachladen, Explosionen, Plasma-Zap …
-    this.uwShot = this.chain(UNDERWATER.shotCutoff, this.master); // hell: Schüsse (sonst fehlt der Knall)
+    this.uwShot = this.chain(UNDERWATER.shotCutoff, this.master, UNDERWATER.shotBass, UNDERWATER.presence); // hell: Schüsse (sonst fehlt der Knall)
   }
   // Unterwasser-Kette: Bass rauf → Höhen weg → Wabern (Chorus) → Echo. Gibt den Eingang zurück.
-  chain(cutoff, out) {
+  chain(cutoff, out, bass = UNDERWATER.bass, presence = 0) {
     const ctx = this.ctx, U = UNDERWATER, input = ctx.createGain();
-    const shelf = ctx.createBiquadFilter(); shelf.type = 'lowshelf'; shelf.frequency.value = 150; shelf.gain.value = U.bass;
+    const shelf = ctx.createBiquadFilter(); shelf.type = 'lowshelf'; shelf.frequency.value = 150; shelf.gain.value = bass;
+    const pres = ctx.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 2500; pres.Q.value = 0.9; pres.gain.value = presence;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = cutoff; lp.Q.value = 0.7;
-    input.connect(shelf).connect(lp).connect(out);
+    input.connect(shelf).connect(pres).connect(lp).connect(out);
     // Wabern: eine winzige Verzögerung, die 5-mal pro Sekunde schwankt, wird dazugemischt
     const wob = ctx.createDelay(0.05); wob.delayTime.value = 0.008;
     const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 5; lg.gain.value = U.wobble; lfo.connect(lg).connect(wob.delayTime); lfo.start();
