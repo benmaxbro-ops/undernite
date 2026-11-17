@@ -266,6 +266,7 @@ function onSnap(m) {
   if (phase !== 'play') return;
   const c = m.c; frameNo++;
   zone = c.z; aliveN = c.n; baseInfo = c.b || null; waveInfo = c.wv || null;
+  for (const h of c.hm || []) { const p = projs.get(h[0]); if (!p) continue; p.x = h[1]; p.y = h[2]; p.z = h[3]; p.dx = h[4]; p.dy = h[5]; p.dz = h[6]; p.life = Math.max(p.life, 0.5); p.mesh.lookAt(p.x + p.dx, p.y + p.dy, p.z + p.dz); }   // Lenk-Torpedos vom Server
   const wasAlive = you && you.alive;
   you = m.you;
   for (const a of c.p) { const e = players.get(a[0]) || spawnPlayer(a[0]); e.seen = frameNo; target(e, a, 1); e.hp = a[6]; e.fl = a[8]; e.w = e.weapon = a[9]; e.veh = a[10]; }

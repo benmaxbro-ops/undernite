@@ -151,8 +151,9 @@ export const ULTIS = {
   goliath: { name: 'Zielcomputer', time: 6,
              desc: 'Der Mech-Computer zielt 6 Sekunden lang automatisch auf den nächsten Gegner, den du siehst.' },
   // n = so viele Torpedos, dmg = Schaden pro Torpedo, splash = Explosionsradius, range = so weit sucht er Ziele
-  triton:  { name: 'Torpedo-Salve', time: 0.8, n: 3, dmg: 40, speed: 60, splash: 6, range: 70,
-             desc: '3 kleine Torpedos schießen nacheinander los, jeder auf den nächsten Gegner, den du siehst.' },
+  // turn = wie stark die Torpedos zum Ziel lenken, life = so viele Sekunden fliegen sie, fuse = so nah dran explodieren sie (Annäherungszünder)
+  triton:  { name: 'Torpedo-Salve', time: 0.8, n: 3, dmg: 40, speed: 45, splash: 6, range: 90, turn: 5, life: 3.0, fuse: 2.8,
+             desc: '3 zielsuchende Torpedos schießen nacheinander los und verfolgen den nächsten Gegner, den du siehst.' },
   // armor = so viel Schaden kommt noch durch (0.33 = ein Drittel), push = wer näher kommt (Meter), wird weggestoßen
   bulwark: { name: 'Festung',     time: 6, armor: 0.33, push: 5,
              desc: '6 Sekunden lang bekommst du nur ein Drittel Schaden, und wer zu nah kommt, wird weggestoßen.' },

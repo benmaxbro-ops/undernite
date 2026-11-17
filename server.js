@@ -614,8 +614,9 @@ function ultTick() {
       let d = p.salvo.d;
       if (best) { const dx = best.x - p.x, dy = best.y + 0.3 - p.y, dz = best.z - p.z, l = Math.hypot(dx, dy, dz) || 1; d = [dx / l, dy / l, dz / l]; }
       spawnProj(p, 'torpedo', p.x + d[0] * 1.8, p.y + d[1] * 1.8 + 0.3, p.z + d[2] * 1.8, d, 1, 0, null,
-        { ...WEAPONS.torpedo, dmg: T.dmg, speed: T.speed, splash: T.splash, spread: 0.02, life: T.range / T.speed });
-      G.proj[G.proj.length - 1].ult = 1;   // Ulti-Torpedos verletzen dich selbst nicht
+        { ...WEAPONS.torpedo, dmg: T.dmg, speed: T.speed, splash: T.splash, spread: 0.02, life: T.life });
+      const tp = G.proj[G.proj.length - 1]; tp.ult = 1;   // Ulti-Torpedos verletzen dich selbst nicht
+      if (best) tp.home = best.id;   // zielsuchend: verfolgt diesen Gegner
       if (--p.salvo.n <= 0) p.salvo = null; else p.salvo.next = G.time + 0.25;
     }
     if (!on) continue;
@@ -682,6 +683,15 @@ function explode(pr, x, y, z) {
   }
 }
 function stepProjectiles(dt) {
+  // zielsuchende Torpedos (Torpedo-Salve): drehen sich jedes Mal ein Stück zum Ziel (turn = Grad-Lenkung pro Sekunde in Bogenmaß)
+  for (const pr of G.proj) {
+    if (!pr.home) continue;
+    const t = G.players.get(pr.home); if (!t || !t.alive) { pr.home = 0; continue; }
+    const tx = t.x - pr.x, ty = t.y + 0.3 - pr.y, tz = t.z - pr.z, tl = Math.hypot(tx, ty, tz) || 1, k = Math.min(1, ULTIS.triton.turn * dt);
+    if (tl < ULTIS.triton.fuse) { explode(pr, pr.x, pr.y, pr.z); pr.dead = true; continue; }   // Annäherungszünder: nah genug dran = Bumm
+    pr.dx += (tx / tl - pr.dx) * k; pr.dy += (ty / tl - pr.dy) * k; pr.dz += (tz / tl - pr.dz) * k;
+    const l = Math.hypot(pr.dx, pr.dy, pr.dz) || 1; pr.dx /= l; pr.dy /= l; pr.dz /= l;
+  }
   for (const pr of G.proj) moveProj(pr, dt);
   G.proj = G.proj.filter(p => !p.dead);
 }
@@ -1525,6 +1535,7 @@ function snapshot() {
   const z = G.zone, P = z && PHASES[z.ph];
   const common = {
     tm: r2(G.time), n: aliveCount(),
+    hm: G.proj.filter(p => p.home).map(p => [p.id, r2(p.x), r2(p.y), r2(p.z), +p.dx.toFixed(3), +p.dy.toFixed(3), +p.dz.toFixed(3)]),   // zielsuchende Torpedos
     wv: G.wave ? [G.wave.n, G.wave.state === 'break' ? Math.ceil(G.wave.t) : -G.creatures.filter(c => c.wave && !c.dead).length] : null,   // Welle: Nummer, Sekunden Pause oder −Haie übrig
     z: z ? [r2(z.x), r2(z.z), r2(z.r), r2(z.nx), r2(z.nz), r2(z.nr), z.ph, P ? Math.ceil((z.sh ? P.shrink : P.wait) - z.t) : 0, z.sh ? 1 : 0] : null,
     p: [...G.players.values()].filter(p => p.alive).map(p => [p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.ceil(p.hp), Math.round(p.shield),
