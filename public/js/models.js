@@ -968,12 +968,17 @@ export function makeReloadHand(suit) {
 // → Ellbogen → Handgelenk → flache Hand mit geschlossenen Fingern. poseSwim(p) setzt alles für den Zeitpunkt p (0…1) im Zug.
 // Schlüssel-Momente für die RECHTE Hand (die linke ist gespiegelt): [Zeitpunkt, Position, Drehung (kippen, drehen, rollen)]
 //   Gleiten: Hände vorne zusammen · Auseinander: nach außen drücken · Ziehen: unter die Brust · Zurück: unter dem Kinn zusammen
+// Drehung = [kippen (− = Finger nach unten), drehen (− = Finger nach außen), rollen (+ = Handfläche nach außen, − = nach innen)]
+// Ablauf wie bei echten Brustschwimmern: langsam auseinander (Handflächen nach außen), dann Finger nach unten und
+// Handflächen nach hinten (fassen), schneller Zug nach innen unter die Brust, Handflächen zueinander vors Kinn, nach vorne schieben.
 export const SWIM_KEYS = [
-  [0.0,  [0.05, -0.1, -0.48],  [-0.15, 0.1, -0.35]],   // Gleiten
-  [0.3,  [0.3, -0.12, -0.42],  [-0.1, -0.4, -1.1]],    // Auseinander (Handfläche nach außen)
-  [0.55, [0.17, -0.26, -0.34], [0.6, -0.2, -1.3]],     // Ziehen (Handfläche nach hinten)
-  [0.78, [0.06, -0.19, -0.3],  [0.2, 0.3, -1.45]],     // unter dem Kinn, Handflächen zueinander
-  [1.0,  [0.05, -0.1, -0.48],  [-0.15, 0.1, -0.35]],   // wieder Gleiten
+  [0.0,  [0.06, -0.1, -0.5],   [0.0, 0.05, 0.3]],     // Gleiten: Arme vorne, Handflächen nach unten (leicht nach außen)
+  [0.25, [0.32, -0.1, -0.44],  [-0.1, -0.3, 1.25]],   // Auseinander: Handflächen drehen nach AUSSEN (ruhig, langsam)
+  [0.38, [0.34, -0.2, -0.38],  [-0.9, -0.15, 0.4]],   // Fassen: Finger zeigen nach unten, Handflächen nach HINTEN
+  [0.52, [0.13, -0.3, -0.3],   [-1.0, 0.3, -0.7]],    // Zug nach innen (schnell, die Kraftphase): Handflächen nach hinten-innen
+  [0.64, [0.05, -0.2, -0.27],  [0.25, 0.15, -1.5]],   // vor dem Kinn: Handflächen zueinander
+  [0.82, [0.05, -0.13, -0.42], [0.05, 0.08, -0.6]],   // nach vorne schieben, Handflächen drehen wieder nach unten
+  [1.0,  [0.06, -0.1, -0.5],   [0.0, 0.05, 0.3]],     // wieder Gleiten
 ];
 export function makeSwimArms(suit) {
   const g = new THREE.Group(), col = SUIT_COL[suit] || 0x1fd6b4, big = suit === 'bulwark' || suit === 'hammerhai' ? 1.25 : suit === 'manta' || suit === 'barrakuda' ? 0.9 : 1;
