@@ -481,11 +481,11 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   const L = GUN_LOOK, env = GUN_ENV.tex;
   // Polymer mit Schrammen (polyWear) · Stahl mit Kratzern und blank gescheuerten Stellen (steelWear / steelRough)
   const white = new THREE.MeshStandardMaterial({ color: L.body, emissive: L.body, emissiveIntensity: L.bodyGlow, map: polyWear(), roughness: 0.62, metalness: 0.2, bumpMap: polymer(), bumpScale: 0.5, roughnessMap: polymer(), envMap: env, envMapIntensity: 0.35 });
-  const metal = new THREE.MeshStandardMaterial({ color: L.metal, emissive: 0x0c1014, emissiveIntensity: 0.4, map: steelWear(), roughness: 0.42, roughnessMap: steelRough(), metalness: 0.9, bumpMap: brushed(), bumpScale: 0.5, envMap: env, envMapIntensity: 1.1 });
+  const metal = new THREE.MeshStandardMaterial({ color: L.metal, emissive: 0x0c1014, emissiveIntensity: 0.4, map: steelWear(), roughness: 0.3, roughnessMap: steelRough(), metalness: 0.95, bumpMap: brushed(), bumpScale: 0.5, envMap: env, envMapIntensity: 1.6 });
   const gripM = new THREE.MeshStandardMaterial({ color: L.grip, emissive: 0x0a0d10, emissiveIntensity: 0.4, roughness: 0.85, metalness: 0.05, bumpMap: stipple(), bumpScale: 1.8, envMap: env, envMapIntensity: 0.15 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x15191d, emissive: 0x06090c, emissiveIntensity: 0.4, roughness: 0.6, metalness: 0.4, envMap: env, envMapIntensity: 0.4 });
   // Früher leuchtend blaue Zierteile (Ringe, Bodenplatten, Knöpfe): jetzt dunkler, brünierter Stahl wie bei echten Waffen
-  const blue = new THREE.MeshStandardMaterial({ color: 0x2c3136, map: steelWear(), roughness: 0.45, roughnessMap: steelRough(), metalness: 0.85, bumpMap: brushed(), bumpScale: 0.4, envMap: env, envMapIntensity: 0.9 });
+  const blue = new THREE.MeshStandardMaterial({ color: 0x2c3136, map: steelWear(), roughness: 0.36, roughnessMap: steelRough(), metalness: 0.9, bumpMap: brushed(), bumpScale: 0.4, envMap: env, envMapIntensity: 1.25 });
   // Gravur-Schild: Schrift, die in die Seite der Waffe geprägt ist. u0..u1 = von hinten nach vorne, v = Höhe, h = Schrifthöhe, x = Seite (+ rechts, − links)
   const engrave = (text, u0, u1, v, h, x) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(u1 - u0, h), new THREE.MeshStandardMaterial({ map: engraving(text), transparent: true, depthWrite: false, roughness: 0.5, metalness: 0.4, polygonOffset: true, polygonOffsetFactor: -2 }));
@@ -502,6 +502,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
   // Linsen (Zielfernrohr, Visier): leicht getöntes Glas, spiegelt – leuchtet nicht
   const glass = new THREE.MeshStandardMaterial({ color: 0x3a5560, transparent: true, opacity: 0.75, roughness: 0.05, metalness: 0.6, envMap: env, envMapIntensity: 1.4 });
   const fill = new THREE.MeshStandardMaterial({ color: 0x2a2f34, roughness: 0.5, metalness: 0.6 });   // (früher leuchtende Druckanzeige)
+  const anim = { t: 9, prev: 0, n: 0, coverA: 0, coverOpen: false };   // Schuss-Mechanik (Schlitten, Verschluss, Hahn …), siehe fireAnim unten
   let tgt = g;   // wohin neue Teile kommen (normalerweise die Waffe selbst, beim Schlitten in dessen Gruppe)
   const part = (geo, mat, x = 0, y = 0, z = 0) => add(tgt, geo, mat, x, y, z);
   // Box von u0 bis u1 (vorne), v0 bis v1 (oben), Breite w, seitlich verschoben um x
@@ -582,7 +583,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     if (plate) box(white, -0.03, 0.002, top - 0.103 * k, top - 0.096 * k, w * 0.82);                           // Griffboden
     side('guard', white, [[0.03, top], [0.098, top], [0.098, top - 0.008], [0.09, top - 0.032], [0.026, top - 0.032]], w * 0.35,
       [[[0.036, top - 0.005], [0.091, top - 0.005], [0.085, top - 0.026], [0.036, top - 0.026]]]);
-    const trig = box(metal, 0.052, 0.058, top - 0.024, top - 0.002, w * 0.2); trig.rotation.x = 0.35;
+    const trig = box(metal, 0.052, 0.058, top - 0.024, top - 0.002, w * 0.2); trig.rotation.x = 0.35; anim.trig = trig;
   };
 
   if (P.kind === 'pistol' && P.drum) {
@@ -599,16 +600,20 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     const dotV = new THREE.MeshStandardMaterial({ color: SIGHT_GLOW, emissive: SIGHT_GLOW, emissiveIntensity: 2.2 });
     add(g, KNUCKLE, dotV, 0, cy + 0.037, -(L - 0.016) - 0.004).scale.setScalar(0.0021);
     // Hahn hinten oben (fährt beim Schuss kurz zurück)
-    const hamG = new THREE.Group(); g.add(hamG); tgt = hamG;
+    const hamP = new THREE.Group(); hamP.position.set(0, top - 0.014, 0.034); g.add(hamP);     // Drehpunkt des Hahns
+    const hamG = new THREE.Group(); hamG.position.set(0, -(top - 0.014), -0.034); hamP.add(hamG); tgt = hamG;
     const ham = box(metal, -0.04, -0.028, top - 0.016, top + 0.004, 0.008); ham.rotation.x = -0.35;
     box(dark, -0.048, -0.036, top - 0.002, top + 0.008, 0.01);                                  // geriffelter Hahnsporn
-    tgt = g;
+    for (let i = 0; i < 3; i++) box(metal, -0.047 + i * 0.004, -0.0455 + i * 0.004, top + 0.008, top + 0.0095, 0.0105);   // Rillen auf dem Sporn
+    tgt = g; anim.ham = hamP;
+    tube(metal, -0.03, -0.024, cy + 0.012, 0.0045);                                             // Schlagbolzen-Buchse
+    pin(-0.03, top - 0.014, W * 1.05);                                                          // Hahnstift
     cock = { g: hamG, at: new THREE.Vector3(0, top + 0.01, 0.045), travel: 0.008 };
     // runder Griff und runder Abzugsbügel
     side('rgrip', gripM, [[-0.036, t + 0.004], [0.012, t], [0.016, t - 0.03], [0.009, t - 0.07], [0.004, t - 0.094], [-0.018, t - 0.1], [-0.04, t - 0.09], [-0.049, t - 0.06], [-0.045, t - 0.03], [-0.04, t - 0.008]], W * 0.95);
     side('rguard', white, [[0.012, t], [0.07, t], [0.064, t - 0.022], [0.048, t - 0.034], [0.026, t - 0.032], [0.012, t - 0.02]], W * 0.38,
       [[[0.02, t - 0.004], [0.062, t - 0.004], [0.052, t - 0.024], [0.03, t - 0.026], [0.02, t - 0.018]]]);
-    const tr = box(metal, 0.034, 0.04, t - 0.024, t - 0.002, W * 0.22); tr.rotation.x = 0.35;
+    const tr = box(metal, 0.034, 0.04, t - 0.024, t - 0.002, W * 0.22); tr.rotation.x = 0.35; anim.trig = tr;
     box(dark, -0.006, 0.004, 0.002, 0.012, 0.004, -W * 0.5);                                    // Trommel-Entriegelung links
     gills(3, 0.095, 0.022, cy + 0.0, 0.016, W * 0.3);                                           // Kiemen seitlich am Unterlauf
     engrave('.44 HYDRO MAGNUM', 0.16, L - 0.02, cy + 0.017, 0.007, -P.br * 1.5 - 0.001);    // Gravur am Lauf links
@@ -629,8 +634,16 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     tgt = slideG;
     for (let i = 0; i < 6; i++) box(dark, -0.024 + i * 0.006, -0.021 + i * 0.006, H * 0.15, H * 0.9, W + 0.002);   // Griffrillen am Schlitten
     tgt = g;
+    // Lauf: eine eigene Gruppe mit Drehpunkt vorne – beim Zurückfahren des Schlittens senkt sich hinten das Patronenlager (wie bei echten Pistolen)
+    const barrelG = new THREE.Group(); barrelG.position.set(0, H * 0.5, -(L - 0.035)); g.add(barrelG);
+    const bIn = new THREE.Group(); bIn.position.set(0, -H * 0.5, L - 0.035); barrelG.add(bIn); tgt = bIn;
     tube(metal, L - 0.04, L - 0.029, H * 0.5, P.br * 1.15);                               // Laufende, bündig mit dem Schlitten
     tube(dark, L - 0.0295, L - 0.0285, H * 0.5, P.br * 0.75);                           // Laufbohrung (dunkel)
+    box(metal, 0.034, 0.071, H * 0.6, H + 0.0014, W * 0.46, W * 0.1);                   // Laufhaube (sieht man oben im Auswurffenster)
+    box(brassM, 0.03, 0.034, H * 0.72, H * 0.86, W * 0.2, W * 0.1);                     // Patronenboden im Lager
+    tgt = g; anim.barrel = barrelG; anim.barrelZ = -(L - 0.035);
+    // Führungsstange der Schließfeder vorne unter dem Lauf, Auszieher und Ladeanzeige
+    tube(metal, L - 0.042, L - 0.03, H * 0.14, 0.0035);
     tgt = slideG;                                                                         // alles Weitere sitzt auf dem Schlitten
     box(dark, -0.026, -0.02, H, H + 0.007, 0.008, -0.007); box(dark, -0.026, -0.02, H, H + 0.007, 0.008, 0.007);   // Kimme
     box(blue, L - 0.05, L - 0.045, H, H + 0.007, 0.004);                                  // Korn (blau leuchtend)
@@ -638,8 +651,11 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     chargeBar(0.015, 0.075, H * 0.25, 0.008, W / 2 + 0.002);
     gills(3, 0.085, 0.024, H * 0.5, H * 0.75, W / 2 + 0.002);
     // Auswurffenster rechts oben: dunkle Öffnung, darin sieht man das Laufende (Stahl)
-    box(dark, 0.03, 0.075, H * 0.5, H + 0.001, W * 0.45, W * 0.3);
-    box(metal, 0.035, 0.072, H * 0.62, H * 0.92, W * 0.35, W * 0.22);
+    box(dark, 0.03, 0.075, H - 0.002, H + 0.001, W * 0.62, W * 0.12);
+    box(dark, 0.03, 0.075, H * 0.55, H, 0.002, W / 2 + 0.0005);                          // Fenster reicht rechts nach unten
+    box(metal, 0.022, 0.034, H * 0.62, H * 0.78, 0.003, W / 2 + 0.0012);                 // Auszieher (Kralle, zieht die Hülse raus)
+    box(metal, -0.031, -0.029, H * 0.25, H * 0.8, W * 0.6);                              // hintere Abdeckplatte des Schlittens
+    for (let i = 0; i < 5; i++) box(dark, 0.08 + i * 0.008, 0.084 + i * 0.008, H - 0.0005, H + 0.0012, W * 0.3);   // Entlastungsschnitte oben
     engrave('UNDERNITE  P9-H', 0.005, 0.07, H * 0.3, 0.0075, -W / 2 - 0.0012);   // Gravur links auf dem Schlitten
     engrave('9 mm HYDRO', 0.0, 0.03, H * 0.3, 0.0065, W / 2 + 0.0012);         // Gravur rechts
     for (let i = 0; i < 4; i++) box(dark, L - 0.075 + i * 0.006, L - 0.072 + i * 0.006, H * 0.2, H * 0.85, W + 0.002);   // vordere Griffrillen
@@ -660,7 +676,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       // Abzugsbügel: vorne eckig (zum Abstützen des Fingers), mit Loch
       side('pguard', white, [[0.026, t], [0.078, t], [0.08, t - 0.004], [0.076, t - 0.032], [0.07, t - 0.036], [0.024, t - 0.034]], W * 0.38,
         [[[0.034, t - 0.005], [0.072, t - 0.005], [0.069, t - 0.029], [0.034, t - 0.029]]]);
-      const tr = box(metal, 0.044, 0.05, t - 0.026, t - 0.002, W * 0.22); tr.rotation.x = 0.3;   // Abzug
+      const tr = box(metal, 0.044, 0.05, t - 0.026, t - 0.002, W * 0.22); tr.rotation.x = 0.3; anim.trig = tr;   // Abzug
       box(metal, 0.044, 0.046, t - 0.018, t - 0.006, W * 0.08);                                // Sicherungszunge im Abzug
       // Bedienteile links: Magazinknopf, Schlittenfanghebel, Zerlegehebel
       box(dark, 0.022, 0.03, t - 0.012, t - 0.002, 0.004, -W * 0.47);
@@ -670,7 +686,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       engrave('Nr. 04172', 0.075, 0.11, -0.019, 0.005, W * 0.37);   // Seriennummer vorne am Rahmen
     }
     if (!P.drum) seatMag('pistol', 1, 0, -0.016, -0.014, -0.207);   // schräg wie der Griff (der Revolver hat stattdessen eine Trommel)
-    rear = 0.035;
+    rear = 0.035; anim.slide = slideG; anim.shellAt = [W * 0.3, H + 0.004, -0.05]; anim.shellSize = [0.0045, 0.0045, 0.019];
     muzzleAt = [0, H * 0.5, -(L - 0.015)]; gripTop = -0.014; gripW = W;
   } else if (P.kind === 'rifle') {
     const { L, H, W } = P, back = L * 0.35, front = L * 0.65;
@@ -719,8 +735,12 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     }
     // Pump-Griff (Splitterwerfer)
     if (P.pump) {
+      tube(metal, front + hg - 0.02, front + hg + 0.13, -H * 0.4, P.br * 0.7);              // Röhrenmagazin unter dem Lauf (bleibt stehen)
+      const pumpG = new THREE.Group(); g.add(pumpG); tgt = pumpG;                            // Pumpe: wird nach jedem Schuss zurück- und vorgerissen
       tube(metal, front + hg, front + hg + 0.1, -H * 0.4, P.br * 1.2);
       for (let i = 0; i < 6; i++) tube(dark, front + hg + 0.01 + i * 0.015, front + hg + 0.017 + i * 0.015, -H * 0.4, P.br * 1.3);
+      for (const sd of [-1, 1]) box(metal, front * 0.5, front + hg, -H * 0.38, -H * 0.33, 0.002, sd * (W / 2 + 0.002));   // Pumpstangen
+      tgt = g; anim.pump = pumpG;
     }
     // Druckpatrone (Magazin): durchsichtig, innen leuchtet das Wasser, unten nach vorne geneigt
     const mu = Math.max(0.13, front * 0.5);                                                     // vor dem Abzugsbügel
@@ -741,6 +761,32 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       rear = back + 0.1;
     }
     box(dark, front * 0.15, front * 0.45, H * 0.05, H * 0.35, 0.004, W / 2 + 0.001);       // Auswurffenster rechts
+    // Verschluss: blanker Verschlussträger mit rundem Verschlusskopf – fährt bei jedem Schuss zurück und wieder vor
+    { const p0 = front * 0.15, p1 = front * 0.45, pv0 = H * 0.05, pv1 = H * 0.35, px = W / 2 + 0.0035, pm = (pv0 + pv1) / 2;
+      const carrier = box(metal, p0 + 0.002, p1 - 0.002, pv0 + 0.004, pv1 - 0.004, 0.002, px);
+      const boltG = new THREE.Group(); g.add(boltG); tgt = boltG;
+      const head = part(GUN_CYL, metal, px + 0.0006, pm, -(p1 - 0.008)); head.scale.set((pv1 - pv0) * 0.32, (pv1 - pv0) * 0.32, 0.01);
+      box(dark, p1 - 0.014, p1 - 0.004, pm + (pv1 - pv0) * 0.18, pm + (pv1 - pv0) * 0.28, 0.0015, px + 0.0018);   // Auszieher-Kralle
+      part(GUN_CYL, brassM, px + 0.0004, pm, -(p1 - 0.0025)).scale.set((pv1 - pv0) * 0.22, (pv1 - pv0) * 0.22, 0.003);   // Patronenboden
+      tgt = g;
+      anim.bolt = { carrier, head: boltG, a: p0 + 0.002, b: p1 - 0.002, travel: (p1 - p0) * 0.7 };
+      // Staubschutzklappe: unten am Fenster angeschlagen, springt beim ersten Schuss auf und bleibt offen
+      const cov = new THREE.Group(); cov.position.set(px + 0.0025, pv0, -(p0 + p1) / 2); g.add(cov); tgt = cov;
+      box(blue, -(p1 - p0) / 2 - 0.002, (p1 - p0) / 2 + 0.002, 0, pv1 - pv0 + 0.003, 0.0015, 0);
+      box(metal, -(p1 - p0) / 2, (p1 - p0) / 2, -0.001, 0.001, 0.003, 0);                  // Scharnierstift
+      tgt = g; anim.cover = cov;
+      // Hülsenabweiser hinter dem Fenster, Schließhilfe (Knopf schräg hinten rechts)
+      box(white, p0 - 0.016, p0 - 0.002, pv1 - 0.004, pv1 + 0.01, 0.01, W / 2 + 0.004);
+      const fa = part(GUN_CYL, metal, W / 2 + 0.007, pv1 + 0.002, -(p0 - 0.03)); fa.scale.set(0.006, 0.006, 0.03); fa.rotation.y = -0.25;
+      part(GUN_CYL, dark, W / 2 + 0.0085, pv1 + 0.002, -(p0 - 0.047)).scale.set(0.0065, 0.0065, 0.004);
+      anim.shellAt = [px + 0.004, pm, -(p1 - 0.01)]; anim.shellSize = [0.0042, 0.0042, 0.024]; }
+    // links: Verschlussfanghebel und Sicherungshebel (mit S / F graviert), rechts: Magazinknopf
+    box(metal, front * 0.06, front * 0.13, -H * 0.3, -H * 0.05, 0.003, -W / 2 - 0.0015);
+    { const sel = box(metal, -0.03, 0.0, -H * 0.12, -H * 0.04, 0.003, -W / 2 - 0.002); sel.rotation.x = 0.4;
+      const hub = part(GUN_CYL, metal, -W / 2 - 0.002, -H * 0.08, 0.015); hub.scale.set(0.007, 0.007, 0.003); hub.rotation.y = Math.PI / 2; }
+    engrave('S   F', -0.045, 0.01, -H * 0.3, 0.007, -W / 2 - 0.0012);
+    { const mb = part(GUN_CYL, dark, W / 2 + 0.002, -H * 0.28, -(mu + 0.03)); mb.scale.set(0.006, 0.006, 0.003); mb.rotation.y = Math.PI / 2; }
+    { const sw = add(g, GEO.torus, metal, 0, -H * 0.42 - 0.01, -(front + hg * 0.85)); sw.scale.set(0.008, 0.008, 0.008); sw.rotation.y = Math.PI / 2; }   // Riemenöse
     for (const [u, v] of [[-back * 0.7, -H * 0.25], [-back * 0.2, -H * 0.25], [front * 0.75, -H * 0.25], [front * 0.75, H * 0.3]]) {
       for (const sd of [-1, 1]) { const sc = part(GUN_CYL, metal, sd * (W / 2 + 0.001), v, -u); sc.scale.set(0.004, 0.004, 0.003); sc.rotation.y = Math.PI / 2; }   // Schrauben
     }
@@ -756,7 +802,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     chargeBar(-back * 0.85, -back * 0.15, H * 0.15, 0.012, W / 2 + 0.002);
     engrave('UN-17  KAL. WASSER  Nr. 0' + (311 + widx * 47), -back * 0.85, -back * 0.05, H * 0.12, 0.009, -W / 2 - 0.0012);   // Gravur links am Gehäuse
     for (const [u, v] of [[-back * 0.5, -H * 0.38], [front * 0.25, -H * 0.38], [front * 0.6, H * 0.05]]) pin(u, v, W);
-    gills(P.gills, front * 0.15, 0.03, H * 0.05, H * 0.75, W / 2 + 0.002);
+    gills(P.gills, front * 0.5, 0.024, H * 0.05, H * 0.7, W / 2 + 0.002);   // vor dem Auswurffenster, damit man den Verschluss sieht
     grip(-H / 2, W);
     muzzleAt = [0, bv, -(tip + 0.045)]; gripTop = -H / 2; gripW = W; support = [0, -H * 0.42, -(front + hg * 0.5)];
   } else if (P.kind === 'pole') {
@@ -857,6 +903,52 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       if (b.tank) b.tank.material.emissiveIntensity = 0.3 + c * 2.2;
     }
     blue.emissiveIntensity = 1.3 + c * 1.4;
+  };
+  // ===== Schuss-Mechanik wie bei echten Waffen =====
+  // Bei jedem Schuss: Pistole – Schlitten fährt zurück, der Lauf kippt hinten nach unten, eine Hülse fliegt rechts raus.
+  // Gewehr – der Verschluss fährt im Auswurffenster zurück und wieder vor, die Staubschutzklappe springt auf.
+  // Pump-Gewehr – nach dem Schuss wird die Pumpe zurück- und vorgerissen (erst dann fliegt die Hülse).
+  // Revolver – der Hahn schlägt nach vorne, spannt sich wieder und die Trommel dreht eine Kammer weiter.
+  const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  const cyc = (t, a, b, c) => t < a ? 0 : t < b ? ease((t - a) / (b - a)) : t < c ? 1 - ease((t - b) / (c - b)) : 0;   // 0 → 1 (hinten) → 0
+  const trigRest = anim.trig ? anim.trig.rotation.x : 0, shells = [];
+  const eject = () => {
+    if (!anim.shellAt) return;
+    let s = shells.find(o => o.life <= 0);
+    if (!s) { if (shells.length >= 4) s = shells[0]; else { const m = add(g, GUN_CYL, brassM); m.scale.set(...anim.shellSize); s = { m, v: [0, 0, 0] }; shells.push(s); } }
+    s.life = 0.5; s.m.visible = true; s.m.position.set(...anim.shellAt); s.m.rotation.set(0, 0, 0);
+    s.v[0] = 0.8 + Math.random() * 0.4; s.v[1] = 0.55 + Math.random() * 0.3; s.v[2] = 0.15 + Math.random() * 0.15; s.spin = 18 + Math.random() * 10;
+  };
+  g.userData.fireAnim = (kick, dt, reloading) => {
+    if (kick >= 0.99 && anim.prev < 0.95 && !reloading) { anim.t = 0; anim.n++; anim.ejected = false; anim.coverOpen = true; } else anim.t += dt;
+    anim.prev = kick;
+    const t = anim.t;
+    if (!reloading) {
+      if (anim.slide && cock) anim.slide.position.z = cock.travel * cyc(t, 0, 0.028, 0.1);
+      if (anim.bolt) {
+        const k = anim.pump ? cyc(t, 0.12, 0.22, 0.34) : cyc(t, 0, 0.022, 0.085);
+        anim.boltK = k;
+      }
+      if (anim.pump) anim.pump.position.z = 0.045 * cyc(t, 0.12, 0.22, 0.34);
+      if (!anim.ejected && t >= (anim.pump ? 0.2 : 0.018)) { anim.ejected = true; eject(); }
+      if (anim.trig) anim.trig.rotation.x = trigRest + 0.4 * (t < 0.1 ? 1 - ease(t / 0.1) : 0);   // Abzug gedrückt, dann springt er vor
+    } else if (anim.bolt && cock) anim.boltK = cock.g.position.z / cock.travel;   // beim Durchladen zieht der Spannhebel den Verschluss mit
+    // Pistolenlauf folgt dem Schlitten: erst ein Stück mit nach hinten, dann kippt er ab
+    if (anim.barrel && anim.slide && cock) { const s = anim.slide.position.z / cock.travel;
+      anim.barrel.position.z = anim.barrelZ + 0.004 * Math.min(1, s * 4); anim.barrel.rotation.x = 0.07 * ease((s - 0.2) / 0.5); }
+    if (anim.bolt) { const B = anim.bolt, off = B.travel * (anim.boltK || 0), len = B.b - B.a - off;
+      B.carrier.scale.z = Math.max(0.001, len); B.carrier.position.z = -(B.a + len / 2); B.head.position.z = off; }
+    if (anim.cover) { anim.coverA += ((anim.coverOpen ? 1 : 0) - anim.coverA) * Math.min(1, dt * 35); anim.cover.rotation.z = -2.5 * anim.coverA; }
+    if (anim.ham) anim.ham.rotation.x = t < 0.12 ? -0.08 : -0.08 + 0.6 * ease((t - 0.12) / 0.16);   // Hahn: schlägt zu, dann wieder gespannt
+    if (g.userData.revolver && !reloading && anim.n) g.userData.revolver.cyl.rotation.z = (anim.n - 1 + ease((t - 0.12) / 0.16)) * TAU / 6;   // Trommel dreht weiter
+    for (const s of shells) {   // fliegende Hülsen: unter Wasser schnell gebremst, sinken langsam
+      if (s.life <= 0) continue;
+      s.life -= dt; const dr = Math.max(0, 1 - dt * 3);
+      s.v[0] *= dr; s.v[1] = s.v[1] * dr - dt * 1.2; s.v[2] *= dr;
+      s.m.position.x += s.v[0] * dt; s.m.position.y += s.v[1] * dt; s.m.position.z += s.v[2] * dt;
+      s.m.rotation.x += s.spin * dt; s.m.rotation.y += s.spin * 0.6 * dt;
+      if (s.life <= 0) s.m.visible = false;
+    }
   };
   g.userData.rear = rear;   // wie weit die Waffe hinter der Hand weitergeht (für die Ego-Perspektive)
   const muzzle = new THREE.Object3D(); muzzle.position.set(...muzzleAt); g.add(muzzle);

@@ -1414,7 +1414,6 @@ function updateViewModel(dt) {
   view.gun.rotation.set(K * 0.08 + rspring.p * 3.2 + view.tilt * 0.15 - view.inY * 1.2, view.tilt * 0.3 + view.inX * 1.4 + (hip[2] || 0) * (1 - ads),
     -view.tilt * 1.15 + K * (view.kickRoll || 0) + view.inX * 1.8);              // −z-Drehung = Boden nach links
   // der Schlitten / Spannhebel fährt bei jedem Schuss kurz zurück
-  if (U.cock && !rl) U.cock.g.position.z = U.cock.travel * Math.min(1, view.kick * 1.4);
   if (rl) {
     // Rucksack und Ellbogen von Kamera- in Waffen-Koordinaten umrechnen
     view.gun.updateMatrix(); IM.copy(view.gun.matrix).invert();
@@ -1426,6 +1425,8 @@ function updateViewModel(dt) {
     if (U.mag) { U.mag.g.position.copy(U.mag.seat); U.mag.g.visible = !U.freshOnly || view.charge > 0; U.mag.fill.emissiveIntensity = 0.4 + 1.4 * view.charge; }   // Magnet weg, wenn verschossen
     if (U.revolver) { const R = U.revolver; R.crane.rotation.z = 0; R.cyl.visible = true; R.cyl.rotation.z = 0; R.loose.visible = false; R.fill.emissiveIntensity = 0.4 + 1.4 * view.charge; }
   }
+  // Schuss-Mechanik: Schlitten, Verschluss, Pumpe, Hahn, Trommel, fliegende Hülsen (siehe models.js)
+  if (U.fireAnim) U.fireAnim(view.kick, dt, rl);
   // Mündungsblitz: ganz kurz hell an der Mündung, und er beleuchtet die Hände
   const fl = Math.max(0, (view.kick - 0.55) / 0.45);
   if (!U.flash) { U.flash = makeFlash(); U.muzzle.add(U.flash); }
