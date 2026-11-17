@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME, ULTI, ULTIS, eyeHeight,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME, ULTI, ULTIS, eyeHeight, leagueOf, BR_UPGRADES as BR_UPS,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,7 @@ function send(ws, obj) { if (ws.readyState === 1) ws.send(typeof obj === 'string
 function broadcast(obj) { const s = JSON.stringify(obj); for (const c of clients.values()) send(c.ws, s); }
 function lobbyMsg() {
   return { t: 'lobby', seed: G.seed, mode: G.mode, bots: G.bots, duo: G.duo ? 1 : 0, urls: lanUrls(),
-    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), suits: suitsOf(c.name), gads: gadsOf(c.name), weps: wepsOf(c.name), atts: attsOf(c.name), load: loadOf(c.name) })) };
+    players: [...clients.values()].map(c => ({ id: c.id, name: c.name, suit: c.suit, pearls: pearlsOf(c.name), up: upsOf(c.name), league: leagueOf(upsOf(c.name)), suits: suitsOf(c.name), gads: gadsOf(c.name), weps: wepsOf(c.name), atts: attsOf(c.name), load: loadOf(c.name) })) };
 }
 const ev = (...a) => G.events.push(a);
 
@@ -156,6 +156,13 @@ function startMatch() {
   for (let i = 0; i < nBots; i++) {
     const p = mkPlayer(nextId++, names[i % names.length], pick(SUIT_ORDER), true);
     G.players.set(p.id, p);
+  }
+  // Faire Bots: sie bekommen die Upgrades, die die Spieler im Durchschnitt gekauft haben (mehr Leben, schneller nachladen …)
+  const humans = [...G.players.values()].filter(p => !p.bot);
+  if (humans.length) {
+    const avg = {};
+    for (const u of BR_UPS) avg[u.k] = Math.round(humans.reduce((a, p) => a + ((p.up && p.up[u.k]) | 0), 0) / humans.length);
+    for (const p of G.players.values()) if (p.bot) { p.up = { ...avg }; p.hp = p.maxhp = Math.round(p.maxhp * upMul(p.up, 'hp')); }
   }
   // jeder außer dem Goliath hat ein Magnet-Gewehr mit 2 Schuss dabei (Platz 3) – damit kann man einen Mech lahmlegen
   for (const p of G.players.values()) if (!SUITS[p.suit].mech) p.weapons[2] = newWeapon('magrifle', 0);

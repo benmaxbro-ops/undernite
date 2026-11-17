@@ -20,9 +20,9 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 Gekaufte Upgrades machen **voll stark**. Damit das nicht unfair wird, kommen Spieler nach ihrem
 Upgrade-Level in **Ligen 1 bis 4**: Anfänger spielen gegen Anfänger, Profis gegen Profis.
-- Jeder Spieler hat ein Level, das sich aus seinen gekauften Upgrades ergibt.
-- Der Server lässt mehrere Runden gleichzeitig laufen, eine pro Liga.
-- Die Bots in einer Liga sind ähnlich stark ausgerüstet wie die Spieler dort.
+- [x] Jedes Level und jede Liga (1–4) wird in der Lobby angezeigt, Bots bekommen die Upgrades der Spieler (schon fertig).
+- [ ] Der Server lässt mehrere Runden gleichzeitig laufen, eine pro Liga (großer Umbau – lohnt sich erst mit vielen Spielern gleichzeitig).
+
 
 ## Später
 

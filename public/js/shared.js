@@ -224,6 +224,11 @@ export const upBonus = (up, k) => { const u = BR_UPGRADES.find(x => x.k === k), 
 // Umrechnung für das Spiel: Schwimmtempo und Leben werden mit (1 + Bonus) malgenommen,
 // alles andere (Nachladezeit, Rückstoß, Wackeln, Füllzeit) durch (1 + Bonus) geteilt – es wird kleiner, also besser.
 export const upMul = (up, k) => { const b = 1 + upBonus(up, k) / 100; return k === 'swim' || k === 'hp' ? b : 1 / b; };   // Tempo und Leben: mehr; alles andere: weniger Zeit
+// Liga: aus den gekauften Upgrades (jede Stufe zählt 1) wird ein Level, daraus Liga 1 (Anfänger) bis 4 (Profi).
+// LEAGUE = ab so vielen Upgrade-Stufen beginnt Liga 2, 3, 4
+export const LEAGUE = [6, 11, 16];
+export const upgradeLevel = (up) => Object.values(up || {}).reduce((a, b) => a + (b | 0), 0);
+export const leagueOf = (up) => { const l = upgradeLevel(up); return 1 + LEAGUE.filter(x => l >= x).length; };
 export const brReward = (kills, secs, place) => {
   const k = kills * BR_REWARD.kill, m = Math.floor(secs / 60) * BR_REWARD.minute, p = BR_REWARD.place[place - 1] || 0;
   return { k, m, p, sum: k + m + p };

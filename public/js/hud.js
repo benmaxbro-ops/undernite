@@ -160,7 +160,7 @@ export class Hud {
       if (lock) b.insertAdjacentHTML('afterbegin', `<span class="lock">🔒 🦪 ${S.price}</span>`);
       if (this.brMe) b.classList.toggle('on', b.dataset.id === this.brMe.suit);
     }
-    $('plist').innerHTML = m.players.map(p => `<li><span>${esc(p.name)}${p.id === myId ? ' <small>(du)</small>' : ''}</span><small>${p.pearls ? `🦪 ${p.pearls} · ` : ''}${SUITS[p.suit].name}</small></li>`).join('')
+    $('plist').innerHTML = m.players.map(p => `<li><span>${esc(p.name)}${p.id === myId ? ' <small>(du)</small>' : ''} <small class="liga">Liga ${p.league || 1}</small></span><small>${p.pearls ? `🦪 ${p.pearls} · ` : ''}${SUITS[p.suit].name}</small></li>`).join('')
       + `<li><span><small>+ ${m.bots} Bots</small></span></li>`;
     if (document.activeElement !== $('bots')) { $('bots').value = m.bots; $('botsN').textContent = m.bots; }
     const exp = m.mode === 'exp';

@@ -79,6 +79,8 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Unterwasser-Licht:** Wasser schluckt Rot zuerst, dann Grün (Werte in `water.js`). Schwebeteilchen blitzen im Lampenkegel auf.
 - **Richtungsanzeige:** Ein feiner Ring um die Bildmitte; schießt jemand bis 80 m entfernt, zeigt ein gelber Pfeil in seine Richtung (rot = du wurdest getroffen).
 - **Sterben:** Das Bild wird dunkel, dann schwarz, dann „Du bist tot“ – zuschauen, schon den nächsten Taucher wählen oder in den Shop (Einkaufen geht nach dem Tod auch während der Runde).
+- **Ligen:** Aus deinen gekauften Upgrades wird ein Level, daraus Liga 1 (Anfänger) bis 4 (Profi) – steht in der Lobby neben dem Namen.
+  Damit es fair bleibt, bekommen die Bots dieselben Upgrades wie die Spieler im Durchschnitt (z. B. mehr Leben). Grenzen: `LEAGUE` in `shared.js`.
 - **Wellen-Überleben** (dritter Modus in der Lobby): ihr kämpft zu viert (Bots füllen auf) in der Mitte der Karte gegen Hai-Wellen.
   Jede Welle mehr und stärkere Haie, alle 5 Wellen ein Riesenhai. In der Pause zwischen den Wellen kommen Gefallene zurück,
   alle bekommen Leben und Munition. Vorbei ist es erst, wenn alle gleichzeitig tot sind. 25 Perlen pro geschaffter Welle. Werte: `WAVE` in `server.js`.
