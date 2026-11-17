@@ -256,11 +256,13 @@ export const RARITY = [
   { name: 'Legendär',   color: '#ffb52e', mul: 1.45 },
 ];
 
-export const VEHICLE_IDS = ['scooter', 'sub', 'jetski'];   // neue Fahrzeuge immer HINTEN anhängen
+export const VEHICLE_IDS = ['scooter', 'sub', 'jetski', 'ray'];   // neue Fahrzeuge immer HINTEN anhängen
 export const VEHICLES = {
   scooter: { name: 'U-Scooter',   hp: 0,   speed: 24, accel: 3.0, r: 1.1, cam: 6.5 },
   // Jetski-Scooter: viel schneller, aber man kann nicht seitwärts fahren (strafe 0) und er dreht weit
   jetski:  { name: 'Jetski',      hp: 0,   speed: 38, accel: 2.2, r: 1.2, cam: 7.5, strafe: 0, turn: 2.4 },
+  // Torpedo-Rochen: gleitet wie ein Mantarochen, schießt Torpedos (torpDmg = Schaden, torpRate = Schuss pro Sekunde)
+  ray:     { name: 'Torpedo-Rochen', hp: 0, speed: 27, accel: 2.4, r: 1.6, cam: 8.5, strafe: 0, turn: 2.0, torpDmg: 40, torpRate: 0.8 },
   sub:     { name: 'Mini-U-Boot', hp: 450, speed: 17, accel: 1.6, r: 3.0, cam: 16 },
 };
 
@@ -619,6 +621,10 @@ export class World {
     // Jetskis: neben den ersten 4 Scootern (ohne neue Zufallszahlen, damit der Rest der Karte gleich bleibt)
     for (const sc of this.vehSpawns.filter(v => v.type === 'scooter').slice(0, 4)) {
       const x = sc.x + 5, z = sc.z + 3; this.vehSpawns.push({ type: 'jetski', x, y: this.heightAt(x, z) + 1.8, z, yaw: sc.yaw });
+    }
+    // Torpedo-Rochen: neben drei anderen Scootern (auch ohne neue Zufallszahlen)
+    for (const sc of this.vehSpawns.filter(v => v.type === 'scooter').slice(4, 7)) {
+      const x = sc.x - 6, z = sc.z - 4; this.vehSpawns.push({ type: 'ray', x, y: this.heightAt(x, z) + 2.2, z, yaw: sc.yaw });
     }
 
     // creature sites

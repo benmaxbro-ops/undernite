@@ -408,6 +408,12 @@ function fire(p, d, aim) {
     spawnProj(p, 'spikemg', p.x + d[0] * 0.8, p.y + eyeHeight(p.suit) + d[1] * 0.8, p.z + d[2] * 0.8, d, 1, v.id, aim, SUB_MG);
     return;
   }
+  if (v && v.type === 'ray') {   // Torpedo-Rochen: Torpedo aus dem Bauch
+    const RY = VEHICLES.ray; if (G.time < v.nextFire - 0.06) return;
+    v.nextFire = G.time + 1 / RY.torpRate;
+    spawnProj(p, 'subtorp', v.x + d[0] * 2.6, v.y + d[1] * 2.6 - 0.5, v.z + d[2] * 2.6, d, 1, v.id, null, { ...WEAPONS.subtorp, dmg: RY.torpDmg, splash: 6 });
+    return;
+  }
   if (v && v.type === 'sub') {
     if (G.time < v.nextFire - 0.06) return;
     v.nextFire = G.time + 1 / WEAPONS.subtorp.rate;

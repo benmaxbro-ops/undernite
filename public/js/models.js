@@ -191,6 +191,35 @@ export function makeSub() {
   return root;
 }
 // Jetski-Scooter: schlanker roter Rumpf mit weißem Streifen, Lenker, Sitz, zwei Kufen und einer leuchtenden Düse hinten
+// Torpedo-Rochen: flacher Rochen-Körper mit zwei schlagenden Flügeln, Schwanz, Sattel und zwei Torpedos unter den Flügeln
+export function makeRay() {
+  const root = new THREE.Group(), g = new THREE.Group(); g.rotation.order = 'YXZ'; root.add(g);
+  const b = new THREE.Group(); b.position.set(0, -0.7, 0); g.add(b);
+  const skin = std(0x2f4a5c, { roughness: 0.55 }), belly = std(0xd8e2e6, { roughness: 0.6 }), dark = std(0x1d2329, { roughness: 0.5 });
+  const wingShape = new THREE.Shape(); wingShape.moveTo(0, -0.9); wingShape.quadraticCurveTo(1.6, -0.4, 2.3, 0.35); wingShape.quadraticCurveTo(1.2, 0.6, 0, 0.9); wingShape.closePath();
+  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2 }).rotateX(Math.PI / 2);
+  add(b, GEO.sph, skin, 0, 0, 0).scale.set(0.75, 0.28, 1.25);                          // Körper
+  add(b, GEO.sph, belly, 0, -0.08, 0.05).scale.set(0.65, 0.18, 1.1);                    // heller Bauch
+  const wings = [];
+  for (const s of [-1, 1]) {
+    const w = new THREE.Group(); w.position.set(s * 0.45, 0, 0); b.add(w);
+    const m = add(w, wingGeo, skin, 0, 0.04, 0); m.scale.set(s, 1, 1);
+    const pod = add(w, GEO.zcyl, dark, s * 0.9, -0.22, -0.1); pod.scale.set(0.12, 0.12, 1.1);   // Torpedo unter dem Flügel
+    add(w, new THREE.ConeGeometry(0.12, 0.25, 12).rotateX(-Math.PI / 2), std(0xd8a818), s * 0.9, -0.22, -0.78);
+    wings.push({ w, s });
+  }
+  const tail = add(b, GEO.zcyl, skin, 0, 0, 1.9); tail.scale.set(0.05, 0.05, 1.5);
+  add(b, GEO.box, dark, 0, 0.28, 0.1).scale.set(0.5, 0.08, 0.9);                        // Sattel
+  add(b, GEO.box, dark, 0, 0.4, -0.55).scale.set(0.55, 0.04, 0.05);                      // Haltegriff
+  for (const s of [-1, 1]) add(b, GEO.sph, glow(0x7df9ff, 2), s * 0.32, 0.08, -1.08).scale.setScalar(0.07);   // leuchtende Augen
+  let ph = Math.random() * 6;
+  root.userData.update = (dt, s) => {
+    g.rotation.y = s.yaw; g.rotation.x = s.pitch;
+    ph += dt * (1.2 + (s.speed || 0) * 0.12);
+    for (const { w, s: sd } of wings) w.rotation.z = sd * Math.sin(ph) * (0.18 + Math.min(0.25, (s.speed || 0) / 80));   // Flügelschlag
+  };
+  return root;
+}
 export function makeJetski() {
   const root = new THREE.Group(), g = new THREE.Group(); g.rotation.order = 'YXZ'; root.add(g);
   const b = new THREE.Group(); b.position.set(0, -0.55, -0.4); g.add(b);

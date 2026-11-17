@@ -9,7 +9,7 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Danach
 
-- [ ] **Neue Fahrzeuge:** Torpedo-Rochen (Jetski ist fertig)
+
 - [ ] **Handy-Steuerung:** Joystick und Knöpfe auf dem Bildschirm
 
 - [ ] **Mech noch viel detaillierter** (außen und innen)
