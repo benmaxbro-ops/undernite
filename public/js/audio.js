@@ -23,7 +23,9 @@ export const UNDERWATER = {
 //   sub   = ganz tiefer Bass-Stoß (50–60 Hertz), den man im Bauch spürt – das "Boom"
 //   loud  = Gesamtlautstärke aller Schüsse
 // duck geht von 0 (nichts wird leiser) bis 0.9 (alles andere fast stumm)
-export const SHOT = { crack: 1.4, body: 3.1, boom: 2.2, mech: 1.6, duck: 0.6, wumms: 1.0, sub: 2.4, loud: 1.4 };
+//   harm  = Boom mit Obertönen: der tiefe Schlag wird angezerrt, so hört man ihn auch auf Laptop-Lautsprechern (die keine ganz tiefen Töne können)
+//   boomLen = wie lange der Boom nachdröhnt (Sekunden)
+export const SHOT = { crack: 1.4, body: 3.1, boom: 3.0, mech: 1.6, duck: 0.6, wumms: 1.4, sub: 3.5, harm: 2.2, boomLen: 0.55, loud: 1.4 };
 // Holztür-Schlag bei jedem Schuss: vol = Lautstärke bei fremden Schüssen, own = bei eigenen,
 // range = bis so viele Meter weit hört man ihn, pitchSmall / pitchBig = Tonhöhe (kleiner = tiefer),
 // body = zusätzlicher tiefer Bass-Schlag darunter
@@ -173,6 +175,7 @@ export class Sfx {
     this.tone(62 - big * 16, 32, 0.08 + big * 0.08, (1.2 + big * 0.4) * SHOT.boom * vol, 'sine');     // harter, dumpfer Schlag
     // Sub-Boom: sehr tiefer Stoß, der kurz nachwirkt (das spürt man mehr, als man es hört)
     this.tone(58 - big * 10, 34, 0.22 + big * 0.25, SHOT.sub * vol * (own ? 1 : 0.5) * (0.6 + big * 0.5), 'sine');
+    this.boomHarm(55 - big * 12, SHOT.boomLen * (0.7 + big * 0.6), SHOT.harm * vol * (own ? 1 : 0.55) * (0.7 + big * 0.4));
     this.tone(130 - big * 30, 60, 0.05, 0.7 * SHOT.boom * vol, 'triangle');
     this.noise(0.05 + big * 0.06, 400, 0.8, 0.5 * SHOT.boom * vol, 'lowpass', 90);
     // 3b) Wumms: der hörbare Druck-Schlag. Grundton fällt von ~150 auf ~55 Hertz, dazu die doppelte Frequenz (Oberton),
@@ -197,6 +200,19 @@ export class Sfx {
       gw.linearRampToValueAtTime(1 - dk, t + 0.008); gw.setTargetAtTime(1, t + 0.06, 0.09);
     }
     return true;
+  }
+  // Boom mit Obertönen: ein tiefer Ton (f Hertz) wird stark angezerrt. Dabei entstehen Obertöne (2×, 3×, 4× f = 100–250 Hertz),
+  // die auch kleine Lautsprecher spielen können – das Ohr "rechnet" daraus den tiefen Boom zurück, obwohl er selbst fehlt.
+  boomHarm(f, dur, vol) {
+    const ctx = this.ctx; if (!ctx || vol <= 0.003) return;
+    if (!this.boomCurve) { const c = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; c[i] = Math.tanh(x * 7) / Math.tanh(7); } this.boomCurve = c; }
+    const t = ctx.currentTime, o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(f * 1.6, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.04); o.frequency.exponentialRampToValueAtTime(f * 0.7, t + dur);   // Schlag fällt schnell ab
+    const env = ctx.createGain(); env.gain.setValueAtTime(0.001, t); env.gain.exponentialRampToValueAtTime(1, t + 0.006); env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    const sh = ctx.createWaveShaper(); sh.curve = this.boomCurve;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = 0.9;   // nur die tiefen Obertöne behalten (sonst schnarrt es)
+    const g = ctx.createGain(); g.gain.value = vol * 1.1;
+    o.connect(env).connect(sh).connect(lp).connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.05);
   }
   // Schuss wie ein Faustschlag gegen eine Holztür: echter Holzschlag (CC0, siehe QUELLEN.txt), tiefer gestimmt,
   // durch die Unterwasser-Kette mit Echo. Große Waffen: zuschlagende Tür, noch tiefer.
