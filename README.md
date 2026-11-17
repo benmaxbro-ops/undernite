@@ -77,6 +77,9 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Unterwasser-Licht:** Wasser schluckt Rot zuerst, dann Grün (Werte in `water.js`). Schwebeteilchen blitzen im Lampenkegel auf.
 - **Richtungsanzeige:** Ein feiner Ring um die Bildmitte; schießt jemand bis 80 m entfernt, zeigt ein gelber Pfeil in seine Richtung (rot = du wurdest getroffen).
 - **Sterben:** Das Bild wird dunkel, dann schwarz, dann „Du bist tot“ – zuschauen, schon den nächsten Taucher wählen oder in den Shop (Einkaufen geht nach dem Tod auch während der Runde).
+- **Wellen-Überleben** (dritter Modus in der Lobby): ihr kämpft zu viert (Bots füllen auf) in der Mitte der Karte gegen Hai-Wellen.
+  Jede Welle mehr und stärkere Haie, alle 5 Wellen ein Riesenhai. In der Pause zwischen den Wellen kommen Gefallene zurück,
+  alle bekommen Leben und Munition. Vorbei ist es erst, wenn alle gleichzeitig tot sind. 25 Perlen pro geschaffter Welle. Werte: `WAVE` in `server.js`.
 - **Duo-Modus** (Häkchen "Duo" in der Lobby): alle spielen in Zweier-Teams, auch die Bots. Teamkameraden starten nebeneinander,
   können sich nicht verletzen, haben ein grünes Namensschild und sind auf dem Sonar ein grüner Punkt. Das letzte Team gewinnt.
   **2-Mann-U-Boot:** Fährt dein Teamkamerad ein U-Boot, steigst du mit **E** unten in die Glaskugel mit zwei MGs und schießt, während er fährt.

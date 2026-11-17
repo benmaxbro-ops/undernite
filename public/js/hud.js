@@ -165,8 +165,9 @@ export class Hud {
     if (document.activeElement !== $('bots')) { $('bots').value = m.bots; $('botsN').textContent = m.bots; }
     const exp = m.mode === 'exp';
     for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === m.mode);
-    $('botsRow').classList.toggle('hidden', exp);
-    $('duoRow').classList.toggle('hidden', exp); $('duo').checked = !!m.duo;
+    const wave = m.mode === 'wave';   // Wellen: immer zu viert, Bots füllen auf – kein Bot-Regler, kein Duo
+    $('botsRow').classList.toggle('hidden', exp || wave);
+    $('duoRow').classList.toggle('hidden', exp || wave); $('duo').checked = !!m.duo;
     $('plist').lastElementChild.classList.toggle('hidden', exp);
     $('go').textContent = exp ? 'EXPEDITION STARTEN' : 'ABTAUCHEN';
     $('lan').innerHTML = m.urls && m.urls.length
@@ -331,7 +332,11 @@ export class Hud {
       $('zoneTxt').classList.toggle('hot', deep);
     }
     const z = s.zone;
-    if (z) {
+    if (s.wave) {   // Wellen-Modus: Welle und Haie statt Schwarzwasser
+      const [n, v] = s.wave;
+      this.set('zoneTxt', 'text', v >= 0 ? (n ? `Welle ${n} geschafft · nächste in ${mmss(v)}` : `Erste Welle in ${mmss(v)}`) : `Welle ${n} · noch ${-v} ${v === -1 ? 'Hai' : 'Haie'}`);
+      $('zoneTxt').classList.toggle('hot', v < 0);
+    } else if (z) {
       const txt = z[5] <= 0 && !z[8] ? 'Schwarzwasser überall – letzter Kampf!' : z[8] ? `Schwarzwasser rückt vor · ${mmss(z[7])}` : `Schwarzwasser kommt in ${mmss(z[7])}`;
       this.set('zoneTxt', 'text', txt); $('zoneTxt').classList.toggle('hot', !!z[8]);
     }

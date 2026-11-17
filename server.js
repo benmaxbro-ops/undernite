@@ -126,14 +126,14 @@ function startMatch() {
     G.vehicles.set(v.id, v);
   }
   G.creatures = [];
-  for (let i = 0; i < 7; i++) {
+  if (G.mode !== 'wave') for (let i = 0; i < 7; i++) {
     const p = randSpot(250, 10 + rnd() * 25);
     G.creatures.push({ id: nextId++, type: 'shark', ...p, vx: 0, vy: 0, vz: 0, yaw: rnd() * 6.28, pitch: 0, hp: CREATURES.shark.hp,
       state: 'patrol', wp: null, tid: 0, scanT: rnd(), t: 0, bites: 0 });
   }
-  for (const l of W.lairs) G.creatures.push({ id: nextId++, type: 'octo', x: l.x, y: l.y, z: l.z, vx: 0, vy: 0, vz: 0, yaw: rnd() * 6.28, pitch: 0,
+  if (G.mode !== 'wave') for (const l of W.lairs) G.creatures.push({ id: nextId++, type: 'octo', x: l.x, y: l.y, z: l.z, vx: 0, vy: 0, vz: 0, yaw: rnd() * 6.28, pitch: 0,
     hp: CREATURES.octo.hp, state: 'lurk', lair: l, tid: 0, cool: 0, grip: 0, acc: 0, scanT: rnd() });
-  for (const s of W.swarms) {
+  if (G.mode !== 'wave') for (const s of W.swarms) {
     const ph = rnd() * 6.28;
     for (let i = 0; i < 7; i++) G.creatures.push({ id: nextId++, type: 'jelly', x: s.x, y: s.y, z: s.z, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0,
       hp: CREATURES.jelly.hp, state: 'drift', sw: s, sph: ph, ox: (rnd() - 0.5) * 12, oy: (rnd() - 0.5) * 7, oz: (rnd() - 0.5) * 12, ph: rnd() * 6.28 });
@@ -152,7 +152,8 @@ function startMatch() {
   }
   G.baits = []; G.drones = [];
   const names = [...BOT_NAMES].sort(() => rnd() - 0.5);
-  for (let i = 0; i < G.bots; i++) {
+  const nBots = G.mode === 'wave' ? Math.max(0, WAVE.team - clients.size) : G.bots;   // Wellen: immer zu viert (Bots füllen auf)
+  for (let i = 0; i < nBots; i++) {
     const p = mkPlayer(nextId++, names[i % names.length], pick(SUIT_ORDER), true);
     G.players.set(p.id, p);
   }
@@ -160,12 +161,12 @@ function startMatch() {
   for (const p of G.players.values()) if (!SUITS[p.suit].mech) p.weapons[2] = newWeapon('magrifle', 0);
   // Duo: je zwei Spieler bilden ein Team (zuerst die Menschen, dann die Bots). team 0 = kein Team (Solo)
   const all = [...G.players.values()];
-  all.forEach((p, i) => { p.team = G.duo ? Math.floor(i / 2) + 1 : 0; });
+  all.forEach((p, i) => { p.team = G.mode === 'wave' ? 1 : G.duo ? Math.floor(i / 2) + 1 : 0; });   // Wellen: alle in einem Team
   const mates = new Map();
   for (const p of all) {
     const m = p.team && mates.get(p.team);
     if (m) { p.x = p.lx = m.x + 3; p.z = p.lz = m.z + 2; p.y = p.ly = m.y; p.yaw = m.yaw; p.pitch = m.pitch; continue; }   // Teamkamerad startet direkt daneben
-    const a = rnd() * 6.283, d = 60 + rnd() * 190;
+    const a = rnd() * 6.283, d = G.mode === 'wave' ? 0 : 60 + rnd() * 190;   // Wellen: alle starten zusammen in der Mitte
     p.x = p.lx = Math.cos(a) * d; p.z = p.lz = Math.sin(a) * d; p.y = p.ly = SURFACE - DEEP.brCeil - 4;   // Start unter der Tiefsee-Grenze
     p.yaw = Math.atan2(p.x, p.z); p.pitch = -0.6;
     if (p.team) mates.set(p.team, p);
@@ -179,6 +180,7 @@ function startMatch() {
   G.events = [];
   G.zone = { x: 0, z: 0, r: 430, fx: 0, fz: 0, fr: 430, nx: 0, nz: 0, nr: 430, ph: 0, t: 0, sh: false };
   pickNextZone();
+  G.wave = G.mode === 'wave' ? { n: 0, state: 'break', t: WAVE.firstBreak } : null;
   for (const c of clients.values()) send(c.ws, startMsg(c));
   console.log(`[match] started: ${clients.size} human(s), ${G.bots} bot(s), seed ${G.seed}`);
 }
@@ -198,7 +200,7 @@ function pickNextZone() {
 }
 function updateZone(dt) {
   const z = G.zone, P = PHASES[z.ph];
-  if (!P) return;
+  if (!P || G.wave) return;   // Wellen-Modus: kein Schwarzwasser
   z.t += dt;
   if (!z.sh) {
     if (z.t >= P.wait) { z.sh = true; z.t = 0; z.fx = z.x; z.fz = z.z; z.fr = z.r; ev('msg', 'Das Schwarzwasser rückt vor!'); }
@@ -783,24 +785,24 @@ function sharkStep(c, dt) {
     if (!c.wp || dist(c, c.wp) < 7) { const z = G.zone, s = randSpot(Math.min(250, Math.max(40, z.r)), 6 + rnd() * 28); c.wp = { x: clamp(s.x + z.x, -270, 270), y: s.y, z: clamp(s.z + z.z, -270, 270) }; }
     steer(c, c.wp.x, c.wp.y, c.wp.z, 5.5, dt, 1.2);
     c.scanT -= dt;
-    if (c.scanT <= 0 && G.time > 35) {
+    if (c.scanT <= 0 && (G.time > 35 || c.wave)) {
       c.scanT = 0.5;
       let best = null, bd = 1e9;
       for (const p of G.players.values()) {
         if (!p.alive) continue;
-        const d = dist(c, p), range = (p.hp < p.maxhp * 0.5 ? 70 : 36) * (inSub(p) ? 0.5 : 1);
+        const d = dist(c, p), range = c.wave ? 600 : (p.hp < p.maxhp * 0.5 ? 70 : 36) * (inSub(p) ? 0.5 : 1);
         if (d < range && d < bd && los(c, p)) { bd = d; best = p; }
       }
       if (best) { c.state = 'hunt'; c.tid = best.id; if (!best.bot) best.ye.push(['warn', 'Ein Hai hat dich gewittert!']); }
     }
   } else if (c.state === 'hunt') {
     const p = G.players.get(c.tid);
-    if (!p || !p.alive || dist(c, p) > 85 || c.hp < 25) { c.state = 'patrol'; c.wp = null; return; }
+    if (!p || !p.alive || (!c.wave && (dist(c, p) > 85 || c.hp < 25))) { c.state = 'patrol'; c.wp = null; c.scanT = 0; return; }
     const d = steer(c, p.x, p.y, p.z, 14.5, dt, 1.2);
     const reach = (inSub(p) ? 3 : SUITS[p.suit].r) + 1.8;
     if (d < reach) {
       ev('bite', r2(p.x), r2(p.y), r2(p.z));
-      damage(p, 18, null, 'shark', c.x, c.z);
+      damage(p, c.dmg || 18, null, 'shark', c.x, c.z);
       c.state = 'retreat'; c.t = 2.4;
       const ax = c.x - p.x, az = c.z - p.z, al = Math.sqrt(ax * ax + az * az) || 1;
       c.rp = { x: c.x + ax / al * 30 + (rnd() - 0.5) * 20, y: Math.min(SURFACE - (G.mode === 'exp' ? 8 : DEEP.brCeil + 3), c.y + 8), z: c.z + az / al * 30 + (rnd() - 0.5) * 20 };
@@ -882,7 +884,7 @@ function botThink(b) {
   }
   for (const c of G.creatures) {
     if (c.dead) continue;
-    const mine = (c.type === 'shark' && c.tid === b.id && c.state !== 'patrol') || (c.type === 'octo' && c.state === 'lunge' && c.tid === b.id);
+    const mine = (c.type === 'shark' && c.tid === b.id && c.state !== 'patrol') || (c.type === 'octo' && c.state === 'lunge' && c.tid === b.id) || (c.wave && dist(b, c) < 45);   // Wellen: jeder Hai in der Nähe
     if (!mine) continue;
     const d = dist(b, c);
     if (d < 24 && d < bd + 10) { bd = d; best = { k: 'c', ref: c }; }
@@ -1401,8 +1403,48 @@ function quitExp() {
 }
 
 // ---------- main tick ----------
+// ---------- Wellen-Überleben ----------
+// team = so viele kämpfen zusammen (Bots füllen auf), firstBreak / pause = Sekunden vor der ersten / zwischen den Wellen,
+// sharks = Haie in Welle 1, more = so viele kommen pro Welle dazu, hpUp = so viel stärker pro Welle (0.15 = +15 %),
+// bite = Biss-Schaden, boss = alle so viele Wellen kommt ein Riesenhai, pearls = Perlen pro geschaffter Welle
+const WAVE = { team: 4, firstBreak: 10, pause: 12, sharks: 4, more: 3, hpUp: 0.25, bite: 20, boss: 5, pearls: 25 };
+function waveTick(dt) {
+  const V = G.wave; if (!V) return;
+  const alivePl = [...G.players.values()].filter(p => p.alive);
+  if (V.state === 'break') {
+    V.t -= dt;
+    if (V.t > 0) return;
+    V.n++; V.state = 'fight';
+    const k = 1 + (V.n - 1) * WAVE.hpUp, n = WAVE.sharks + (V.n - 1) * WAVE.more, boss = V.n % WAVE.boss === 0;
+    for (let i = 0; i < n + (boss ? 1 : 0); i++) {
+      const big = boss && i === n, a = rnd() * 6.283, d = 80 + rnd() * 40;
+      const t = alivePl[i % Math.max(1, alivePl.length)];
+      const cx = clamp((t ? t.x : 0) + Math.cos(a) * d, -270, 270), cz = clamp((t ? t.z : 0) + Math.sin(a) * d, -270, 270);
+      const cy = Math.min(SURFACE - DEEP.brCeil - 3, G.world.heightAt(cx, cz) + 8 + rnd() * 15);
+      G.creatures.push({ id: nextId++, type: 'shark', x: cx, y: cy, z: cz, vx: 0, vy: 0, vz: 0, yaw: rnd() * 6.28, pitch: 0,
+        hp: CREATURES.shark.hp * k * (big ? 6 : 1), state: 'hunt', wp: null, tid: t ? t.id : 0, scanT: 0, t: 0, bites: 0,
+        dmg: WAVE.bite * (1 + (V.n - 1) * 0.12) * (big ? 2 : 1), big: big ? 1 : 0, wave: 1 });
+    }
+    ev('msg', boss ? 'Welle ' + V.n + ' – ein RIESENHAI kommt!' : 'Welle ' + V.n + ' – ' + n + ' Haie kommen!');
+    return;
+  }
+  // Welle geschafft, wenn alle Haie dieser Welle tot sind
+  if (!G.creatures.some(c => c.wave && !c.dead)) {
+    V.state = 'break'; V.t = WAVE.pause;
+    const anyAlive = alivePl.length ? alivePl[0] : null;
+    for (const p of G.players.values()) {
+      if (!p.alive && anyAlive) {   // Gefallene kommen zurück – neben einem Lebenden, mit halbem Leben
+        p.alive = true; p.hp = p.maxhp * 0.5; p.shield = 0; p.x = p.lx = anyAlive.x + (rnd() - 0.5) * 6; p.y = p.ly = anyAlive.y; p.z = p.lz = anyAlive.z + (rnd() - 0.5) * 6;
+        if (!p.bot) p.ye.push(['revive', r2(p.x), r2(p.y), r2(p.z)]);
+      } else if (p.alive) p.hp = Math.min(p.maxhp, p.hp + p.maxhp * 0.3);
+      for (const w of p.weapons) if (w && WEAPONS[w.id].mag) w.ammo = Math.max(w.ammo, WEAPONS[w.id].mag);   // Munition auffüllen
+    }
+    ev('msg', 'Welle ' + V.n + ' geschafft! Pause – Gefallene sind zurück.');
+  }
+}
 function tick(dt) {
   if (G.mode === 'exp') return tickExp(dt);
+  waveTick(dt);
   G.time += dt;
   updateZone(dt);
   const z = G.zone, dps = zoneDps();
@@ -1442,20 +1484,22 @@ function tick(dt) {
   const alive = [...G.players.values()].filter(p => p.alive);
   const humansAlive = alive.filter(p => !p.bot).length;
   if (clients.size === 0) { toLobby(); return; }
-  if (alive.length <= 1 || (G.duo && aliveTeams() <= 1)) endMatch();   // Duo: das letzte Team gewinnt
+  if (G.wave) { if (alive.length === 0) endMatch(); }   // Wellen: erst vorbei, wenn alle gleichzeitig tot sind
+  else if (alive.length <= 1 || (G.duo && aliveTeams() <= 1)) endMatch();   // Duo: das letzte Team gewinnt
   else if (humansAlive === 0) { G.noHumanT += dt; if (G.noHumanT > 6) endMatch(); }
 }
 function snapshot() {
   const z = G.zone, P = z && PHASES[z.ph];
   const common = {
     tm: r2(G.time), n: aliveCount(),
+    wv: G.wave ? [G.wave.n, G.wave.state === 'break' ? Math.ceil(G.wave.t) : -G.creatures.filter(c => c.wave && !c.dead).length] : null,   // Welle: Nummer, Sekunden Pause oder −Haie übrig
     z: z ? [r2(z.x), r2(z.z), r2(z.r), r2(z.nx), r2(z.nz), r2(z.nr), z.ph, P ? Math.ceil((z.sh ? P.shrink : P.wait) - z.t) : 0, z.sh ? 1 : 0] : null,
     p: [...G.players.values()].filter(p => p.alive).map(p => [p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.ceil(p.hp), Math.round(p.shield),
       (p.boost ? 2 : 0) | (p.grabbed ? 4 : 0) | (G.time < (p.invisT || 0) ? 8 : 0),   // 8 = getarnt (Sepia-Ulti)
       p.weapons[p.slot] ? WEAPON_IDS.indexOf(p.weapons[p.slot].id) : -1, p.veh]),
     c: G.creatures.map(c => [c.id, CREATURE_IDS.indexOf(c.type), r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.pitch),
       ['hunt', 'lunge', 'chase', 'swing', 'attack', 'flee'].includes(c.state) ? 1 : c.state === 'hold' ? 2 : 0,
-      c.sub || 0, c.maxhp ? Math.max(0, Math.ceil(c.hp / c.maxhp * 100)) : 100, c.gold ? 1 : 0]),
+      c.sub || 0, c.maxhp ? Math.max(0, Math.ceil(c.hp / c.maxhp * 100)) : 100, c.gold ? 1 : 0, c.big ? 1 : 0]),   // 11: Riesenhai
     v: [...G.vehicles.values()].map(v => { const gn = v.gunner && G.players.get(v.gunner); return [v.id, VEHICLE_IDS.indexOf(v.type), r2(v.x), r2(v.y), r2(v.z), r2(v.yaw), r2(v.pitch), Math.ceil(v.hp), v.driver, v.gunner || 0, gn ? r2(gn.yaw) : 0, gn ? r2(gn.pitch) : 0]; }),   // 9-11: Schütze, seine Blickrichtung
     e: G.events,
     // expedition: who owns which base + their aquarium (so everybody sees the fish in the other bases)
@@ -1492,7 +1536,8 @@ function endMatch() {
   const rank = [...G.players.values()].sort((a, b) => a.place - b.place).map(p => {
     const r = { id: p.id, n: p.name, place: p.place, k: p.kills, bot: p.bot ? 1 : 0, suit: p.suit };
     if (!p.bot) {   // Perlen für echte Spieler: Kills + überlebte Minuten + Platz-Bonus
-      r.pearls = brReward(p.kills, p.alive ? G.time : p.deathT || 0, p.place);
+      r.pearls = brReward(p.kills, p.alive ? G.time : p.deathT || 0, G.wave ? 99 : p.place);
+      if (G.wave) { r.pearls.wave = Math.max(0, G.wave.n - 1) * WAVE.pearls; r.pearls.sum += r.pearls.wave; }   // Perlen für jede geschaffte Welle
       r.pearls.total = addPearls(p.name, r.pearls.sum);
     }
     return r;
@@ -1542,7 +1587,7 @@ wss.on('connection', (ws) => {
         if (!suitOwned(suitsOf(c.name), c.suit)) c.suit = 'triton';                 // anderer Name: Taucher evtl. nicht gekauft
         if (Number.isFinite(m.bots)) G.bots = clamp(Math.round(m.bots), 0, 23);
         if (typeof m.duo === 'boolean' && G.phase === 'lobby') G.duo = m.duo;   // Duo-Modus: Zweier-Teams
-        if ((m.mode === 'br' || m.mode === 'exp') && m.mode !== G.mode && G.phase === 'lobby') { G.mode = m.mode; G.world = new World(G.seed, G.mode); }
+        if ((m.mode === 'br' || m.mode === 'exp' || m.mode === 'wave') && m.mode !== G.mode && G.phase === 'lobby') { G.mode = m.mode; G.world = new World(G.seed, G.mode); }
         if (G.phase === 'lobby') broadcast(lobbyMsg());
         else if (G.phase === 'play' && G.mode === 'exp' && !G.players.has(c.id)) {
           expJoin(c); broadcast(metaMsg()); send(ws, startMsg(c));

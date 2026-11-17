@@ -92,6 +92,7 @@ addEventListener('resize', resize); resize();
 const hud = new Hud(), sfx = new Sfx();
 const dyn = new THREE.Group(); scene.add(dyn);
 let W = null, env = null;
+let waveInfo = null;   // Wellen-Modus: [Nummer, Pause-Sekunden oder −Haie übrig]
 let mode = 'br', phase = 'connecting', myId = 0, mySuit = 'triton', you = null, zone = null, aliveN = 0, frameNo = 0, time = 0;
 const meta = new Map(), players = new Map(), creatures = new Map(), vehicles = new Map(), pickups = new Map(), projs = new Map();
 let crates = [];
@@ -261,7 +262,7 @@ function target(e, a, o) { e.tx = a[o]; e.ty = a[o + 1]; e.tz = a[o + 2]; e.tyaw
 function onSnap(m) {
   if (phase !== 'play') return;
   const c = m.c; frameNo++;
-  zone = c.z; aliveN = c.n; baseInfo = c.b || null;
+  zone = c.z; aliveN = c.n; baseInfo = c.b || null; waveInfo = c.wv || null;
   const wasAlive = you && you.alive;
   you = m.you;
   for (const a of c.p) { const e = players.get(a[0]) || spawnPlayer(a[0]); e.seen = frameNo; target(e, a, 1); e.hp = a[6]; e.fl = a[8]; e.w = e.weapon = a[9]; e.veh = a[10]; }
@@ -271,6 +272,7 @@ function onSnap(m) {
     const e = sync(creatures, a[0], () => ({ type, sub: a[8], gold: a[10], r: creatureR(type, a[8]),
       mesh: type === 'shark' ? makeShark() : type === 'octo' ? makeOcto() : type === 'fish' ? makeFish(FISH[a[8]], a[10]) : type === 'boss' ? makeBoss(BOSSES[a[8]]) : makeJelly(a[0]) }));
     target(e, a, 2); e.state = a[7]; e.hpPct = a[9];
+    if (a[11] && !e.big) { e.big = true; e.mesh.scale.multiplyScalar(2.3); e.r *= 2.3; }   // Riesenhai (Wellen-Modus)
   }
   prune(creatures);
   for (const a of c.v) { const type = VEHICLE_IDS[a[1]]; const e = sync(vehicles, a[0], () => ({ type, mesh: type === 'sub' ? makeSub() : type === 'jetski' ? makeJetski() : makeScooter() })); target(e, a, 2); e.hp = a[7]; e.driver = a[8]; e.gunner = a[9] || 0; e.gyaw = a[10] || 0; e.gpitch = a[11] || 0; }
@@ -684,6 +686,8 @@ function onPrivate(e) {
     case 'dead': held = -1; deadInfo = { place: e[1], by: e[2], lost: e[3] || 0 }; firing = false; if (hud.shopOpen) hud.closeShop();
       if (mode !== 'exp') { death.t = 0; death.start = null; death.on = true; sfx.tinnitus(2); sfx.tone(70, 35, 0.8, 0.9, 'sine'); }   // Battle Royale: Bild wird dunkel, dann "Du bist tot"
       break;
+    // Wellen-Modus: in der Pause zurück ins Spiel geholt
+    case 'revive': endDeath(); document.getElementById('deathFx').style.opacity = '0'; me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du bist wieder dabei!', 2.5); break;
     case 'spawn': torch.on = false; torch.bat = LAMPS[torch.lvl].battery; me.x = e[1]; me.y = e[2]; me.z = e[3]; me.vx = me.vy = me.vz = 0; camYaw = e[4]; camPitch = -0.3; me.energy = 100; deadInfo = null; specId = 0; hud.spec(null); hud.banner('Du wachst am Boot wieder auf.', 2.5); break;
     case 'fish': { const S = FISH[e[1]]; sfx.pickup(); hud.feed(`${e[2] ? '⭐ <b style="color:#ffd34d">Goldener</b> ' : 'Gefangen: '}<b>${S.name}</b> · +${e[3]} €`, true); break; }
     case 'aqfree': hud.feed(`Freigelassen: <b>${catchName(catchFromNet(e[1]))}</b>`, true); break;
@@ -1505,7 +1509,7 @@ function frame(now) {
     outside = !!zone && Math.hypot(fx.x - zone[0], fx.z - zone[1]) > zone[2];
     promptT -= dt; if (promptT <= 0) { promptT = 0.12; hud.prompt(computePrompt()); }
     if (mode === 'exp' && you && you.x) { if (held >= you.x.bagL.length || !you.alive) held = -1; updateTorch(dt, SURFACE - fx.y); updateAquarium(dt); }
-    hud.update({ you, zone, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y + depthOffset(), suit: mySuit, outside, time, dt,
+    hud.update({ you, zone, wave: waveInfo, alive: aliveN, energy: me.energy, depth: SURFACE - fx.y + depthOffset(), suit: mySuit, outside, time, dt,
       lamp: mode === 'exp' ? { on: torch.on, bat: torch.bat, cap: LAMPS[torch.lvl].battery } : null, held });
     let marks = [];
     // Hammerhai (Elektrosinn): Gegner in der Nähe erscheinen als rote Punkte auf der Minikarte

@@ -20,7 +20,6 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 ## Neue Modi (Ideen von Ben, 17.11.)
 
 - [ ] **U-Boot zum Begehen:** fertig bis auf Bens Test (sitzen, aufstehen, laufen, Periskop, Details)
-- [ ] **Wellen-Überleben (Wave Survival):** zu viert gegen immer stärkere Wellen von Kreaturen überleben.
 
 ## Fairness: Ligen
 
