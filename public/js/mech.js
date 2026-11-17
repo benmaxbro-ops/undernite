@@ -213,6 +213,26 @@ export function makeCockpit() {
   const leds = [0x5ef2e0, 0xffd36b, 0x7dff9a, 0xff6b5e, 0x5ef2e0, 0x7dff9a];
   leds.forEach((c, i) => { const l = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: c })); l.position.set(-0.36 + i * 0.05, -0.375, -0.585); l.scale.set(0.022, 0.01, 0.006); l.rotation.x = -0.5; g.add(l); });
   const scr = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0x0f4a46 })); scr.position.set(0.3, -0.37, -0.57); scr.scale.set(0.15, 0.07, 0.005); scr.rotation.set(-0.5, -0.2, 0); g.add(scr);
+  // Kuppel rundum (sieht man, wenn man im Freelook nach oben oder zur Seite schaut):
+  // Glasschale, Metallbögen von links nach rechts, eine Mittelstrebe und eine Luke ganz oben
+  const DOME_R = 0.92;
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(DOME_R, 48, 24, 0, Math.PI * 2, 0, 1.25),
+    new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.04, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide }));
+  shell.position.set(0, -0.04, 0.05); g.add(shell);
+  for (const z of [-0.3, 0.05, 0.4]) {   // Bögen über dem Kopf
+    const r = Math.sqrt(DOME_R * DOME_R - z * z);
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(r, 0.022, 10, 56, Math.PI), steel); arch.position.set(0, -0.04, 0.05 + z); g.add(arch);
+    for (let i = 1; i < 6; i++) { const a = i / 6 * Math.PI, b = new THREE.Mesh(SPH, steel); b.position.set(Math.cos(a) * r, -0.04 + Math.sin(a) * r, 0.05 + z + 0.02); b.scale.setScalar(0.012); g.add(b); }   // Nieten
+  }
+  // Mittelstrebe: fängt erst 55° über dem Blick nach vorne an (damit sie geradeaus nicht stört) und läuft über den Kopf nach hinten
+  const spineP = new THREE.Group(); spineP.rotation.y = Math.PI / 2; spineP.position.set(0, -0.04, 0.05); g.add(spineP);
+  const spine = new THREE.Mesh(new THREE.TorusGeometry(DOME_R, 0.026, 10, 56, Math.PI * 125 / 180), steel); spine.rotation.z = Math.PI * 55 / 180; spineP.add(spine);
+  const hatch = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.03, 12, 40), steel); hatch.rotation.x = Math.PI / 2; hatch.position.set(0, DOME_R - 0.06, 0.12); g.add(hatch);   // Luke oben
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.012, 8, 32), dark); wheel.rotation.x = Math.PI / 2; wheel.position.set(0, DOME_R - 0.1, 0.12); g.add(wheel);   // Handrad der Luke
+  for (let i = 0; i < 4; i++) { const sp = new THREE.Mesh(BOX, dark); sp.position.set(0, DOME_R - 0.1, 0.12); sp.rotation.y = i * Math.PI / 4; sp.scale.set(0.16, 0.008, 0.008); g.add(sp); }
+  for (const s of [-1, 1]) {   // zwei kleine Lampen an den Bögen
+    const lamp = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0xffe2b0 })); lamp.position.set(0.42 * s, 0.72, 0.2); lamp.scale.set(0.06, 0.012, 0.03); lamp.rotation.z = -0.5 * s; g.add(lamp);
+  }
   // Steuerhebel links und rechts unten: Sockel mit Gummimanschette, Stange, Griff mit Knöpfen.
   // Sie kippen mit, wenn du steuerst (update unten).
   const rubber = new THREE.MeshStandardMaterial({ color: 0x111417, roughness: 0.95 });

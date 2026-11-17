@@ -97,7 +97,13 @@ const flashLight = new THREE.PointLight(0x9fe4ff, 0, 5, 1.6); flashLight.positio
 // Streulicht der Helmlampe auf Hände und Waffe (sitzt oben am Helm, reicht nur bis zu den Händen)
 const handLight = new THREE.PointLight(0xe8f0ff, 0, 1.4, 2); handLight.position.set(0.05, 0.22, 0.05); camera.add(handLight);
 // Mech-Cockpit: Glaskuppel, Kragen, Armaturenbrett und warmes Licht innen (nur in der Ego-Sicht des Goliath)
-const cockpit = makeCockpit(); cockpit.visible = false; camera.add(cockpit);
+// Mech-Freelook: im Goliath-Cockpit (Ego-Sicht) dreht die Maus nur den KOPF – Cockpit und Waffe bleiben, wo der Mech hinschaut.
+// Mit Rechtsklick dreht sich der ganze Mech zum Blick, und man zielt.
+// yaw = so weit kann man den Kopf zur Seite drehen, pitchUp/pitchDown = nach oben/unten (Winkel), turn = wie schnell der Mech folgt
+const FREELOOK = { yaw: 1.9, pitchUp: 1.3, pitchDown: 0.7, turn: 7 };
+const head = { yaw: 0, pitch: 0 };   // so weit ist der Kopf gerade gegenüber dem Mech gedreht
+const mechFrame = new THREE.Group(); camera.add(mechFrame);   // Cockpit und Waffe hängen hier dran und drehen gegen den Kopf
+const cockpit = makeCockpit(); cockpit.visible = false; mechFrame.add(cockpit);
 // Mündungsblitz: zwei gekreuzte leuchtende Scheiben und ein heller Kern (blau-weiß, wie ein Druckstoß aus Wasser)
 function makeFlash() {
   const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -116,7 +122,7 @@ const SWIM = { minSpeed: 2.5, rate: 0.35, rateSpeed: 0.035, blendIn: 3, blendOut
 const VIEW = { hip: { pistol: [0.03, -0.112, 0.04], rifle: [0.1, -0.13, 0.02], tube: [0.15, -0.13, 0] },
   inertia: 0.35, inertiaMax: 0.05, inertiaBack: 9, breathe: 0.0025, hands: [0.35, 0.06] };
 view.g.position.set(0.15, -0.13, 0);   // rechts, unten (die Tiefe kommt von der Waffe selbst, siehe updateViewModel)
-camera.add(view.g);
+mechFrame.add(view.g);   // normal (ohne Freelook) ist mechFrame genau die Kamera
 // firstPerson = Taste V gedrückt (Ego-Perspektive), fpOn = sie ist gerade wirklich aktiv (nicht in Fahrzeugen)
 let firstPerson = false, fpOn = false;
 let camYaw = 0, camPitch = -0.35, camDist = 5, firing = false, nextFire = 0, specId = 0, shockUntil = 0, shake = 0, deadInfo = null, promptT = 0, sendT = 0;
@@ -692,8 +698,26 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; firing =
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas) return;
   const sens = 0.0022 * settings.sens * camera.fov / FOV;   // Mausempfindlichkeit aus den Einstellungen; mit Zoom entsprechend langsamer
-  camYaw -= e.movementX * sens; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - e.movementY * sens * (settings.invertY ? -1 : 1)));
+  const my = e.movementY * sens * (settings.invertY ? -1 : 1);
+  if (mechFree() && !scoping) {   // Freelook: nur den Kopf drehen
+    head.yaw = Math.max(-FREELOOK.yaw, Math.min(FREELOOK.yaw, head.yaw - e.movementX * sens));
+    head.pitch = Math.max(-FREELOOK.pitchDown, Math.min(FREELOOK.pitchUp, head.pitch - my));
+    return;
+  }
+  camYaw -= e.movementX * sens; camPitch = Math.max(-1.45, Math.min(1.45, camPitch - my));
 });
+// Freelook gibt es nur im Mech, in der Ego-Sicht, lebendig und nicht im Fahrzeug
+function mechFree() { return fpOn && !!(you && you.alive) && !!SUITS[mySuit].mech && !you.veh; }
+const QH = new THREE.Quaternion(), QB = new THREE.Quaternion(), EB = new THREE.Euler(0, 0, 0, 'YXZ');
+// jedes Bild: beim Rechtsklick dreht der Mech zum Blick (der Kopf kommt dabei zurück nach vorne)
+function updateHead(dt) {
+  if (!mechFree()) { head.yaw = head.pitch = 0; return; }
+  if (scoping) {
+    const k = Math.min(1, dt * FREELOOK.turn), dy = head.yaw * k, dp = head.pitch * k;
+    camYaw += dy; head.yaw -= dy;
+    const np = Math.max(-1.45, Math.min(1.45, camPitch + dp)); head.pitch -= np - camPitch; camPitch = np;
+  }
+}
 const lock = () => { sfx.init(); if (phase === 'play' && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); };
 canvas.addEventListener('mousedown', (e) => { if (document.pointerLockElement !== canvas) { lock(); return; } if (e.button === 2) { scoping = true; return; } if (e.button !== 0) return; if (held >= 0) { if (nearBase()) placeHeld(); return; } firing = true; });
 document.getElementById('pause').addEventListener('click', lock);
@@ -1329,7 +1353,13 @@ function updateCamera(dt) {
   if (headUp > 0.5 && py < SURFACE + 0.8 && py > SURFACE - 0.8) py = SURFACE + 0.8;   // never sit exactly in the water plane
   shake = Math.max(0, shake - dt * 2.2);
   camera.position.set(px + (Math.random() - 0.5) * shake, py + (Math.random() - 0.5) * shake, pz + (Math.random() - 0.5) * shake);
-  camera.rotation.set(camPitch, camYaw, alive ? flow.roll : 0);   // leichte Neigung beim Seitwärtsschwimmen
+  updateHead(dt);
+  camera.rotation.set(Math.max(-1.5, Math.min(1.5, camPitch + head.pitch)), camYaw + head.yaw, alive ? flow.roll : 0);   // leichte Neigung beim Seitwärtsschwimmen; im Mech + Kopf
+  // Cockpit und Waffe bleiben in Mech-Richtung: mechFrame = (Kamera-Drehung)⁻¹ × (Mech-Drehung)
+  if (head.yaw || head.pitch) { QB.setFromEuler(EB.set(camPitch, camYaw, 0)); mechFrame.quaternion.copy(camera.quaternion).invert().multiply(QB); }
+  else mechFrame.quaternion.identity();
+  // Fadenkreuz nur, wenn man wirklich in Schussrichtung schaut
+  const crossEl = document.getElementById('cross'); if (crossEl) crossEl.style.visibility = Math.hypot(head.yaw, head.pitch) > 0.08 ? 'hidden' : '';
 }
 function lobbyCamera() {
   view.g.visible = false; lamp.intensity = 0; torchBeam.visible = false; for (const l of glowLights) l.intensity = 0;   // keine Waffe und keine Lampe in der Lobby

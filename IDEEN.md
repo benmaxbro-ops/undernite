@@ -16,11 +16,16 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 - [ ] **Mech noch viel detaillierter** (außen und innen)
 - [ ] **Mech-Cockpit:** Steuerhebel und Zeiger sind drin – noch mehr Bildschirme und Knöpfe möglich
-- [ ] **Mech-Freelook (Wunsch von Ben):** Maus dreht nur den Kopf im Cockpit (nach oben durch die Kuppel schauen, zur Seite, nach unten);
-      die Waffe in der rechten Hand bleibt vorne. Rechtsklick = Arm mit Waffe folgt dem Blick und zielt. Kuppel rundum ausbauen (Glas, Streben, Lampen über dir).
-      Entschieden: Ohne Rechtsklick dreht die Maus nur den Kopf. Mit Rechtsklick dreht sich der ganze Mech mit dem Blick, und man zielt. W/A/S/D bewegen wie bisher (relativ zum Mech).
 - [ ] **Mech wie eine Maschine animiert (auch von außen):** Arm mit Waffe im 90°-Winkel neben dem Körper;
       zum Nachladen kippt die Waffe 90° zur Seite (Magazin nach links), die andere Hand greift rein, Magazin raus und rein – mechanisch, wie ein Roboter
+
+## Neue Modi (Ideen von Ben, 17.11.)
+
+- [ ] **U-Boot zum Begehen (auch Solo):** im U-Boot aufstehen, herumlaufen, umschauen und sich wieder ans Steuerpult setzen.
+      Innen richtig eingerichtet mit U-Boot-Kram (Rohre, Ventile, Bildschirme, Periskop …), vorher Referenzbilder echter U-Boote ansehen.
+- [ ] **Duo-Modus:** zu zweit in einem U-Boot. Einer fährt am Steuerpult, der andere sitzt unten in einer Glaskugel mit MGs und schießt.
+      Beide können aufstehen und im U-Boot herumlaufen, der Schütze klettert aus der Kugel direkt ins U-Boot.
+- [ ] **Wellen-Überleben (Wave Survival):** zu viert gegen immer stärkere Wellen von Kreaturen überleben.
 
 ## Fairness: Ligen
 

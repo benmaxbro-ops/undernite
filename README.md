@@ -24,6 +24,7 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 | Maus | zielen / umsehen |
 | (Schießen) | Rückstoß wie bei einer Bodycam: Waffe und Kamera reißen zusammen hoch, das Wasser bremst sie weich ab (`RSPRING` in `main.js`). Aus der Waffe quillt eine Gasblase (`GAS`). |
 | (Grafik) | Bodycam-Linse (ab Qualität „Niedrig“): schnelles Drehen verwischt das Bild, beim Zielen wird der Rand unscharf (`motion` und `focus` in `lens.js`) |
+| Maus im Goliath (Ego-Sicht) | **Freelook:** Die Maus dreht nur deinen Kopf im Cockpit – nach oben durch die Kuppel, zur Seite, nach unten. Mit **rechter Maustaste** dreht sich der ganze Mech zum Blick und du zielst. Werte: `FREELOOK` in `main.js` |
 | Leertaste / C | aufwärts / abwärts – ganz oben schaut dein Kopf aus dem Wasser (X geht auch abwärts) |
 | H | Waffe wegstecken / rausholen (weggesteckt: Hände frei, 8 % schneller) |
 | (Schwimmen) | Bewegungen laufen weich an, beim Loslassen gleitest du aus, beim Seitwärtsschwimmen neigt sich die Kamera leicht (Werte: `FLOW` in `main.js`) |
