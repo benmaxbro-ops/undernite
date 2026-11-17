@@ -21,8 +21,7 @@ Neue Wünsche kommen unten dazu und werden der Reihe nach abgearbeitet.
 
 ## Neue Modi (Ideen von Ben, 17.11.)
 
-- [ ] **U-Boot zum Begehen (auch Solo):** im U-Boot aufstehen, herumlaufen, umschauen und sich wieder ans Steuerpult setzen.
-      Innen richtig eingerichtet mit U-Boot-Kram (Rohre, Ventile, Bildschirme, Periskop …), vorher Referenzbilder echter U-Boote ansehen.
+- [ ] **U-Boot zum Begehen:** sitzen, aufstehen (B), herumlaufen und Innenraum sind drin – noch offen: mehr Details, Periskop benutzen, Ben testet es
 - [ ] **Duo-Modus:** zu zweit in einem U-Boot. Einer fährt am Steuerpult, der andere sitzt unten in einer Glaskugel mit MGs und schießt.
       Beide können aufstehen und im U-Boot herumlaufen, der Schütze klettert aus der Kugel direkt ins U-Boot.
 - [ ] **Wellen-Überleben (Wave Survival):** zu viert gegen immer stärkere Wellen von Kreaturen überleben.

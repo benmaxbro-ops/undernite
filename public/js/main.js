@@ -797,7 +797,8 @@ function controlMe(dt) {
   let speed = S.speed * UP('swim') * (holster.on ? HOLSTER.speed : 1) * ((mySuit === 'manta' || mySuit === 'hammerhai') && ultOn() ? ULTIS[mySuit].speed : 1), accel = 5, r = S.r, strafe = 1, canBoost = true;   // Profi-Flossen
   if (vt === 'scooter') { speed = VEHICLES.scooter.speed; accel = VEHICLES.scooter.accel; strafe = 0.35; r = VEHICLES.scooter.r; canBoost = false; }
   else if (vt === 'sub') { speed = VEHICLES.sub.speed; accel = VEHICLES.sub.accel; strafe = 0; r = VEHICLES.sub.r; canBoost = false; }
-  if (vt === 'sub' && !subIn.stand) { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
+  if (vt === 'sub' && subIn.stand) { /* im U-Boot herumlaufen: das U-Boot behält seine Richtung */ }
+  else if (vt === 'sub') { me.hyaw = approachAngle(me.hyaw, camYaw, 1.6 * dt); me.hpitch += Math.max(-1.1 * dt, Math.min(1.1 * dt, camPitch - me.hpitch)); }
   else { me.hyaw = camYaw; me.hpitch = camPitch; }
   const shop = hud.shopOpen || (vt === 'sub' && subIn.stand);   // im Shop nicht schwimmen; wer im U-Boot steht, steuert nicht (es bremst ab)
   const down = canCling() ? keys.KeyX : (keys.KeyC || keys.KeyX);   // Triton/Manta: C = festhalten, also sinken nur mit X
@@ -1399,12 +1400,15 @@ function updateCamera(dt) {
   if (headUp > 0.5 && py < SURFACE + 0.8 && py > SURFACE - 0.8) py = SURFACE + 0.8;   // never sit exactly in the water plane
   // U-Boot innen: Kamera auf Augenhöhe am Sitz bzw. dort, wo man steht; Innenraum einblenden
   const sv = inSubFP();
-  if (!sv) { subIn.stand = false; if (subRoom) subRoom.visible = false; }
+  // von innen: alle Außenteile (Glaskugel, Scheinwerferkegel, Leuchtstreifen …) ausblenden, sonst blendet es weiß
+  const showHull = (body, on) => { for (const c of body.children) if (c !== subRoom) c.visible = on; };
+  if (subRoom && subRoom.parent && (!sv || subRoom.parent !== sv.mesh.userData.body)) showHull(subRoom.parent, true);
+  if (!sv) { subIn.stand = false; if (subRoom) { subRoom.visible = false; if (subRoom.parent) subRoom.parent.remove(subRoom); } }
   else {
     const body = sv.mesh.userData.body;
     if (!subRoom) subRoom = makeSubInterior();
     if (subRoom.parent !== body) body.add(subRoom);
-    subRoom.visible = true;
+    subRoom.visible = true; showHull(body, false);
     if (subIn.stand) updateSubWalk(dt, sv);
     sv.mesh.updateMatrixWorld(true);
     V.set(subIn.x, subIn.stand ? SUBROOM.eyeStand + Math.sin(time * 1.3) * 0.01 : SUBROOM.eyeSit, subIn.z); body.localToWorld(V);
