@@ -495,7 +495,7 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
       box(gillIn, u - du * 0.25, u + du * 0.25, v - h / 2, v + h / 2, 0.004, s * sx);           // leuchtender Schlitz
       for (let k = 0; k < 3; k++) {                                                          // 3 Lamellen, die sich auffächern
         const hinge = new THREE.Group(); hinge.position.set(s * (sx + 0.002 + k * 0.0015), v, -(u + du * 0.3)); tgt.add(hinge);
-        const len = du * (0.95 - k * 0.2), hh = h * (1 - k * 0.12);
+        const len = du * (0.42 - k * 0.1), hh = h * (1 - k * 0.12);   // schmale Lamellen mit Lücken (wie Lüftungsschlitze)
         const lam = add(hinge, GEO.box, gillWhite, 0, 0, len / 2); lam.scale.set(0.0025, hh, len);
         const edge = add(hinge, GEO.box, gillEdge, s * 0.0014, 0, len - 0.002); edge.scale.set(0.001, hh, 0.003);   // blaue Kante
         flaps.push({ hinge, s, k });
@@ -529,20 +529,23 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     tgt = g;
     // Rahmen (unten)
     side('frame', white, [[-0.022, -0.014], [L - 0.04, -0.014], [L - 0.04, 0], [-0.022, 0]], W * 0.88);
-    box(metal, L * 0.45, L - 0.045, -0.02, -0.014, W * 0.5);                              // Schiene unten
+    // Zubehörschiene unter dem Lauf (Picatinny): Leiste mit Querschlitzen, dazu die "Staubschutz"-Nase vorne am Rahmen
+    box(white, L * 0.42, L - 0.04, -0.024, -0.012, W * 0.72);
+    for (let i = 0; i < 3; i++) { const u = L * 0.48 + i * 0.016; box(dark, u, u + 0.006, -0.0255, -0.02, W * 0.74); }
     tgt = slideG;
     for (let i = 0; i < 6; i++) box(dark, -0.024 + i * 0.006, -0.021 + i * 0.006, H * 0.15, H * 0.9, W + 0.002);   // Griffrillen am Schlitten
     tgt = g;
-    tube(metal, L - 0.035, L - 0.02, H * 0.5, P.br * 1.3);                                // Lauf
-    ring(L - 0.02, H * 0.5, P.br * 1.5);                                                  // blaue Mündung
-    tube(dark, L - 0.02, L - 0.017, H * 0.5, P.br * 0.8);
+    tube(metal, L - 0.04, L - 0.029, H * 0.5, P.br * 1.15);                               // Laufende, bündig mit dem Schlitten
+    tube(dark, L - 0.0295, L - 0.0285, H * 0.5, P.br * 0.75);                           // Laufbohrung (dunkel)
     tgt = slideG;                                                                         // alles Weitere sitzt auf dem Schlitten
     box(dark, -0.026, -0.02, H, H + 0.007, 0.008, -0.007); box(dark, -0.026, -0.02, H, H + 0.007, 0.008, 0.007);   // Kimme
     box(blue, L - 0.05, L - 0.045, H, H + 0.007, 0.004);                                  // Korn (blau leuchtend)
     box(glass, 0.02, 0.09, H - 0.003, H + 0.001, W * 0.5);                                // Fenster oben
     chargeBar(0.015, 0.075, H * 0.25, 0.008, W / 2 + 0.002);
     gills(3, 0.085, 0.024, H * 0.5, H * 0.75, W / 2 + 0.002);
-    box(dark, 0.035, 0.08, H * 0.55, H + 0.001, 0.004, W / 2 + 0.001);                    // Auswurffenster rechts
+    // Auswurffenster rechts oben: dunkle Öffnung, darin sieht man das Laufende (Stahl)
+    box(dark, 0.03, 0.075, H * 0.5, H + 0.001, W * 0.45, W * 0.3);
+    box(metal, 0.035, 0.072, H * 0.62, H * 0.92, W * 0.35, W * 0.22);
     for (let i = 0; i < 4; i++) box(dark, L - 0.075 + i * 0.006, L - 0.072 + i * 0.006, H * 0.2, H * 0.85, W + 0.002);   // vordere Griffrillen
     // Leuchtvisier wie bei echten Pistolen (Tritium): zwei grüne Punkte hinten auf der Kimme, einer vorne auf dem Korn
     const dotM = new THREE.MeshStandardMaterial({ color: SIGHT_GLOW, emissive: SIGHT_GLOW, emissiveIntensity: 2.2 });
@@ -551,7 +554,23 @@ export function makeWaterGun(widx, fp = false, mods = null) {   // mods = Aufsä
     tgt = g;
     cock = { g: slideG, at: new THREE.Vector3(0, H + 0.012, 0.012), travel: 0.032 };   // hinten oben an den Griffrillen anfassen
     sightAt = [0, H + 0.005];
-    grip(-0.014, W, 0.1, false);
+    // Griff wie bei einer echten Polymer-Pistole: oben hinten der "Biberschwanz" (schützt die Hand vor dem Schlitten),
+    // hinten ein geschwungener Rücken, vorne Fingermulden, unten ein ausgestellter Magazinschacht
+    {
+      const t = -0.014;
+      side('pgrip', gripM, [[-0.04, t + 0.004], [-0.031, t - 0.004], [-0.028, t - 0.03], [-0.031, t - 0.065], [-0.036, t - 0.098], [-0.04, t - 0.104],
+        [0.014, t - 0.104], [0.013, t - 0.095], [0.016, t - 0.08], [0.013, t - 0.07], [0.018, t - 0.058], [0.015, t - 0.048], [0.021, t - 0.037], [0.026, t - 0.018], [0.03, t]], W * 0.92);
+      box(white, -0.041, 0.015, t - 0.108, t - 0.1, W * 0.98);                              // Magazinboden (unten am Griff)
+      // Abzugsbügel: vorne eckig (zum Abstützen des Fingers), mit Loch
+      side('pguard', white, [[0.026, t], [0.078, t], [0.08, t - 0.004], [0.076, t - 0.032], [0.07, t - 0.036], [0.024, t - 0.034]], W * 0.38,
+        [[[0.034, t - 0.005], [0.072, t - 0.005], [0.069, t - 0.029], [0.034, t - 0.029]]]);
+      const tr = box(metal, 0.044, 0.05, t - 0.026, t - 0.002, W * 0.22); tr.rotation.x = 0.3;   // Abzug
+      box(metal, 0.044, 0.046, t - 0.018, t - 0.006, W * 0.08);                                // Sicherungszunge im Abzug
+      // Bedienteile links: Magazinknopf, Schlittenfanghebel, Zerlegehebel
+      box(dark, 0.022, 0.03, t - 0.012, t - 0.002, 0.004, -W * 0.47);
+      box(metal, -0.005, 0.03, -0.006, -0.002, 0.004, -W * 0.48);
+      box(metal, 0.04, 0.05, -0.008, -0.003, 0.004, -W * 0.46);
+    }
     if (!P.drum) seatMag('pistol', 1, 0, -0.016, -0.014, -0.207);   // schräg wie der Griff (der Revolver hat stattdessen eine Trommel)
     rear = 0.035;
     muzzleAt = [0, H * 0.5, -(L - 0.015)]; gripTop = -0.014; gripW = W;
