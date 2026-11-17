@@ -3,10 +3,15 @@
 // in here must be pure JS without DOM or Node APIs.
 
 export const SURFACE = 130;      // y of the water surface
-export const SIZE = 640;         // world edge length in metres
+// MAP_K = wie viel größer die Battle-Royale-Karte ist als früher (1.4 = 1,4-mal so breit, also fast doppelt so viel Fläche).
+// Die Expedition bleibt so groß wie vorher (dort zählt der Trichter in der Mitte).
+export const MAP_K = 1.4;
+export const SIZE = 900;         // world edge length in metres
 export const HALF = SIZE / 2;
-export const PLAY = 288;         // playable half extent (inside the rim)
-export const GRID_N = 256;       // height grid cells per edge
+export const PLAY = HALF - 32;   // playable half extent (inside the rim)
+export const GRID_N = 360;       // height grid cells per edge (2,5 m pro Kästchen)
+// Wie viel von allem auf der großen Karte verteilt wird (Battle Royale)
+export const MAP_STUFF = { subs: 4, scooters: 16, jetskis: 8, rays: 4, crates: 30, rocks: 190, reefs: 6, kelp: 6, swarms: 9, sharks: 10, loot: 40 };
 export const CELL = SIZE / GRID_N;
 export const TICK_HZ = 20;
 
@@ -481,7 +486,9 @@ export class World {
 
     // seamount position feeds into the height field
     const sa = R() * TAU;
-    this.smx = Math.cos(sa) * 150; this.smz = Math.sin(sa) * 150;
+    const K = exp ? 1 : MAP_K, MS = MAP_STUFF;   // Battle Royale: alles weiter verteilt und mehr davon
+    this.lim = exp ? 288 : PLAY;                  // bis hierhin kann man schwimmen
+    this.smx = Math.cos(sa) * 150 * K; this.smz = Math.sin(sa) * 150 * K;
 
     const n1 = GRID_N + 1;
     this.grid = new Float32Array(n1 * n1);
@@ -506,14 +513,14 @@ export class World {
     const ringSite = (r0, r1) => { const a = R() * TAU, d = r0 + R() * (r1 - r0); return { x: Math.cos(a) * d, z: Math.sin(a) * d }; };
 
     // wreck
-    const ws = exp ? ringSite(186, 204) : pickSite(190, sites, 130); sites.push(ws);
+    const ws = exp ? ringSite(186, 204) : pickSite(190 * K, sites, 130 * K); sites.push(ws);
     this.wreck = { x: ws.x, z: ws.z, y: this.heightAt(ws.x, ws.z), yaw: R() * TAU };
     for (const k of [-12, -6, 0, 6, 12]) {
       const x = ws.x + Math.cos(this.wreck.yaw) * k, z = ws.z - Math.sin(this.wreck.yaw) * k;
       this.cols.push({ x, y: this.heightAt(x, z) + 2, z, r: 5 });
     }
     // ruins
-    const rs = exp ? ringSite(126, 144) : pickSite(190, sites, 130); sites.push(rs);
+    const rs = exp ? ringSite(126, 144) : pickSite(190 * K, sites, 130 * K); sites.push(rs);
     this.ruins = { x: rs.x, z: rs.z, y: this.heightAt(rs.x, rs.z) };
     const ring = (count, rad, miss) => {
       const out = [];
@@ -538,8 +545,8 @@ export class World {
     }
 
     // rocks
-    for (let i = 0; i < 95; i++) {
-      const x = (R() * 2 - 1) * 275, z = (R() * 2 - 1) * 275;
+    for (let i = 0; i < (exp ? 95 : MS.rocks); i++) {
+      const x = (R() * 2 - 1) * 275 * K, z = (R() * 2 - 1) * 275 * K;
       if (!farFrom(x, z, [ws, rs], 26)) continue;
       const r = R() < 0.12 ? 8 + R() * 5 : 2 + R() * 4.5;
       const y = this.heightAt(x, z) + r * 0.25;
@@ -583,7 +590,7 @@ export class World {
       for (let i = 0; i < 40; i++) {
         const a = R() * TAU, d = rad * Math.sqrt(R());
         let x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
-        x = Math.max(-270, Math.min(270, x)); z = Math.max(-270, Math.min(270, z));
+        const lim = exp ? 270 : PLAY - 18; x = Math.max(-lim, Math.min(lim, x)); z = Math.max(-lim, Math.min(lim, z));
         p = { x, y: this.heightAt(x, z) + lift, z, yaw: R() * TAU };
         if (free(p.x, p.y, p.z, pad)) return p;
       }
@@ -593,7 +600,7 @@ export class World {
 
     // kelp forests
     const kelpSites = [];
-    for (let i = 0; i < 4; i++) { const s = exp ? ringSite(245, 268) : pickSite(220, sites.concat(kelpSites), 70); kelpSites.push(s); }
+    for (let i = 0; i < (exp ? 4 : MS.kelp); i++) { const s = exp ? ringSite(245, 268) : pickSite(220 * K, sites.concat(kelpSites), 70 * K); kelpSites.push(s); }
     for (const s of kelpSites) for (let i = 0; i < 170; i++) {
       const p = spot(s.x, s.z, 38, 0, 0.5);
       this.kelp.push({ x: p.x, y: p.y - 0.3, z: p.z, h: 7 + R() * 12, rot: R() * Math.PI });
@@ -601,12 +608,13 @@ export class World {
     this.kelpSites = kelpSites;
     // coral reefs + scattered coral
     const reefs = []; this.reefSites = reefs;
-    for (let i = 0; i < 4; i++) reefs.push(exp ? ringSite(i < 3 ? 245 : 185, i < 3 ? 268 : 205) : pickSite(230, reefs, 80));
+    for (let i = 0; i < (exp ? 4 : MS.reefs); i++) reefs.push(exp ? ringSite(i < 3 ? 245 : 185, i < 3 ? 268 : 205) : pickSite(230 * K, reefs, 80 * K));
     const pal = [0xff5d8f, 0xff9a3c, 0xc86bff, 0xffd84d, 0x35e0c8, 0xff6b5e];
-    for (let i = 0; i < 620; i++) {
-      const s = i < 480 ? reefs[i % reefs.length] : { x: 0, z: 0 };
-      const p = spot(s.x, s.z, i < 480 ? 34 : 270, 0, 0.3);
-      if (exp && i >= 480 && p.y < 20) continue;     // no stray coral in the dark deep
+    const nReef = exp ? 480 : 720, nCoral = exp ? 620 : 1000;
+    for (let i = 0; i < nCoral; i++) {
+      const s = i < nReef ? reefs[i % reefs.length] : { x: 0, z: 0 };
+      const p = spot(s.x, s.z, i < nReef ? 34 : 270 * K, 0, 0.3);
+      if (exp && i >= nReef && p.y < 20) continue;     // no stray coral in the dark deep
       this.coral.push({ x: p.x, y: p.y, z: p.z, s: 0.5 + R() * 1.6, type: (R() * 3) | 0, col: pal[(R() * pal.length) | 0], rot: R() * TAU });
     }
 
@@ -617,13 +625,13 @@ export class World {
     addCrates(this.smx, this.smz, 30, 4);
     for (const s of kelpSites) addCrates(s.x, s.z, 30, 3);
     for (const s of reefs) addCrates(s.x, s.z, 28, 2);
-    addCrates(0, 0, 265, 16);
+    addCrates(0, 0, 265 * K, exp ? 16 : MS.crates);
 
     // vehicles
     this.vehSpawns.push({ type: 'sub', ...spot(ws.x, ws.z, 30, 3.5, 4) });
     this.vehSpawns.push({ type: 'sub', ...spot(rs.x, rs.z, 28, 3.5, 4) });
-    for (let i = 0; i < 2; i++) this.vehSpawns.push({ type: 'sub', ...spot(0, 0, 240, 3.5, 4) });
-    for (let i = 0; i < 9; i++) this.vehSpawns.push({ type: 'scooter', ...spot(0, 0, 250, 1.4, 2) });
+    for (let i = 0; i < (exp ? 2 : MS.subs); i++) this.vehSpawns.push({ type: 'sub', ...spot(0, 0, 240 * K, 3.5, 4) });
+    for (let i = 0; i < (exp ? 9 : MS.scooters); i++) this.vehSpawns.push({ type: 'scooter', ...spot(0, 0, 250 * K, 1.4, 2) });
     // Jetskis: neben den ersten 4 Scootern (ohne neue Zufallszahlen, damit der Rest der Karte gleich bleibt)
     for (const sc of this.vehSpawns.filter(v => v.type === 'scooter').slice(0, 4)) {
       const x = sc.x + 5, z = sc.z + 3; this.vehSpawns.push({ type: 'jetski', x, y: this.heightAt(x, z) + 1.8, z, yaw: sc.yaw });
@@ -632,12 +640,19 @@ export class World {
     for (const sc of this.vehSpawns.filter(v => v.type === 'scooter').slice(4, 7)) {
       const x = sc.x - 6, z = sc.z - 4; this.vehSpawns.push({ type: 'ray', x, y: this.heightAt(x, z) + 2.2, z, yaw: sc.yaw });
     }
+    // große Karte: noch mehr Jetskis und Rochen, überall verteilt (auch bei Wrack, Ruinen, Riffen und Kelpwäldern)
+    if (!exp) {
+      const hot = [ws, rs, ...reefs, ...kelpSites];
+      for (let i = 0; i < MS.jetskis; i++) { const h = i < hot.length ? hot[i] : { x: 0, z: 0 }; this.vehSpawns.push({ type: 'jetski', ...spot(h.x, h.z, i < hot.length ? 40 : 250 * K, 1.8, 2.5) }); }
+      for (let i = 0; i < MS.rays; i++) this.vehSpawns.push({ type: 'ray', ...spot(0, 0, 250 * K, 2.2, 2.5) });
+    }
 
     // creature sites
     this.lairs.push(spot(ws.x, ws.z, 14, 1.3, 1.5), spot(rs.x, rs.z, 10, 1.3, 1.5));
-    for (const s of reefs.slice(0, 2)) this.lairs.push(spot(s.x, s.z, 18, 1.3, 1.5));
+    for (const s of reefs.slice(0, exp ? 2 : 4)) this.lairs.push(spot(s.x, s.z, 18, 1.3, 1.5));
     this.lairs.push(spot(kelpSites[0].x, kelpSites[0].z, 15, 1.3, 1.5));
-    for (let i = 0; i < 5; i++) { const p = spot(0, 0, 220, 0, 3); p.y += 12 + R() * 22; this.swarms.push(p); }
+    if (!exp) this.lairs.push(spot(kelpSites[3].x, kelpSites[3].z, 15, 1.3, 1.5));
+    for (let i = 0; i < (exp ? 5 : MS.swarms); i++) { const p = spot(0, 0, 220 * K, 0, 3); p.y += 12 + R() * 22; this.swarms.push(p); }
 
     // glowing crystals on the deep floors (expedition only, decoration)
     this.crystals = [];
@@ -661,12 +676,14 @@ export class World {
     this.pois = exp ? [{ n: 'Boot', x: EXP_BOAT.x, z: EXP_BOAT.z }, ...this.bases.map(b => ({ n: 'Basis', x: b.c.x, z: b.c.z }))] : [
       { n: 'Wrack', x: ws.x, z: ws.z }, { n: 'Ruinen', x: rs.x, z: rs.z },
       { n: 'Seeberg', x: this.smx, z: this.smz }, { n: 'Kelpwald', x: kelpSites[0].x, z: kelpSites[0].z },
+      { n: 'Riff', x: reefs[0].x, z: reefs[0].z }, { n: 'Riff', x: reefs[3].x, z: reefs[3].z }, { n: 'Kelpwald', x: kelpSites[3].x, z: kelpSites[3].z },
     ];
     // Leuchtkorallen überall auf dem Boden. Eigener Zufall (RG), damit sich der Rest der Welt nicht verschiebt.
     const RG = rng(this.seed ^ 0x51ed270b);
     this.glowCorals = [];
-    for (let i = 0; i < GLOW_CORALS.count; i++) {
-      const x = (RG() * 2 - 1) * (PLAY - 8), z = (RG() * 2 - 1) * (PLAY - 8), s = 0.6 + RG() * 0.9, col = (RG() * 3) | 0, rot = RG() * TAU;
+    const gcN = exp ? GLOW_CORALS.count : Math.round(GLOW_CORALS.count * MAP_K * MAP_K), gcR = exp ? 280 : PLAY - 8;
+    for (let i = 0; i < gcN; i++) {
+      const x = (RG() * 2 - 1) * gcR, z = (RG() * 2 - 1) * gcR, s = 0.6 + RG() * 0.9, col = (RG() * 3) | 0, rot = RG() * TAU;
       if (exp && Math.hypot(x - EXP_BOAT.x, z - EXP_BOAT.z) < 40) continue;                      // nicht unter dem Boot
       if ((this.bases || []).some(b => Math.hypot(b.c.x - x, b.c.z - z) < 14)) continue;          // nicht in den Basen
       const y = this.heightAt(x, z);
@@ -752,6 +769,63 @@ export class World {
         }
       }
     }
+    // ----- neue Orte auf der großen Karte (nur Battle Royale) -----
+    // Containerfeld, Flugzeugwrack, Schwarze Raucher (heiße Quellen) und eine Pipeline quer über die Karte.
+    // Eigener Zufall (RL), damit sich der Rest der Welt nicht verschiebt. Gezeichnet wird alles in props.js.
+    this.containers = []; this.plane = null; this.vents = []; this.pipe = [];
+    if (!exp) {
+      const RL = rng(this.seed ^ 0x3d5a9e21), lim = PLAY - 60;
+      const taken = [ws, rs, { x: this.smx, z: this.smz }, ...reefs, ...kelpSites];
+      const site = (minD) => {
+        let p = null;
+        for (let i = 0; i < 120; i++) {
+          const x = (RL() * 2 - 1) * lim, z = (RL() * 2 - 1) * lim;
+          p = { x, z }; if (farFrom(x, z, taken, minD)) break;
+        }
+        taken.push(p); return p;
+      };
+      const crate = (x, z) => this.crates.push({ x, y: this.heightAt(x, z) + 0.05, z, yaw: RL() * TAU });
+      // Containerfeld: Container liegen kreuz und quer, manche gestapelt, manche offen
+      const cs = site(95), cyaw = RL() * TAU;
+      for (let i = 0; i < 13; i++) {
+        const a = RL() * TAU, d = 4 + RL() * 22, x = cs.x + Math.cos(a) * d, z = cs.z + Math.sin(a) * d;
+        const yaw = cyaw + (RL() < 0.6 ? 0 : Math.PI / 2) + (RL() - 0.5) * 0.5, y = this.heightAt(x, z);
+        const c = { x, y, z, yaw, col: (RL() * 6) | 0, open: RL() < 0.35, tilt: (RL() - 0.5) * 0.12 };
+        this.containers.push(c);
+        if (i < 4 && RL() < 0.8) this.containers.push({ x, y: y + 2.6, z, yaw: yaw + (RL() - 0.5) * 0.3, col: (RL() * 6) | 0, open: false, tilt: (RL() - 0.5) * 0.08 });   // obendrauf
+      }
+      for (const c of this.containers) for (const k of [-2, 0, 2]) addCol({ x: c.x + Math.cos(c.yaw) * k, y: c.y + 1.3, z: c.z - Math.sin(c.yaw) * k, r: 1.45 });
+      for (let i = 0; i < 3; i++) { const a = RL() * TAU, d = 8 + RL() * 18; crate(cs.x + Math.cos(a) * d, cs.z + Math.sin(a) * d); }
+      this.pois.push({ n: 'Containerfeld', x: cs.x, z: cs.z });
+      // Flugzeugwrack: Rumpf in zwei Teilen, Flügel, Motoren
+      const ps = site(95), pyaw = RL() * TAU;
+      this.plane = { x: ps.x, z: ps.z, y: this.heightAt(ps.x, ps.z), yaw: pyaw, tailYaw: (RL() - 0.5) * 0.8, roll: (RL() - 0.5) * 0.4 };
+      for (const k of [-8, -3, 2]) addCol({ x: ps.x + Math.cos(pyaw) * k, y: this.plane.y + 1.6, z: ps.z - Math.sin(pyaw) * k, r: 2.1 });
+      for (let i = 0; i < 2; i++) { const a = RL() * TAU, d = 9 + RL() * 10; crate(ps.x + Math.cos(a) * d, ps.z + Math.sin(a) * d); }
+      this.pois.push({ n: 'Flugzeug', x: ps.x, z: ps.z });
+      // Schwarze Raucher: Schlote aus Gestein, aus denen schwarzes, heißes Wasser quillt
+      const vs = site(90);
+      for (let i = 0; i < 6; i++) {
+        const a = RL() * TAU, d = i ? 3 + RL() * 13 : 0, x = vs.x + Math.cos(a) * d, z = vs.z + Math.sin(a) * d;
+        const v = { x, y: this.heightAt(x, z) - 0.3, z, h: 4 + RL() * (i ? 7 : 12), r: 0.8 + RL() * 0.9 };
+        this.vents.push(v);
+        for (let k = 0; k < 3; k++) addCol({ x, y: v.y + v.h * (0.2 + k * 0.32), z, r: v.r * (1.25 - k * 0.25) });
+      }
+      for (let i = 0; i < 2; i++) { const a = RL() * TAU, d = 10 + RL() * 8; crate(vs.x + Math.cos(a) * d, vs.z + Math.sin(a) * d); }
+      this.pois.push({ n: 'Raucher', x: vs.x, z: vs.z });
+      // Pipeline: liegt auf Stützen quer über die Karte (von Rand zu Rand), schlängelt sich etwas
+      const pa = RL() * TAU, edge = PLAY - 30, bend = (RL() - 0.5) * 160;
+      const A = { x: Math.cos(pa) * edge, z: Math.sin(pa) * edge }, B = { x: -A.x, z: -A.z }, len = Math.hypot(B.x - A.x, B.z - A.z);
+      const nx = -(B.z - A.z) / len, nz = (B.x - A.x) / len;
+      for (let d = 0; d <= len; d += 2) {
+        const t = d / len, off = bend * 4 * t * (1 - t), x = A.x + (B.x - A.x) * t + nx * off, z = A.z + (B.z - A.z) * t + nz * off;
+        const y = this.heightAt(x, z) + 1.4;
+        this.pipe.push({ x, y, z });
+        addCol({ x, y, z, r: 0.95 });
+      }
+      // Fahrzeuge an den neuen Orten
+      for (const s of [cs, ps, vs]) { const x = s.x + 14, z = s.z - 10; this.vehSpawns.push({ type: 'jetski', x, y: this.heightAt(x, z) + 1.8, z, yaw: RL() * TAU }); }
+    }
   }
 
   _raw(x, z) {
@@ -762,15 +836,15 @@ export class World {
       let h = EXP_BOTTOM;
       for (const [r0, step] of EXP_STEPS) h += step * sstep(r0, r0 + 12, r);
       h += (fbm(x * 0.03, z * 0.03, s + 50, 2) - 0.5) * 5;
-      h += 30 * sstep(HALF - 70, HALF, Math.max(Math.abs(x), Math.abs(z)));
+      h += 30 * sstep(250, 320, Math.max(Math.abs(x), Math.abs(z)));   // Rand (die Expedition ist so groß wie früher)
       return h;
     }
     let h = fbm(x * 0.0055, z * 0.0055, s, 4) * 52;
     h += (fbm(x * 0.035, z * 0.035, s + 50, 2) - 0.5) * 5;
-    const tz = (fbm(x * 0.004, 3.7, s + 99, 2) - 0.5) * 300;      // winding trench
+    const tz = (fbm(x * 0.004, 3.7, s + 99, 2) - 0.5) * 300 * MAP_K;      // winding trench
     h -= 34 * (1 - sstep(10, 46, Math.abs(z - tz)));
     const mx = x - this.smx, mz = z - this.smz;
-    h += 55 * (1 - sstep(15, 95, Math.sqrt(mx * mx + mz * mz)));   // seamount
+    h += 55 * (1 - sstep(15, 95 * MAP_K, Math.sqrt(mx * mx + mz * mz)));   // seamount
     h += 80 * sstep(HALF - 70, HALF, Math.max(Math.abs(x), Math.abs(z))); // rim
     return h;
   }
@@ -788,8 +862,9 @@ export class World {
   // Push a sphere {x,y,z,vx,vy,vz} out of terrain, colliders and world bounds.
   // top: highest allowed y (default keeps the sphere just under the water surface)
   collide(p, r, top = SURFACE - r - 0.4) {
-    if (p.x < -PLAY) { p.x = -PLAY; if (p.vx < 0) p.vx = 0; } else if (p.x > PLAY) { p.x = PLAY; if (p.vx > 0) p.vx = 0; }
-    if (p.z < -PLAY) { p.z = -PLAY; if (p.vz < 0) p.vz = 0; } else if (p.z > PLAY) { p.z = PLAY; if (p.vz > 0) p.vz = 0; }
+    const L = this.lim;
+    if (p.x < -L) { p.x = -L; if (p.vx < 0) p.vx = 0; } else if (p.x > L) { p.x = L; if (p.vx > 0) p.vx = 0; }
+    if (p.z < -L) { p.z = -L; if (p.vz < 0) p.vz = 0; } else if (p.z > L) { p.z = L; if (p.vz > 0) p.vz = 0; }
     // Aus Felsen und Riff-Hügeln hinausschieben. Mehrmals hintereinander, damit man zwischen 3 Hügeln nicht hin- und
     // hergeschoben wird (und stecken bleibt). Schwung in die Wand hinein wird weggenommen → man gleitet an Hügeln entlang.
     const list = this.hash.get(hkey(Math.floor(p.x / HC), Math.floor(p.z / HC)));

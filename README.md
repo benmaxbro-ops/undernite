@@ -71,6 +71,10 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
   verteilen Stromschläge. Alle lassen sich erlegen und hinterlassen Beute.
 - **Welt:** bei jeder Runde neu erzeugt – Graben, Seeberg, Wrack, Ruinen, Kelpwälder und ein leuchtendes Netz aus Riff-Adern
   quer über den Boden (feste Hügel: man kann nicht hindurch, Kugeln auch nicht → Deckung).
+  Die Karte ist 1,4-mal so breit wie früher (MAP_K in shared.js) – dafür liegen mehr Fahrzeuge herum (6 U-Boote, 16 Scooter,
+  15 Jetskis, 7 Rochen), mehr Kisten, Riffe, Kelpwälder, Haie und Quallen (MAP_STUFF). Neue Orte: Containerfeld, Flugzeugwrack,
+  Schwarze Raucher (heiße Schlote mit Rauch) und eine Pipeline quer über die Karte, dazu Walskelette und viel Kleinzeug am Boden
+  (Kiesel, Seegras, Seeigel, Seesterne, Muscheln, Schwämme, Anemonen – gezeichnet nur in deiner Nähe, siehe props.js).
 - **Schießen:** Vor jedem Schuss baut sich kurz Druck auf (Pistole 0,1 s, Harpune 0,3 s), dann geht er mit einem Wumms raus.
   Von weitem klingen Schüsse wie ein dumpfer Schlag gegen eine Holztür.
 - **Hitze:** Jeder schnelle Schuss heizt die Waffe auf. Während man schießt, passiert nichts. Hört man auf oder lädt nach,

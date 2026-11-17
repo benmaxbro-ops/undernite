@@ -12,6 +12,7 @@ import { Sfx } from './audio.js';
 import { startFinisher } from './finisher.js';
 import { settings, onSettings, openSettings, closeSettings, QUALITY } from './settings.js';
 import { setReefQuality } from './reef.js';
+import { setPropsQuality } from './props.js';
 import { makeShock, makeBlast, SHOCK } from './shock.js';
 // so weit hinter der Mündung sitzen die Seitenkiemen je Waffe (Meter) – dort kommt beim Hitze-Ablassen der Druck raus
 const GILL_BACK = [0.14, 0.2, 0.26, 0.3, 0.55, 0.55, 0.32, 0.6, 0.16, 0.24, 0.4, 0.32, 0.3, 0.3, 0.3];
@@ -1233,7 +1234,7 @@ onSettings((s) => {
   sfx.setVolume(s.volume); music.setVolume(s.music);
   renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); resize();
   setupPost(Q);                 // Leuchten und weiche Schatten
-  setReefQuality(Q.reef);       // gilt ab der nächsten Welt (nächste Runde)
+  setReefQuality(Q.reef); setPropsQuality(Q.reef);       // gilt ab der nächsten Welt (nächste Runde)
   FOV = s.fov;
   document.getElementById('fpsBox').classList.toggle('hidden', !s.fps);
 });

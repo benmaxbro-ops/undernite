@@ -11,7 +11,7 @@ import {
   World, SUITS, SUIT_ORDER, WEAPONS, WEAPON_IDS, RARITY, VEHICLES, VEHICLE_IDS,
   CREATURES, CREATURE_IDS, SURFACE, TICK_HZ, segSphere, creatureR, FINISHER, COMPRESSOR, DEEP, GLOW_CORALS,
   EXP_HP, EXP_BOAT, EXP_RESPAWN, EXP_START_MONEY, REGEN_DELAY, REGEN_RATE, REGEN_RATE_SURFACE, FLOORS, floorAt, FISH, GOLD_CHANCE, GOLD_MUL, BOSSES, BOSS_RESPAWN,
-  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME, ULTI, ULTIS, eyeHeight, leagueOf, BR_UPGRADES as BR_UPS,
+  TANKS, LUNGS, LAMPS, airUse, SHOP_WEAPONS, PLAY, fishValue, AQUARIUM, aqIncome, catchToNet, EXP_LEDGES, EXP_MAX_DEPTH, brReward, BR_UPGRADES, upMul, HEAT, heatStart, suitOwned, GADGETS, gadgetOf, BR_WEAPONS, ATTACHMENTS, modDef, DRAW_TIME, ULTI, ULTIS, eyeHeight, leagueOf, MAP_K, MAP_STUFF, BR_UPGRADES as BR_UPS,
 } from './public/js/shared.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -55,7 +55,7 @@ const BOT_NAMES = ['Käpt\'n Kiemen', 'Graf Zackenbarsch', 'Tiefsee-Tina', 'Blub
   'Dorsch-Dieter', 'Rochen-Rita', 'Algen-Achim', 'Barrakuda-Bea', 'Tintenfisch-Tom', 'Seegurken-Sven', 'Anglerfisch-Anna',
   'Makrelen-Max', 'Flossen-Frieda', 'Kugelfisch-Kurt', 'Perlen-Pia'];
 const PHASES = [
-  { wait: 45, shrink: 35, r: 200, dps: 2 }, { wait: 35, shrink: 30, r: 125, dps: 3 },
+  { wait: 50, shrink: 45, r: 260, dps: 2 }, { wait: 35, shrink: 32, r: 150, dps: 3 },   // große Karte: erste Ringe größer
   { wait: 30, shrink: 25, r: 70, dps: 5 }, { wait: 25, shrink: 20, r: 32, dps: 7 },
   { wait: 20, shrink: 20, r: 10, dps: 10 }, { wait: 10, shrink: 15, r: 0, dps: 14 },
 ];
@@ -125,6 +125,7 @@ function addPickup(k, x, y, z, wid = '', rar = 0, ammo = -1, spare = null) {
   return p;
 }
 function removePickup(p) { G.pickups.delete(p.id); ev('pk-', p.id); }
+const LIM = PLAY - 18;   // so weit draußen dürfen Bots und Tiere höchstens hin
 function randSpot(rad, lift) {
   const W = G.world;
   for (let i = 0; i < 30; i++) {
@@ -146,8 +147,8 @@ function startMatch() {
     G.vehicles.set(v.id, v);
   }
   G.creatures = [];
-  if (G.mode !== 'wave') for (let i = 0; i < 7; i++) {
-    const p = randSpot(250, 10 + rnd() * 25);
+  if (G.mode !== 'wave') for (let i = 0; i < MAP_STUFF.sharks; i++) {
+    const p = randSpot(250 * MAP_K, 10 + rnd() * 25);
     G.creatures.push({ id: nextId++, type: 'shark', ...p, vx: 0, vy: 0, vz: 0, yaw: rnd() * 6.28, pitch: 0, hp: CREATURES.shark.hp,
       state: 'patrol', wp: null, tid: 0, scanT: rnd(), t: 0, bites: 0 });
   }
@@ -193,19 +194,19 @@ function startMatch() {
   for (const p of all) {
     const m = p.team && mates.get(p.team);
     if (m) { p.x = p.lx = m.x + 3; p.z = p.lz = m.z + 2; p.y = p.ly = m.y; p.yaw = m.yaw; p.pitch = m.pitch; continue; }   // Teamkamerad startet direkt daneben
-    const a = rnd() * 6.283, d = G.mode === 'wave' ? 0 : 60 + rnd() * 190;   // Wellen: alle starten zusammen in der Mitte
+    const a = rnd() * 6.283, d = G.mode === 'wave' ? 0 : (60 + rnd() * 190) * MAP_K;   // Wellen: alle starten zusammen in der Mitte
     p.x = p.lx = Math.cos(a) * d; p.z = p.lz = Math.sin(a) * d; p.y = p.ly = SURFACE - DEEP.brCeil - 4;   // Start unter der Tiefsee-Grenze
     p.yaw = Math.atan2(p.x, p.z); p.pitch = -0.6;
     if (p.team) mates.set(p.team, p);
   }
   // floor loot
-  for (let i = 0; i < 24; i++) {
-    const s = randSpot(260, 1.0), r = rnd();
+  for (let i = 0; i < MAP_STUFF.loot; i++) {
+    const s = randSpot(260 * MAP_K, 1.0), r = rnd();
     if (r < 0.55) addPickup('w', s.x, s.y, s.z, rollWeapon(), rollRarity(-0.15));
     else addPickup(r < 0.78 ? 'med' : 'sh', s.x, s.y, s.z);
   }
   G.events = [];
-  G.zone = { x: 0, z: 0, r: 430, fx: 0, fz: 0, fr: 430, nx: 0, nz: 0, nr: 430, ph: 0, t: 0, sh: false };
+  const zr = 430 * MAP_K; G.zone = { x: 0, z: 0, r: zr, fx: 0, fz: 0, fr: zr, nx: 0, nz: 0, nr: zr, ph: 0, t: 0, sh: false };
   pickNextZone();
   G.wave = G.mode === 'wave' ? { n: 0, state: 'break', t: WAVE.firstBreak } : null;
   for (const c of roomClients()) send(c.ws, startMsg(c));
@@ -222,8 +223,8 @@ function pickNextZone() {
   const z = G.zone, P = PHASES[z.ph];
   if (!P) { z.nx = z.x; z.nz = z.z; z.nr = 0; return; }
   const maxOff = Math.max(0, z.r - P.r) * 0.9;
-  const a = rnd() * 6.283, d = Math.sqrt(rnd()) * (z.ph === 0 ? 90 : maxOff);
-  z.nx = clamp(z.x + Math.cos(a) * d, -170, 170); z.nz = clamp(z.z + Math.sin(a) * d, -170, 170); z.nr = P.r;
+  const a = rnd() * 6.283, d = Math.sqrt(rnd()) * (z.ph === 0 ? 90 * MAP_K : maxOff), zc = 170 * MAP_K;
+  z.nx = clamp(z.x + Math.cos(a) * d, -zc, zc); z.nz = clamp(z.z + Math.sin(a) * d, -zc, zc); z.nr = P.r;
 }
 function updateZone(dt) {
   const z = G.zone, P = PHASES[z.ph];
@@ -826,7 +827,7 @@ const inSub = (p) => p.veh && G.vehicles.get(p.veh)?.type === 'sub';
 function sharkStep(c, dt) {
   const W = G.world;
   if (c.state === 'patrol') {
-    if (!c.wp || dist(c, c.wp) < 7) { const z = G.zone, s = randSpot(Math.min(250, Math.max(40, z.r)), 6 + rnd() * 28); c.wp = { x: clamp(s.x + z.x, -270, 270), y: s.y, z: clamp(s.z + z.z, -270, 270) }; }
+    if (!c.wp || dist(c, c.wp) < 7) { const z = G.zone, s = randSpot(Math.min(250 * MAP_K, Math.max(40, z.r)), 6 + rnd() * 28); c.wp = { x: clamp(s.x + z.x, -LIM, LIM), y: s.y, z: clamp(s.z + z.z, -LIM, LIM) }; }
     steer(c, c.wp.x, c.wp.y, c.wp.z, 5.5, dt, 1.2);
     c.scanT -= dt;
     if (c.scanT <= 0 && (G.time > 35 || c.wave)) {
@@ -982,7 +983,7 @@ function botThink(b) {
   if (goal) { b.goal = goal; if (b.crate >= 0 && gd < S.r + 4) openCrate(b.crate); return; }
   if (!b.goal || b.goal.zone || dist(b, b.goal) < 4) {
     const a = rnd() * 6.283, d = tz.r * 0.7 * Math.sqrt(rnd());
-    const x = clamp(tz.x + Math.cos(a) * d, -270, 270), zz = clamp(tz.z + Math.sin(a) * d, -270, 270);
+    const x = clamp(tz.x + Math.cos(a) * d, -LIM, LIM), zz = clamp(tz.z + Math.sin(a) * d, -LIM, LIM);
     b.goal = { x, y: W.heightAt(x, zz) + 4 + rnd() * 12, z: zz };
   }
 }
@@ -1463,7 +1464,7 @@ function waveTick(dt) {
     for (let i = 0; i < n + (boss ? 1 : 0); i++) {
       const big = boss && i === n, a = rnd() * 6.283, d = 80 + rnd() * 40;
       const t = alivePl[i % Math.max(1, alivePl.length)];
-      const cx = clamp((t ? t.x : 0) + Math.cos(a) * d, -270, 270), cz = clamp((t ? t.z : 0) + Math.sin(a) * d, -270, 270);
+      const cx = clamp((t ? t.x : 0) + Math.cos(a) * d, -LIM, LIM), cz = clamp((t ? t.z : 0) + Math.sin(a) * d, -LIM, LIM);
       const cy = Math.min(SURFACE - DEEP.brCeil - 3, G.world.heightAt(cx, cz) + 8 + rnd() * 15);
       G.creatures.push({ id: nextId++, type: 'shark', x: cx, y: cy, z: cz, vx: 0, vy: 0, vz: 0, yaw: rnd() * 6.28, pitch: 0,
         hp: CREATURES.shark.hp * k * (big ? 6 : 1), state: 'hunt', wp: null, tid: t ? t.id : 0, scanT: 0, t: 0, bites: 0,

@@ -2,6 +2,7 @@
 // surface, light shafts, plankton, bubbles, effects and the zone wall.
 import * as THREE from 'three';
 import { buildReef } from './reef.js';
+import { buildProps } from './props.js';
 import { sand, rock, rockColor } from './textures.js';
 import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT, deepGlow, DEEP } from './shared.js';
 const LAVA_FOG = new THREE.Color(0x4a1206), PRIM_FOG = new THREE.Color(0x061a3a);
@@ -178,16 +179,8 @@ export function buildEnvironment(scene, W) {
   W.lintels.forEach((l, i) => put(caps, W.columns.length + i, l.x, l.y + 0.6, l.z, 0, l.yaw, 0, l.len, 1.0, 2.2));
   root.add(caps);
 
-  // ----- wreck -----
-  const wr = new THREE.Group(); wr.position.set(W.wreck.x, W.wreck.y, W.wreck.z); wr.rotation.set(0, W.wreck.yaw, 0.28);
-  const rust = addCaustics(new THREE.MeshStandardMaterial({ color: 0x6e4a34, roughness: 0.9, metalness: 0.3 }), uTime, 0.7);
-  const rust2 = new THREE.MeshStandardMaterial({ color: 0x4d3a30, roughness: 0.95, metalness: 0.2 });
-  const hull = new THREE.Mesh(new THREE.CapsuleGeometry(4.6, 26, 6, 14).rotateZ(Math.PI / 2), rust); hull.scale.y = 0.9; hull.position.y = 1.2; wr.add(hull);
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(9, 4, 6), rust2); deck.position.set(-5, 6, 0); wr.add(deck);
-  const funnel = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 5, 10), rust2); funnel.position.set(1.5, 6.5, 0); funnel.rotation.z = -0.25; wr.add(funnel);
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, 13, 6), rust2); mast.position.set(9, 9, 0); mast.rotation.z = 0.3; wr.add(mast);
-  for (let i = 0; i < 6; i++) { const w = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.2), new THREE.MeshStandardMaterial({ color: 0x0c1418, emissive: 0x39d6c6, emissiveIntensity: i % 3 ? 0 : 0.6 })); w.position.set(-8.5 + i * 1.4, 6.3, 3.02); wr.add(w); }
-  root.add(wr);
+  // ----- Schiffswrack, Containerfeld, Flugzeug, Schwarze Raucher, Pipeline, Walskelette, Kleinzeug am Boden: props.js -----
+  const props = buildProps(root, W, (m) => addCaustics(m, uTime, 0.7), uTime);
 
   // ----- expedition: glowing crystals in the deep + trader boat -----
   let boat = null, base = null, bases = [];
@@ -370,6 +363,7 @@ export function buildEnvironment(scene, W) {
       zTex.offset.y = -t * 0.12; zTex.offset.x = t * 0.004;
       // plankton wraps around the camera
       const cx = cam.position.x, cy = cam.position.y, cz = cam.position.z;
+      props(dt, cx, cz);
       for (let i = 0; i < PN; i++) {
         const o = i * 3;
         let dx = pArr[o] - cx, dy = pArr[o + 1] - cy, dz = pArr[o + 2] - cz;
@@ -422,7 +416,7 @@ export function buildEnvironment(scene, W) {
       snowMat.uniforms.uFogDensity.value = Math.abs(fog.density);
       snowMat.uniforms.uScale.value = innerHeight * Math.min(devicePixelRatio, 1.5) / (2 * Math.tan(cam.fov * Math.PI / 360));
       scene.background = fog.color;
-      if (zone) { zoneWall.visible = zone[2] > 0.5 && zone[2] < 400; zoneWall.position.set(zone[0], 60, zone[1]); zoneWall.scale.set(zone[2], 1, zone[2]); }
+      if (zone) { zoneWall.visible = zone[2] > 0.5 && zone[2] < 650; zoneWall.position.set(zone[0], 60, zone[1]); zoneWall.scale.set(zone[2], 1, zone[2]); }
       else zoneWall.visible = false;
     },
     dispose() {
