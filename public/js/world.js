@@ -2,7 +2,7 @@
 // surface, light shafts, plankton, bubbles, effects and the zone wall.
 import * as THREE from 'three';
 import { buildReef } from './reef.js';
-import { sand, rock } from './textures.js';
+import { sand, rock, rockColor } from './textures.js';
 import { SIZE, HALF, GRID_N, SURFACE, EXP_BOAT, deepGlow, DEEP } from './shared.js';
 const LAVA_FOG = new THREE.Color(0x4a1206), PRIM_FOG = new THREE.Color(0x061a3a);
 import { makeBoat, makeTag } from './models.js';
@@ -137,8 +137,8 @@ export function buildEnvironment(scene, W) {
     rp.setXYZ(i, x * n, y * n, z * n);
   }
   rg.computeVertexNormals();
-  const rockTex = rock();
-  const rocks = new THREE.InstancedMesh(rg, addCaustics(new THREE.MeshStandardMaterial({ color: 0x6a7780, roughness: 0.95, map: rockTex, bumpMap: rockTex, bumpScale: 3 }), uTime, 0.8), W.rocks.length);
+  const rockTex = rock(), rockCol = rockColor();   // grau für die Unebenheit, farbig (Algen, Krusten) für das Aussehen
+  const rocks = new THREE.InstancedMesh(rg, addCaustics(new THREE.MeshStandardMaterial({ color: 0xa8b2b8, roughness: 0.95, map: rockCol, bumpMap: rockTex, bumpScale: 3 }), uTime, 0.8), W.rocks.length);
   W.rocks.forEach((r, i) => put(rocks, i, r.x, r.y, r.z, 0, r.rot, 0, r.r * r.sx, r.r * r.sy, r.r * r.sz));
   root.add(rocks);
 

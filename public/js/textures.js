@@ -56,9 +56,18 @@ export const brushed = () => tex('brushed', 256, (c, n) => {
 // Sand am Meeresboden: Körner und kleine Wellenrippel (Farbe wird mit der Bodenfarbe gemischt, deshalb grau)
 export const sand = () => tex('sand', 512, (c, n) => {
   const R = seeded(21); c.fillStyle = '#e6d9bd'; c.fillRect(0, 0, n, n);
-  for (let y = 0; y < n; y++) { const v = 205 + Math.sin(y * 0.19 + Math.sin(y * 0.031) * 3) * 22; c.fillStyle = `rgb(${v + 18},${v + 6},${v - 22})`; c.fillRect(0, y, n, 1); }
+  // geschwungene Rippel wie echter Sand (kachelbar: die Wellen passen an allen Rändern zusammen)
+  const img = c.getImageData(0, 0, n, n), d = img.data, T = Math.PI * 2 / n;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const w = y + 9 * Math.sin(x * T * 2) + 5 * Math.sin(x * T * 3 + 1.3) + 3 * Math.sin((x + y) * T * 5);   // Welle verbiegen
+    const r = Math.sin(w * T * 17), v = 205 + (r > 0 ? r * 26 : r * 14);   // Kamm heller und schmaler als das Tal
+    const o = (y * n + x) * 4; d[o] = v + 18; d[o + 1] = v + 6; d[o + 2] = v - 22; d[o + 3] = 255;
+  }
+  c.putImageData(img, 0, 0);
   for (let i = 0; i < 6000; i++) { const v = 150 + R() * 105; c.fillStyle = `rgb(${v},${v - 4},${v - 10})`; c.fillRect(R() * n, R() * n, 1 + R() * 1.6, 1 + R() * 1.6); }
   for (let i = 0; i < 90; i++) { const v = 120 + R() * 40; c.fillStyle = `rgba(${v},${v},${v},0.6)`; c.beginPath(); c.arc(R() * n, R() * n, 1.5 + R() * 3, 0, 7); c.fill(); }   // Steinchen
+  c.lineWidth = 1.4;
+  for (let i = 0; i < 40; i++) { c.strokeStyle = `rgba(250,246,236,${0.5 + R() * 0.4})`; const x = R() * n, y = R() * n, a = R() * 6; c.beginPath(); c.arc(x, y, 2 + R() * 3, a, a + 2 + R()); c.stroke(); }   // Muschelstückchen
 }, { cached: false });
 
 // Fels: fleckig mit Rissen
@@ -69,6 +78,16 @@ export const rock = () => tex('rock', 256, (c, n) => {
   for (let i = 0; i < 26; i++) { c.lineWidth = 0.5 + R() * 1.5; c.beginPath(); let x = R() * n, y = R() * n; c.moveTo(x, y); for (let k = 0; k < 6; k++) { x += (R() - 0.5) * 40; y += (R() - 0.5) * 40; c.lineTo(x, y); } c.stroke(); }
   speckle(c, n, R, 40, 180);
 }, { cached: false, repeat: 2 });
+
+// Fels in Farbe: graue Grundfarbe mit Algen (grün/braun), Bewuchs-Krusten (hell) und dunklen Spalten
+export const rockColor = () => tex('rockCol', 256, (c, n) => {
+  const R = seeded(33); c.fillStyle = '#8c9296'; c.fillRect(0, 0, n, n);
+  for (let i = 0; i < 220; i++) { const v = 110 + R() * 70, r = 4 + R() * 22; c.fillStyle = `rgba(${v},${v + 4},${v + 6},0.35)`; c.beginPath(); c.arc(R() * n, R() * n, r, 0, 7); c.fill(); }   // Flecken
+  for (let i = 0; i < 260; i++) { const g = R() < 0.6; c.fillStyle = g ? `rgba(80,${105 + R() * 35},70,0.09)` : `rgba(${115 + R() * 25},95,65,0.09)`; c.beginPath(); c.arc(R() * n, R() * n, 3 + R() * 14, 0, 7); c.fill(); }   // Algen grün und braun
+  for (let i = 0; i < 90; i++) { c.fillStyle = `rgba(225,220,208,${0.2 + R() * 0.3})`; c.beginPath(); c.arc(R() * n, R() * n, 0.8 + R() * 2.2, 0, 7); c.fill(); }   // helle Krusten (Seepocken)
+  c.strokeStyle = 'rgba(30,32,34,0.3)';
+  for (let i = 0; i < 26; i++) { c.lineWidth = 0.5 + R() * 1.5; c.beginPath(); let x = R() * n, y = R() * n; c.moveTo(x, y); for (let k = 0; k < 6; k++) { x += (R() - 0.5) * 40; y += (R() - 0.5) * 40; c.lineTo(x, y); } c.stroke(); }   // Spalten
+}, { color: true, cached: false, repeat: 2 });
 
 // Korallen: kleine Poren (Polypen)
 export const pores = () => tex('pores', 256, (c, n) => {
