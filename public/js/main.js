@@ -1125,6 +1125,10 @@ function updateEntities(dt) {
     e.held = e.id === myId && held >= 0 && you && you.x ? catchFromNet(you.x.bagL[held]) : null;
     // nur vom eigenen Taucher weiß das Spiel, wann er nachlädt – also gehen nur bei dir die Kiemen auf
     e.gills = e.id === myId ? view.gills : 0; e.charge = e.id === myId ? view.charge : 0;
+    // wie weit das Nachladen ist (für die Mech-Animation von außen). Bei anderen schätzen wir es: Start merken, Dauer der Waffe
+    if (e.id === myId) e.rl = you && you.rl > 0 && you.rlT ? Math.min(1, 1 - you.rl / you.rlT) : 0;
+    else if (e.fl & 16) { e.rlStart ??= time; const wd = WEAPONS[WEAPON_IDS[e.w]]; e.rl = Math.min(1, (time - e.rlStart) / ((wd && wd.reload) || 2.5)); }
+    else { e.rlStart = undefined; e.rl = 0; }
     e.fin = fins.find(f => f.attacker === e.id) || null;
     const veh = e.veh ? vehicles.get(e.veh) : null;
     // im U-Boot sieht man den Taucher nicht, und in der Ego-Perspektive nicht den eigenen Körper

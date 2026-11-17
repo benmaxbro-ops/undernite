@@ -1501,7 +1501,7 @@ function snapshot() {
     wv: G.wave ? [G.wave.n, G.wave.state === 'break' ? Math.ceil(G.wave.t) : -G.creatures.filter(c => c.wave && !c.dead).length] : null,   // Welle: Nummer, Sekunden Pause oder −Haie übrig
     z: z ? [r2(z.x), r2(z.z), r2(z.r), r2(z.nx), r2(z.nz), r2(z.nr), z.ph, P ? Math.ceil((z.sh ? P.shrink : P.wait) - z.t) : 0, z.sh ? 1 : 0] : null,
     p: [...G.players.values()].filter(p => p.alive).map(p => [p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.ceil(p.hp), Math.round(p.shield),
-      (p.boost ? 2 : 0) | (p.grabbed ? 4 : 0) | (G.time < (p.invisT || 0) ? 8 : 0),   // 8 = getarnt (Sepia-Ulti)
+      (p.boost ? 2 : 0) | (p.grabbed ? 4 : 0) | (G.time < (p.invisT || 0) ? 8 : 0) | (p.reload > 0 ? 16 : 0),   // 16 = lädt gerade nach   // 8 = getarnt (Sepia-Ulti)
       p.weapons[p.slot] ? WEAPON_IDS.indexOf(p.weapons[p.slot].id) : -1, p.veh]),
     c: G.creatures.map(c => [c.id, CREATURE_IDS.indexOf(c.type), r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.pitch),
       ['hunt', 'lunge', 'chase', 'swing', 'attack', 'flee'].includes(c.state) ? 1 : c.state === 'hold' ? 2 : 0,

@@ -97,8 +97,22 @@ export function makePlayerModel(suit, id, name, tagColor) {   // tagColor: Farbe
     const amp = 0.12 + Math.min(1, s.speed / 9) * 0.4;
     if (parts.mech) {
       inner.rotation.x = s.pitch * 0.2;
-      parts.arms[1].rotation.x = s.pitch;   // rechter Arm zielt mit der Waffe
-      parts.arms[0].rotation.x = 0.15;      // linker Arm bleibt locker an der Seite (nur Finisher und Nachladen)
+      // Waffe in der rechten Zange: Oberarm hängt, Unterarm zeigt nach vorne (90°). Das Modell ist mech-groß.
+      if (s.weapon !== lastW && s.weapon >= 0) {
+        lastW = s.weapon;
+        if (!parts.mgun) { parts.mgun = new THREE.Group(); parts.mgun.position.set(0, -1.1, -1.25); parts.arms[1].add(parts.mgun); }
+        parts.mgun.clear(); gunModel = makeWaterGun(s.weapon); gunModel.scale.setScalar(3.8); parts.mgun.add(gunModel);
+      }
+      if (gunModel) { gunModel.userData.setGills(s.gills || 0); gunModel.userData.setCharge(s.charge || 0); }
+      // Nachladen wie ein Roboter (MECH_RELOAD): Waffe kippt 90° (Magazin nach links), linker Arm schwenkt rein, Magazin raus und rein, zurück
+      const R = s.rl || 0, seg = (a, b) => Math.max(0, Math.min(1, (R - a) / (b - a))), ease = (x) => x * x * (3 - 2 * x);
+      const tilt = R > 0 ? ease(seg(0, 0.15)) * (1 - ease(seg(0.85, 1))) : 0;   // kippen am Anfang, zurück am Ende
+      const reach = R > 0 ? ease(seg(0.12, 0.3)) * (1 - ease(seg(0.7, 0.88))) : 0; // linker Arm kommt rein und geht wieder
+      if (parts.mgun) parts.mgun.rotation.z = -Math.PI / 2 * tilt;
+      // beide Arme schwenken beim Nachladen zur Körpermitte und treffen sich vor der Brust (rechts mit der Waffe, links greift ans Magazin)
+      parts.arms[1].rotation.set(s.pitch * (1 - tilt * 0.8) + tilt * 0.25, tilt * 0.95, 0);
+      parts.arms[0].rotation.set(0.15 + reach * 0.3, -reach * 1.15, 0);
+      if (gunModel && gunModel.userData.mag) { const M = gunModel.userData.mag, out = R > 0 ? Math.sin(Math.min(1, Math.max(0, (R - 0.3) / 0.4)) * Math.PI) : 0; M.g.position.copy(M.seat).addScaledVector(M.out, out * M.len * 1.3); }   // Magazin raus und wieder rein
       parts.legs[0].rotation.x = Math.sin(phase * 0.6) * amp; parts.legs[1].rotation.x = -Math.sin(phase * 0.6) * amp;
       if (parts.animate) parts.animate(dt, s.speed || 0, 0.25 + 0.15 * Math.sin(phase * 0.3));   // Propeller drehen, Zangen bewegen sich leicht
       // Goliath-Finisher: nach vorne greifen, hoch über den Kopf heben … und werfen!
