@@ -103,6 +103,9 @@ Anderer Port: `set PORT=9000` vor `node server.js`.
 - **Sonar-Radar** (oben rechts, nur Battle Royale): du bist in der Mitte, vorne ist oben. Ein grüner Strahl dreht sich alle 3 Sekunden einmal herum;
   wo er drüberstreicht, leuchten Boden, Riffe und Gegner in der Nähe (bis 45 m) kurz auf – mit leisem Sonar-Ping pro Umdrehung und "Ding" pro Gegner.
   **Im U-Boot** zeigt das Bord-Sonar alle Gegner bis 90 m durchgehend. Fährt jemand ein U-Boot, hört man dessen Sonar in der Nähe. Werte: `SONAR` und `SONAR_SND` in `hud.js`.
+  Auf dem Radar siehst du auch, **was in der Nähe ist** (bis 90 m): gelbe Symbole für freie Fahrzeuge (Ellipse = U-Boot, Dreieck = Jetski,
+  Raute = Rochen, Kreis = Scooter), orange Kästchen = Truhen, Punkte in Seltenheitsfarbe = Waffen, grünes/blaues Kreuz = Medikit/Schild.
+  Darunter steht die Liste „In der Nähe: …“. Ist nichts in Reichweite, zeigt ein Pfeil am Rand zum nächsten Fahrzeug und zur nächsten Truhe (mit Entfernung,  in ).
 
 ## Modus: Tiefsee-Expedition (v0.2)
 

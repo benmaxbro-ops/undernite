@@ -10,6 +10,21 @@ const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStar
 // Sonar-Radar: range = so viele Meter zeigt es bis zum Rand, period = Sekunden für eine Umdrehung des Strahls,
 // fade = so viele Sekunden leuchtet ein Echo nach, hear = so nah müssen Gegner sein, damit das Sonar sie hört
 export const SONAR = { range: 90, period: 3, fade: 2.6, hear: 45 };
+// Was in der Nähe ist (Radar oben rechts): far = bis so weit (Meter) zeigt ein Pfeil am Rand zum nächsten freien Fahrzeug und zur nächsten Truhe
+export const NEAR = { far: 400 };
+const NEAR_NAME = { sub: ['U-Boot', 'U-Boote'], scooter: ['Scooter', 'Scooter'], jetski: ['Jetski', 'Jetskis'], ray: ['Rochen', 'Rochen'], crate: ['Truhe', 'Truhen'], w: ['Waffe', 'Waffen'], med: ['Medikit', 'Medikits'], sh: ['Schild', 'Schilde'] };
+const VEH_KINDS = ['sub', 'jetski', 'ray', 'scooter'];
+// kleines Symbol für jedes Ding auf dem Radar
+function nearIcon(c, k, x, y, rar) {
+  c.lineWidth = 1; c.strokeStyle = '#2a1a00';
+  if (k === 'sub') { c.fillStyle = '#ffc94d'; c.beginPath(); c.ellipse(x, y, 6, 3.4, 0, 0, 7); c.fill(); c.stroke(); c.fillRect(x - 1, y - 6, 3, 3); }
+  else if (k === 'jetski') { c.fillStyle = '#ffc94d'; c.beginPath(); c.moveTo(x, y - 5); c.lineTo(x + 4.5, y + 4); c.lineTo(x - 4.5, y + 4); c.closePath(); c.fill(); c.stroke(); }
+  else if (k === 'ray') { c.fillStyle = '#ffc94d'; c.beginPath(); c.moveTo(x, y - 5); c.lineTo(x + 5, y); c.lineTo(x, y + 5); c.lineTo(x - 5, y); c.closePath(); c.fill(); c.stroke(); }
+  else if (k === 'scooter') { c.fillStyle = '#ffc94d'; c.beginPath(); c.arc(x, y, 3.4, 0, 7); c.fill(); c.stroke(); }
+  else if (k === 'crate') { c.fillStyle = '#ff9a3c'; c.fillRect(x - 3.5, y - 3, 7, 6); c.strokeRect(x - 3.5, y - 3, 7, 6); c.fillStyle = '#ffd166'; c.fillRect(x - 3.5, y - 0.5, 7, 1); }
+  else if (k === 'w') { c.fillStyle = (RARITY[rar] || RARITY[0]).color; c.strokeStyle = '#fff'; c.beginPath(); c.arc(x, y, 2.6, 0, 7); c.fill(); c.stroke(); }
+  else { c.fillStyle = k === 'med' ? '#5dff8a' : '#5ec8ff'; c.fillRect(x - 3, y - 1, 6, 2); c.fillRect(x - 1, y - 3, 2, 6); }
+}
 // Sonar-Töne: radar = Ping bei jeder Umdrehung, blip = "Ding" pro erwischtem Gegner, sub = Ping im eigenen U-Boot,
 // near = Ping fremder U-Boote (so laut ganz nah dran), nearRange = bis so viele Meter hört man ihn
 export const SONAR_SND = { radar: 0.22, blip: 0.5, sub: 0.6, near: 0.4, nearRange: 140 };
@@ -348,6 +363,7 @@ export class Hud {
   }
   drawMini(base, zone, me, vehicles, pois, marks = []) {
     this.mini.canvas.classList.remove('sonar');
+    if (this.nearHtml) { this.nearHtml = ''; $('near').classList.add('hidden'); }
     const c = this.mini, n = 190, k = n / (HALF * 2), px = (x) => (x + HALF) * k;
     c.drawImage(base, 0, 0, n, n);
     c.font = '10px Bahnschrift, sans-serif'; c.textAlign = 'center'; c.fillStyle = 'rgba(230,251,255,.75)';
@@ -369,7 +385,8 @@ export class Hud {
   // wo er drüberstreicht, leuchten Boden und Gegner kurz auf und verblassen dann wieder.
   // blips = Gegner, die das Sonar hören kann ({ id, x, z }), time = Spielzeit in Sekunden
   // live = true (im U-Boot): Gegner werden durchgehend angezeigt, nicht nur kurz beim Überstreichen. Gibt zurück, wie viele Gegner neu erwischt wurden.
-  drawSonar(img, zone, me, vehicles, pois, marks, blips, time, live = false) {
+  // items = Dinge, die man benutzen kann: { x, z, k: 'sub' | 'scooter' | 'jetski' | 'ray' | 'crate' | 'w' | 'med' | 'sh', rar }
+  drawSonar(img, zone, me, items, pois, marks, blips, time, live = false) {
     let newHits = 0;
     this.mini.canvas.classList.add('sonar');
     const c = this.mini, n = 190, h = n / 2, R = SONAR.range, k = (h - 2) / R, cy = Math.cos(me.yaw), sy = Math.sin(me.yaw);
@@ -403,9 +420,28 @@ export class Hud {
     // Orte, freie Fahrzeuge und feste Markierungen
     c.font = '10px Bahnschrift, sans-serif'; c.textAlign = 'center'; c.fillStyle = 'rgba(200,255,215,.7)';
     for (const p of pois) { const [x, y] = scr(p.x, p.z); if (Math.hypot(x - h, y - h) < h - 8) c.fillText(p.n, x, y - 4); }
-    c.fillStyle = '#ffc94d';
-    for (const v of vehicles) if (!v.driver) { const [x, y] = scr(v.x, v.z), s = v.type === 'sub' ? 5 : 3; c.fillRect(x - s / 2, y - s / 2, s, s); }
+    // Dinge in der Nähe: Fahrzeuge, Truhen, Waffen, Medikits – mit eigenem Symbol. Unten steht, wie viele es sind.
+    // Ist kein Fahrzeug (oder keine Truhe) in Reichweite, zeigt ein Pfeil am Rand zum nächsten, mit Entfernung.
+    const count = {}, best = {};
+    for (const it of items) {
+      const d = Math.hypot(it.x - me.x, it.z - me.z), grp = VEH_KINDS.includes(it.k) ? 'veh' : it.k;
+      if (d < R) { const [x, y] = scr(it.x, it.z); nearIcon(c, it.k, x, y, it.rar); count[it.k] = (count[it.k] || 0) + 1; }
+      if ((grp === 'veh' || grp === 'crate') && (!best[grp] || d < best[grp].d)) best[grp] = { ...it, d };
+    }
+    for (const g of ['veh', 'crate']) {
+      const b = best[g]; if (!b || b.d < R || b.d > NEAR.far) continue;
+      const [x, y] = scr(b.x, b.z), a = Math.atan2(y - h, x - h), rx = h + Math.cos(a) * (h - 13), ry = h + Math.sin(a) * (h - 13);
+      c.save(); c.translate(rx, ry); c.rotate(a); c.fillStyle = g === 'veh' ? '#ffc94d' : '#ff9a3c'; c.strokeStyle = '#2a1a00';
+      c.beginPath(); c.moveTo(7, 0); c.lineTo(-3, -5); c.lineTo(-1, 0); c.lineTo(-3, 5); c.closePath(); c.fill(); c.stroke(); c.restore();
+      const tx = h + Math.cos(a) * (h - 30), ty = h + Math.sin(a) * (h - 30);
+      c.font = 'bold 10px Bahnschrift, sans-serif'; c.fillStyle = g === 'veh' ? '#ffe39a' : '#ffc08a';
+      c.fillText(`${NEAR_NAME[b.k][0]} ${Math.round(b.d)} m`, tx, ty + 3);
+    }
     for (const m of marks) { const [x, y] = scr(m.x, m.z); c.fillStyle = m.c; c.beginPath(); c.arc(x, y, m.s, 0, TAU); c.fill(); }
+    // Text unter dem Radar
+    const parts = [...VEH_KINDS, 'crate', 'w', 'med', 'sh'].filter(k => count[k]).map(k => `<i>${count[k]}</i> ${NEAR_NAME[k][count[k] > 1 ? 1 : 0]}`);
+    const html = parts.length ? '<b>In der Nähe:</b> ' + parts.join(' · ') : '';
+    if (html !== this.nearHtml) { this.nearHtml = html; const el = $('near'); el.innerHTML = html; el.classList.toggle('hidden', !html); }
     // Gegner: leuchten auf, wenn der Strahl über sie streicht, und bleiben kurz an der Stelle stehen
     const echo = this.echo ||= new Map(), swept = ((sweep - last) % TAU + TAU) % TAU;
     for (const b of blips) {

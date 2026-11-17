@@ -1600,7 +1600,12 @@ function frame(now) {
         if (isMate(e.id)) { mates.push({ x: e.x, z: e.z, c: '#7dff9a', s: 4 }); continue; }
         if ((mySub || e.mesh.visible) && Math.hypot(e.x - fx.x, e.y - fx.y, e.z - fx.z) < hear) blips.push({ id: e.id, x: e.x, z: e.z });
       }
-      const hits = hud.drawSonar(env.sonar, zone, { x: fx.x, z: fx.z, yaw: camYaw }, vehicles.values(), W.pois, mates, blips, time, mySub);
+      // Dinge in der Nähe fürs Radar: freie Fahrzeuge, geschlossene Truhen, Waffen und Medikits am Boden
+      const items = [];
+      for (const v of vehicles.values()) if (!v.driver && !v.gunner) items.push({ x: v.x, z: v.z, k: v.type });
+      for (const c of crates) if (!c.userData.isOpen) items.push({ x: c.position.x, z: c.position.z, k: 'crate' });
+      for (const p of pickups.values()) items.push({ x: p.x, z: p.z, k: p.k, rar: p.rar });
+      const hits = hud.drawSonar(env.sonar, zone, { x: fx.x, z: fx.z, yaw: camYaw }, items, W.pois, mates, blips, time, mySub);
       if (you && you.alive && !mySub) {   // Taucher: leises Ping bei jeder Umdrehung, "Ding" für jeden erwischten Gegner
         if (hud.sweepWrapped) sfx.sonar(SONAR_SND.radar, 1.12);
         if (hits) sfx.sonarBlip(SONAR_SND.blip);

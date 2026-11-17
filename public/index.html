@@ -48,6 +48,7 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #topRight{position:absolute;right:22px;top:22px;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 #mini{width:190px;height:190px;border-radius:12px;border:1px solid var(--line);background:#06202e}
 #mini.sonar{border-radius:50%;border:none;background:transparent}
+#near{padding:6px 10px;font-size:12px;color:var(--mute);max-width:260px;text-align:right;line-height:1.5} #near b{color:#ffc94d} #near i{font-style:normal;color:var(--ink)}
 #counts{display:flex;gap:8px} #counts div{padding:6px 12px;font-size:13px;color:var(--mute)} #counts b{color:var(--ink);font-size:20px;margin-left:6px}
 #zoneTxt{position:absolute;top:20px;left:50%;transform:translateX(-50%);padding:7px 18px;font-size:15px;letter-spacing:.04em}
 #zoneTxt.hot{border-color:#b970ff;color:#e6ccff}
@@ -232,6 +233,7 @@ button.ghost{pointer-events:auto;cursor:pointer;border:1px solid var(--line);bac
   <div id="bossBar" class="panel hidden"><div class="n" id="bossName"></div><div class="bar"><i id="bossFill"></i></div></div>
   <div id="topRight">
     <canvas id="mini" width="190" height="190"></canvas>
+    <div id="near" class="panel hidden"></div>
     <div id="counts"><div class="panel"><span id="cntA">Überlebende</span><b class="num" id="alive">0</b></div><div class="panel"><span id="cntK">Kills</span><b class="num" id="kills">0</b></div></div>
   </div>
   <div id="peri" class="hidden"></div>
